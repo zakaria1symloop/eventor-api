@@ -1,5 +1,20 @@
 import { Module } from '@nestjs/common';
+import { BookingsModule } from '../bookings/bookings.module.js';
+import { DisputesModule } from '../disputes/disputes.module.js';
+import { MessagingModule } from '../messaging/messaging.module.js';
+import { ReviewsModule } from '../reviews/reviews.module.js';
+import { AppReviewsController } from './app-reviews.controller.js';
+import { AppReviewsService } from './app-reviews.service.js';
+import { PacksModule } from '../packs/packs.module.js';
+import { AppGateway } from './app.gateway.js';
+import { AppMessagesController } from './app-messages.controller.js';
+import { AppMessagesService } from './app-messages.service.js';
+import { ServicesModule } from '../services/services.module.js';
+import { AppProviderController } from './app-provider.controller.js';
+import { AppProviderService } from './app-provider.service.js';
 import { UsersModule } from '../users/users.module.js';
+import { AppBookingsController } from './app-bookings.controller.js';
+import { AppBookingsService } from './app-bookings.service.js';
 import { AppAuthController } from './app-auth.controller.js';
 import { AppAuthService } from './app-auth.service.js';
 import { AppBudgetService } from './app-budget.service.js';
@@ -22,9 +37,9 @@ import { AppMeService } from './app-me.service.js';
  * from `verification.policy.ts`, and account deletion from `UserAccountsService`.
  */
 @Module({
-  imports: [UsersModule],
-  controllers: [AppAuthController, AppMeController, AppCatalogController, AppConfigController],
-  providers: [AppAuthService, AppMeService, AppCatalogService, AppFavouritesService, AppBudgetService, AppMailListener],
+  imports: [UsersModule, BookingsModule, ServicesModule, PacksModule, MessagingModule, ReviewsModule, DisputesModule],
+  controllers: [AppAuthController, AppMeController, AppCatalogController, AppConfigController, AppBookingsController, AppProviderController, AppMessagesController, AppReviewsController],
+  providers: [AppAuthService, AppMeService, AppCatalogService, AppFavouritesService, AppBudgetService, AppMailListener, AppBookingsService, AppProviderService, AppMessagesService, AppReviewsService, AppGateway],
   exports: [AppMeService],
 })
 export class AppApiModule {}

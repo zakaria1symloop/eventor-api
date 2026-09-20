@@ -5,7 +5,7 @@ import type { DataSource } from 'typeorm';
 import { ReportStatus, ReportTargetType } from '../common/enums/moderation.enums.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { ReportsService } from './reports.service.js';
-import { REVIEW_EVENTS, type ReplyModeratedEvent, type ReportCreatedEvent, type ReportsClosedEvent, type ReviewModeratedEvent } from './reviews.events.js';
+import { REVIEW_EVENTS, type ReplyModeratedEvent, type ReportCreatedEvent, type ReportsClosedEvent, type ReviewCreatedEvent, type ReviewModeratedEvent } from './reviews.events.js';
 
 const REASONS: Record<string, { en: string; ar: string }> = {
   inappropriate: { en: 'inappropriate content', ar: 'محتوى غير لائق' },
@@ -44,6 +44,26 @@ export class ReviewsListener {
     if (!userIds.length) return new Map();
     const rows: { id: string; language: string }[] = await this.dataSource.query('SELECT id, language FROM users WHERE id IN (?) AND deleted_at IS NULL', [userIds]);
     return new Map(rows.map((r) => [r.id, r.language === 'ar' ? 'ar' : 'en']));
+  }
+
+  /** status-rules §8: a new review tells the provider (🔔📱). */
+  @OnEvent(REVIEW_EVENTS.created)
+  async onReviewCreated(event: ReviewCreatedEvent): Promise<void> {
+    const lang = (await this.languages([event.providerId])).get(event.providerId) ?? 'en';
+    const stars = '★'.repeat(event.rating);
+    await this.notifications.notify(
+      [event.providerId],
+      {
+        type: 'review.new',
+        title: lang === 'ar' ? 'تقييم جديد' : 'New review',
+        body:
+          lang === 'ar'
+            ? `تلقيت تقييمًا جديدًا (${event.rating}/5) على الحجز ${event.bookingReference}.`
+            : `You received a new review (${event.rating}/5, ${stars}) on booking ${event.bookingReference}.`,
+        data: { reviewId: event.reviewId, bookingId: event.bookingId, rating: event.rating },
+      },
+      { push: true },
+    );
   }
 
   @OnEvent(REVIEW_EVENTS.reportCreated)

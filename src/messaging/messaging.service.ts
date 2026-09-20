@@ -110,7 +110,7 @@ export class MessagingService {
    * The direct conversation of a client ↔ provider pair (one per pair), created
    * when missing; `bookingId` points at the latest booking.
    */
-  async ensureDirectConversation(em: EntityManager, afterCommit: AfterCommit, input: { clientId: string; providerId: string; bookingId: string; serviceId: string | null }): Promise<string> {
+  async ensureDirectConversation(em: EntityManager, afterCommit: AfterCommit, input: { clientId: string; providerId: string; bookingId: string | null; serviceId: string | null }): Promise<string> {
     const [existing]: { id: string }[] = await em.query(
       `SELECT c.id FROM conversations c
        JOIN conversation_participants a ON a.conversation_id = c.id AND a.user_id = ?
@@ -119,7 +119,8 @@ export class MessagingService {
       [input.clientId, input.providerId],
     );
     if (existing) {
-      await em.query('UPDATE conversations SET booking_id = ?, updated_at = ? WHERE id = ?', [input.bookingId, new Date(), existing.id]);
+      // A chat opened without a booking keeps the booking it already had.
+      if (input.bookingId) await em.query('UPDATE conversations SET booking_id = ?, updated_at = ? WHERE id = ?', [input.bookingId, new Date(), existing.id]);
       return existing.id;
     }
     const repository = em.getRepository(Conversation);

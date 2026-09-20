@@ -927,6 +927,78 @@ export const ERROR_CODES = {
     en: 'The month must look like YYYY-MM.',
     ar: 'يجب أن يكون الشهر بالصيغة YYYY-MM.',
   },
+
+  // ── mobile app, part 2: bookings, messaging, reviews, disputes ──
+  PROVIDER_NOT_VERIFIED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'Your profile is still being reviewed. You can publish and accept bookings once it is approved.',
+    ar: 'لا يزال ملفك قيد المراجعة. يمكنك النشر وقبول الحجوزات بعد الموافقة عليه.',
+  },
+  CHECK_IN_NOT_ALLOWED: {
+    status: HttpStatus.CONFLICT,
+    en: 'This booking cannot be confirmed in its current state.',
+    ar: 'لا يمكن تأكيد هذا الحجز في حالته الحالية.',
+  },
+  CHECK_IN_TOO_EARLY: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'You can confirm once the event has taken place.',
+    ar: 'يمكنك التأكيد بعد انتهاء المناسبة.',
+  },
+  CHECK_IN_DISPUTED: {
+    status: HttpStatus.CONFLICT,
+    en: 'A problem is already open on this booking.',
+    ar: 'هناك مشكلة مفتوحة بالفعل على هذا الحجز.',
+  },
+  REVIEW_EXISTS: {
+    status: HttpStatus.CONFLICT,
+    en: 'You have already reviewed this booking.',
+    ar: 'لقد قمت بتقييم هذا الحجز من قبل.',
+  },
+  REVIEW_NOT_ALLOWED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'Only the client of a completed booking can leave a review.',
+    ar: 'يمكن فقط لعميل حجز مكتمل ترك تقييم.',
+  },
+  REVIEW_WINDOW_CLOSED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'The review window for this booking is closed.',
+    ar: 'انتهت مهلة التقييم لهذا الحجز.',
+  },
+  REVIEW_EDIT_WINDOW_CLOSED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'A review can only be edited within 48 hours.',
+    ar: 'يمكن تعديل التقييم خلال 48 ساعة فقط.',
+  },
+  REVIEW_REPLY_EXISTS: {
+    status: HttpStatus.CONFLICT,
+    en: 'You have already replied to this review.',
+    ar: 'لقد قمت بالرد على هذا التقييم من قبل.',
+  },
+  REPORT_TARGET_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    en: 'The reported item was not found.',
+    ar: 'لم يتم العثور على العنصر المُبلّغ عنه.',
+  },
+  NOT_A_PARTICIPANT: {
+    status: HttpStatus.FORBIDDEN,
+    en: 'You are not part of this conversation.',
+    ar: 'أنت لست طرفًا في هذه المحادثة.',
+  },
+  CONVERSATION_READ_ONLY: {
+    status: HttpStatus.FORBIDDEN,
+    en: 'You cannot write in this conversation.',
+    ar: 'لا يمكنك الكتابة في هذه المحادثة.',
+  },
+  DISPUTE_NOT_WITHDRAWABLE: {
+    status: HttpStatus.CONFLICT,
+    en: 'Only the person who opened a dispute can withdraw it, while it is still open.',
+    ar: 'يمكن فقط لمن فتح النزاع سحبه، وما دام مفتوحًا.',
+  },
+  BOOKING_TAB_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    en: 'Unknown tab "{tab}".',
+    ar: 'تبويب غير معروف "{tab}".',
+  },
 } as const satisfies Record<string, ErrorDefinition>;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

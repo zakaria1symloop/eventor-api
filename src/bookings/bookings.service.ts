@@ -58,6 +58,8 @@ import {
   packLines,
   reminderRetryAfter,
   REMINDER_INTERVAL_HOURS,
+  checkInOutcome,
+  checkInRefusal,
   serviceQuantity,
   targetStatus,
   toCents,
@@ -812,6 +814,7 @@ export class BookingsService {
     afterCommit: AfterCommit,
     auth: AuthUser,
     dto: CreateBookingDto,
+    options: { source?: BookingSource } = {},
   ): Promise<string> {
     const [client] = await em.query(
       'SELECT id, role, full_name FROM users WHERE id = ? AND deleted_at IS NULL',
@@ -957,7 +960,7 @@ export class BookingsService {
         clientNote: dto.clientNote ?? null,
         ...totals,
         feePercent,
-        source: BookingSource.Dashboard,
+        source: options.source ?? BookingSource.Dashboard,
         createdById: auth.id,
       }),
     );
@@ -1530,6 +1533,141 @@ export class BookingsService {
       );
     });
     return this.get(id);
+  }
+
+  /**
+   * The other party answers a reschedule proposal (status-rules §5 "either
+   * party proposes and the other accepts"). Accepting moves the booking and its
+   * availability row; rejecting only closes the proposal. The proposer cannot
+   * answer their own proposal — they cancel it instead.
+   */
+  async respondToReschedule(
+    auth: AuthUser,
+    id: string,
+    rescheduleId: string,
+    action: 'accept' | 'reject',
+  ): Promise<void> {
+    await runInTransaction(this.dataSource, async (em, afterCommit) => {
+      const booking = await this.load(em, id, true);
+      const row = await em.getRepository(BookingReschedule).findOne({
+        where: { id: rescheduleId, bookingId: id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!row) throw AppException.of('RESCHEDULE_NOT_FOUND');
+      if (row.status !== RescheduleStatus.Pending)
+        throw AppException.of('RESCHEDULE_NOT_PENDING', { status: row.status });
+      if (row.proposedById === auth.id) throw AppException.of('NOT_OWNER');
+      if (!isEditable(booking.status))
+        throw AppException.of('BOOKING_NOT_EDITABLE', {
+          status: booking.status,
+        });
+
+      const now = new Date();
+      const newDate = dateOnly(row.newDate);
+      const newStart = hhmm(row.newStart);
+      const newEnd = hhmm(row.newEnd);
+      if (action === 'accept') {
+        await this.assertAvailable(em, {
+          providerId: booking.providerId,
+          serviceId: booking.serviceId,
+          packId: booking.packId,
+          date: newDate,
+          startTime: newStart,
+          endTime: newEnd,
+          excludeBookingId: booking.id,
+        });
+        await this.moveBooking(em, booking, newDate, newStart, newEnd, now);
+      }
+      await em.getRepository(BookingReschedule).update(row.id, {
+        status:
+          action === 'accept'
+            ? RescheduleStatus.Accepted
+            : RescheduleStatus.Rejected,
+        resolvedAt: now,
+      });
+      await this.audit.log(
+        {
+          action:
+            action === 'accept'
+              ? 'booking.reschedule_accepted'
+              : 'booking.reschedule_rejected',
+          objectType: 'booking',
+          objectId: id,
+          objectLabel: booking.reference,
+          level: AuditLevel.Normal,
+          changes: {
+            rescheduleId,
+            eventDate: { from: dateOnly(row.oldDate), to: newDate },
+          },
+        },
+        em,
+      );
+      this.events.emitAfterCommit<BookingRescheduledEvent>(
+        afterCommit,
+        action === 'accept'
+          ? BOOKING_EVENTS.rescheduled
+          : BOOKING_EVENTS.rescheduleProposed,
+        {
+          ...this.eventBase(booking, true),
+          oldDate: dateOnly(row.oldDate),
+          newDate,
+          applied: action === 'accept',
+        },
+      );
+    });
+  }
+
+  /**
+   * status-rules §5 "All good": after the event either party confirms, and when
+   * **both** have, the booking completes immediately instead of waiting for the
+   * dispute window to run out. Returns what happened, so the caller can answer
+   * with the refreshed booking.
+   */
+  async checkIn(
+    auth: AuthUser,
+    id: string,
+    party: PartyRole.Client | PartyRole.Provider,
+  ): Promise<'recorded' | 'complete'> {
+    return runInTransaction(this.dataSource, async (em, afterCommit) => {
+      const booking = await this.load(em, id, true);
+      const mine =
+        party === PartyRole.Client ? 'clientCheckedInAt' : 'providerCheckedInAt';
+      const theirs =
+        party === PartyRole.Client ? 'providerCheckedInAt' : 'clientCheckedInAt';
+      const outcome = checkInOutcome({
+        status: booking.status,
+        disputeStatus: booking.disputeStatus,
+        eventDate: dateOnly(booking.eventDate),
+        today: algiersToday(),
+        otherCheckedIn: booking[theirs] !== null,
+      });
+      const refusal = checkInRefusal(outcome);
+      if (refusal) throw refusal;
+
+      const now = new Date();
+      await em.getRepository(Booking).update(id, { [mine]: now } as never);
+      Object.assign(booking, { [mine]: now });
+      await this.audit.log(
+        {
+          action: 'booking.checked_in',
+          objectType: 'booking',
+          objectId: id,
+          objectLabel: booking.reference,
+          level: AuditLevel.Info,
+          changes: { party, bothConfirmed: outcome === 'complete' },
+        },
+        em,
+      );
+      if (outcome === 'complete') {
+        await this.applyTransition(em, afterCommit, booking, 'completed', {
+          actorId: auth.id,
+          reason: null,
+          note: 'Both parties confirmed the event went well.',
+          notify: true,
+        });
+      }
+      return outcome as 'recorded' | 'complete';
+    });
   }
 
   // ── price ───────────────────────────────────────────────────

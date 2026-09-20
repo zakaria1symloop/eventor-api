@@ -14,7 +14,7 @@ import { ServicesService } from './services.service.js';
   imports: [PacksModule, BookingsModule],
   controllers: [AdminServicesController, AdminAvailabilityController],
   providers: [ServicesService, AvailabilityService, ServicesMailListener],
-  exports: [ServicesService],
+  exports: [ServicesService, AvailabilityService],
 })
 export class ServicesModule implements OnModuleInit {
   constructor(

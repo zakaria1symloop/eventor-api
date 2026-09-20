@@ -26,7 +26,14 @@ export interface AdminNotification {
 export const NOTIFICATION_EVENTS = {
   /** A notification row was written for an admin: pushed as `notification:new` to that admin's sockets. */
   adminCreated: 'notification.admin_created',
+  /** A notification row was written for a client or a provider: pushed as `notification:new` on the `/app` socket. */
+  userCreated: 'notification.user_created',
 } as const;
+
+export interface UserNotificationCreatedEvent {
+  userId: string;
+  notification: { id: string; type: string; title: string; body: string; data: Record<string, unknown> | null; readAt: null; createdAt: string };
+}
 
 export interface AdminNotificationCreatedEvent {
   userId: string;
@@ -71,7 +78,22 @@ export class NotificationsService {
     const ids = [...new Set(userIds.filter(Boolean))];
     if (ids.length === 0) return;
     const now = new Date();
-    for (const userId of ids) await this.insert(userId, notification.type, notification.title, notification.body, notification.data ?? null, now);
+    for (const userId of ids) {
+      const id = await this.insert(userId, notification.type, notification.title, notification.body, notification.data ?? null, now);
+      // The `/app` socket turns this into `notification:new` for that user's devices.
+      await this.emitter.emitAsync(NOTIFICATION_EVENTS.userCreated, {
+        userId,
+        notification: {
+          id,
+          type: notification.type.slice(0, 60),
+          title: notification.title.slice(0, 190),
+          body: notification.body,
+          data: (notification.data ?? null) as Record<string, unknown> | null,
+          readAt: null,
+          createdAt: now.toISOString(),
+        },
+      } satisfies UserNotificationCreatedEvent);
+    }
     if (!options.push) return;
     const tokens: { token: string; platform: PushTarget['platform'] }[] = await this.dataSource.query(
       'SELECT token, platform FROM device_tokens WHERE user_id IN (?) AND deleted_at IS NULL',

@@ -2,6 +2,8 @@ import type { ReportReason, ReportStatus, ReportTargetType } from '../common/enu
 import type { ModerationAction } from './reviews.policy.js';
 
 export const REVIEW_EVENTS = {
+  /** A client reviewed a completed booking from the app: 🔔📱 the provider. */
+  created: 'review.created',
   /** hide / show / redact by an admin: 🔔 author (when `notifyAuthor`). */
   moderated: 'review.moderated',
   /** A reply was hidden or shown again: 🔔 the provider. */
@@ -11,6 +13,18 @@ export const REVIEW_EVENTS = {
   /** Reports resolved or dismissed: 🔔 each reporter with the outcome. */
   reportsClosed: 'report.closed',
 } as const;
+
+export interface ReviewCreatedEvent {
+  reviewId: string;
+  bookingId: string;
+  bookingReference: string;
+  authorId: string;
+  providerId: string;
+  rating: number;
+  /** What the flag scan found; a flagged review is published and reported automatically. */
+  flags: string[];
+  reportId: string | null;
+}
 
 export interface ReviewModeratedEvent {
   reviewId: string;

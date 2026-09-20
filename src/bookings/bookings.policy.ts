@@ -1,4 +1,5 @@
 import { BookingDisputeStatus, BookingLineKind, BookingStatus } from '../common/enums/booking.enums.js';
+import { AppException } from '../common/errors/app.exception.js';
 import { PriceType } from '../common/enums/catalog.enums.js';
 
 // ── status transitions (status-rules §5, admin actor) ────────────
@@ -167,6 +168,38 @@ export function reminderRetryAfter(lastSentAt: Date | null, now = new Date()): n
   if (!lastSentAt) return 0;
   const wait = lastSentAt.getTime() + REMINDER_INTERVAL_HOURS * HOUR - now.getTime();
   return wait > 0 ? Math.ceil(wait / 1000) : 0;
+}
+
+// ── check-in ("All good / Report a problem") ─────────────────────
+
+export type CheckInOutcome = 'refused_status' | 'refused_dispute' | 'refused_too_early' | 'recorded' | 'complete';
+
+/**
+ * status-rules §5: after the event either party taps "All good"; when **both**
+ * have, the booking completes immediately instead of waiting for the dispute
+ * window to run out. A booking that is not accepted, is disputed, or whose
+ * event has not happened yet refuses the tap.
+ */
+export function checkInOutcome(input: {
+  status: BookingStatus;
+  disputeStatus: BookingDisputeStatus;
+  /** `YYYY-MM-DD`, Africa/Algiers. */
+  eventDate: string;
+  today: string;
+  otherCheckedIn: boolean;
+}): CheckInOutcome {
+  if (input.status !== BookingStatus.Accepted) return 'refused_status';
+  if (input.disputeStatus === BookingDisputeStatus.Open) return 'refused_dispute';
+  if (input.eventDate > input.today) return 'refused_too_early';
+  return input.otherCheckedIn ? 'complete' : 'recorded';
+}
+
+/** The error a refused check-in answers with; `null` when the tap is allowed. */
+export function checkInRefusal(outcome: CheckInOutcome): AppException | null {
+  if (outcome === 'refused_status') return AppException.of('CHECK_IN_NOT_ALLOWED');
+  if (outcome === 'refused_dispute') return AppException.of('CHECK_IN_DISPUTED');
+  if (outcome === 'refused_too_early') return AppException.of('CHECK_IN_TOO_EARLY');
+  return null;
 }
 
 /** Event end as a UTC instant: date + end time (or 23:59) in Africa/Algiers (UTC+1, no DST). */

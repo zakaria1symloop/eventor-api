@@ -9,11 +9,13 @@ it — do not hand-write models).
 | Base URL | `{API_URL}/api/v1` (local: `http://localhost:3000/api/v1`) |
 | Swagger UI | `{API_URL}/api/v1/docs` |
 | OpenAPI JSON | `{API_URL}/api/v1/docs/openapi.json`, committed as `backend/openapi.json` |
-| Tags | `app-auth`, `app-me`, `app-catalog`, `app-config` |
+| Tags | `app-auth`, `app-me`, `app-catalog`, `app-bookings`, `app-provider`, `app-messages`, `app-reviews`, `app-config` |
+| Socket.IO | `{API_URL}/app` (§11) |
 
-**Part 1 is auth + client browsing.** Bookings, messaging, reviews, reports and
-every `/app/provider/**` route are part 2 (§9). The screen map
-(`../../docs/mobile-screen-map.md`) names them with the paths they will take.
+**Part 1 is auth + client browsing; part 2 is everything else** — bookings,
+messaging, reviews, reports, disputes and the whole provider side. Both are
+built. The screen map (`../../docs/mobile-screen-map.md`) is the other half of
+this document: it says which screen each endpoint serves.
 
 ## 1. Authentication
 
@@ -115,7 +117,7 @@ Validation failures are `400 VALIDATION_FAILED` with
 | 429 | rate limited — honour `Retry-After` / `details.retryAfterSeconds` |
 | 500 | our fault; show a generic message and keep `requestId` |
 
-Codes you will meet in part 1, beyond the auth table above:
+Codes you will meet in part 1, beyond the auth table above (part 2 adds its own list at the end of §9):
 `VALIDATION_FAILED`, `RATE_LIMITED`, `SORT_FIELD_NOT_ALLOWED`, `MONTH_INVALID`,
 `SERVICE_NOT_FOUND`, `PACK_NOT_FOUND`, `PROVIDER_NOT_FOUND`, `CATEGORY_NOT_FOUND`,
 `WILAYA_NOT_FOUND`, `USER_NOT_FOUND`, `SESSION_NOT_FOUND`, `FILE_NOT_FOUND`,
@@ -187,7 +189,7 @@ ordering is `?order=` with a fixed vocabulary (`relevance`, `price_asc`,
 ## 7. Privacy rules you will notice
 
 - Provider objects never carry a phone or an email. Clients reach a provider
-  through the chat (part 2), where contact details stay masked until the pair
+  through the chat (§9), where contact details stay masked until the pair
   share an accepted or completed booking.
 - Review authors appear as `"Yasmine K."`, never a full name.
 - A service that is not visible answers **404, not 403** — the API does not
@@ -237,8 +239,8 @@ means the endpoint is not built yet.
 | 20 Pack detail | `GET /app/packs/{id}` · `GET /app/packs/{id}/availability?month=YYYY-MM` |
 | 16 Notifications | `GET /app/me/notifications` · `GET /app/me/notifications/unread-count` · `POST /app/me/notifications/read` · `POST /app/me/device-tokens` |
 | — Profile & settings | `GET`/`PATCH /app/me` · `POST /app/me/avatar` · `POST /app/me/password` · `GET`/`DELETE /app/me/sessions` · `GET`/`PATCH /app/me/notification-preferences` · `DELETE /app/me` |
-| 14 Messages, 15 Chat | part 2 |
-| — Booking flow, Bookings tab, Leave a review | part 2 |
+| 14 Messages, 15 Chat | see **Messaging** below |
+| — Booking flow, Bookings tab, Leave a review | see **Bookings** below |
 
 ### Notes on the trickier ones
 
@@ -263,17 +265,241 @@ means the endpoint is not built yet.
   (analytics is V2 per the signed offer). Ship the calls; they start counting
   later. Nothing in the UI may depend on it.
 
-## 9. What part 2 still owes you
+## 9. Part 2: bookings, messaging, reviews, disputes, provider
 
-Not built yet, all named in the screen map: the booking flow
-(`/app/bookings`, quote, cancel, reschedule, invoice PDF), messaging
-(`/app/conversations`, the Socket.IO namespace for the app, typing and presence),
-reviews (`POST /app/bookings/{id}/review`), reports, disputes, and the whole
-provider side (`/app/provider/home`, requests, services, photos, availability
-blocks, packs, the "Available for bookings" toggle). Build screens 14, 15 and
-the Bookings tab against the screen map and expect the paths there.
+Everything below is live. The rules are `status-rules.md` §5–§10; this section
+is only the map from screen to endpoint, plus the traps.
 
-## 10. Rate limits
+### Bookings (client) — `app-bookings`
+
+| Screen | Endpoints |
+| --- | --- |
+| 12 / 20 → booking sheet | `POST /app/bookings/quote` then `POST /app/bookings` |
+| — Bookings tab | `GET /app/bookings?tab=upcoming\|pending\|past\|cancelled&page` |
+| — Booking detail | `GET /app/bookings/{id}` |
+| — Cancel | `POST /app/bookings/{id}/cancel {reason}` |
+| — Reschedule | `POST /app/bookings/{id}/reschedule {date,startTime?,endTime?,reason}` |
+| — Answer a proposal | `POST /app/bookings/{id}/reschedules/{rid}/accept` · `/reject` |
+| — After the event | `POST /app/bookings/{id}/check-in {answer:"ok"\|"problem"}` |
+| — Invoice | `GET /app/bookings/{id}/invoice` · `GET /app/bookings/{id}/invoice.pdf` |
+
+- **`quote` writes nothing** and never fails on a bad date: `available` is
+  `false` and `unavailableReason` is `DATE_UNAVAILABLE`, `MIN_NOTICE` or
+  `PROVIDER_NOT_ACCEPTING`. Use it to grey the button; `POST /app/bookings`
+  turns the same reasons into errors (409 / 422).
+- `feePercent` is **informational**. Payment is cash between the two of you:
+  the client owes `total` and Eventor takes nothing at the door.
+- Send **`X-Platform: android | ios | web`** on `POST /app/bookings`, so
+  `bookings.source` is honest. It defaults to `android`.
+- Every card and detail carries **`allowedActions`** — draw the buttons from it
+  rather than re-deriving the status machine. The write endpoints enforce the
+  same list, so the two can never disagree.
+- The **tabs are derived, not stored**: `upcoming` is accepted with the event
+  still ahead, `past` is completed *or* accepted with the event behind us, and
+  `cancelled` holds cancelled **and declined** bookings.
+- **Privacy:** the provider's phone appears only once the booking is accepted,
+  and their email never does. A provider sees the client's phone and email from
+  acceptance on.
+- **Cancelling costs nothing.** No fee and no window are enforced; the
+  service's own `cancellationPolicy` text is shown and not applied. A
+  disagreement becomes a dispute.
+- **Check-in** is the "All good / Report a problem" pair. `"ok"` from **both**
+  parties completes the booking immediately instead of waiting out the 72-hour
+  dispute window. `"problem"` deliberately answers **422
+  `CHECK_IN_NOT_ALLOWED`** with `details.next` pointing at the dispute
+  endpoint — reporting a problem needs a description, so it is a dispute.
+
+### Provider — `app-provider`
+
+| Screen | Endpoints |
+| --- | --- |
+| 21 / 21a Home · Provider | **`GET /app/provider/home`** (one call) |
+| — Available for bookings | `PATCH /app/provider/profile {acceptingBookings}` |
+| — Requests tab | `GET /app/provider/bookings?tab=requests\|upcoming\|past` · `GET /app/provider/bookings/{id}` |
+| — Accept / Decline / Complete | `POST /app/provider/bookings/{id}/accept` · `/decline {reason}` · `/complete` |
+| — Cancel, reschedule, check-in | `/cancel {reason}` · `/reschedule` · `/reschedules/{rid}/accept\|reject` · `/check-in` |
+| — Services tab | `GET/POST /app/provider/services` · `PATCH /app/provider/services/{id}` · `/publish` · `/unpublish` · `DELETE` |
+| — Service photos | `POST /app/provider/services/{id}/photos` (multipart) · `PATCH …/photos/order` · `DELETE …/photos/{photoId}` |
+| — My packs | `GET/POST /app/provider/packs` · `PATCH /app/provider/packs/{id}` · `/publish` · `/unpublish` · `DELETE` · the same three photo routes |
+| — Calendar | `GET /app/provider/availability?month=YYYY-MM` · `POST /app/provider/availability/blocks` · `DELETE /app/provider/availability/blocks/{id}` |
+| — Profile | `PATCH /app/provider/profile` |
+| — Reviews received | `GET /app/provider/reviews` · `POST /app/reviews/{id}/reply` · `PATCH`/`DELETE /app/reviews/replies/{id}` |
+
+- **`GET /app/provider/home` decides which screen to draw.** `state` is
+  `verified` (screen 21), `pending` or `rejected` (screen 21a) or `blocked`.
+  On 21a it also returns `verificationSteps` and the whole `documents` payload
+  of `GET /app/me/documents`, so the resubmit flow needs no second call.
+- **Publishing and accepting need a verified, active profile** — otherwise
+  **422 `PROVIDER_NOT_VERIFIED`**. Everything else (drafts, photos, packs,
+  calendar, profile) works while the profile is under review.
+- **Publishing runs the checklist** of status-rules §3. A refusal is
+  **422 `SERVICE_PUBLISH_INVALID`** with `details.missing`, an array of
+  `titleEn`, `titleAr`, `descriptionEn`, `descriptionAr`, `price`, `photos`,
+  `category`, `wilayas`. Render it as a to-do list, do not re-check locally.
+- You cannot remove the **last photo of a published service** (422
+  `SERVICE_PUBLISH_INVALID`); unpublish it first.
+- A **pack is built from your own published services** (at least two, one
+  wilaya, price below the sum) — somebody else's service answers 422
+  `PACK_SERVICE_OTHER_PROVIDER`.
+- Turning **`acceptingBookings` off keeps your services visible** and refuses
+  new bookings. It is not a way to hide yourself.
+- Everything under `/app/provider/**` is **yours only**: another provider's row
+  is **403 `NOT_OWNER`**, never 404.
+
+### Messaging — `app-messages`
+
+| Screen | Endpoints |
+| --- | --- |
+| 14 Messages | `GET /app/conversations?filter=all\|unread\|booking&q&page` |
+| 15 Chat · header | `GET /app/conversations/{id}` |
+| 15 Chat · bubbles | `GET /app/conversations/{id}/messages?before&limit` |
+| 12 "Message" | `POST /app/conversations {userId, bookingId?, body}` |
+| 15 composer | `POST /app/conversations/{id}/messages` — JSON `{body}` or multipart `file` |
+| 15 on open | `POST /app/conversations/{id}/read` |
+| 15 long-press | `POST /app/messages/{id}/report {reason, note?}` |
+| 12 / 13 "Report" | `POST /app/reports {targetType, targetId, reason, note?}` |
+
+- **One direct conversation per client ↔ provider pair.** `POST
+  /app/conversations` is idempotent: it reuses the existing chat and just adds
+  your message. `bookingId` attaches the context card and must be a booking the
+  two of you share.
+- **Messages page backwards.** `data` is oldest-first so you append at the
+  bottom; scroll up with `before = meta.nextBefore` until `meta.hasMore` is
+  `false`. Note the envelope here is the **cursor page** `{ data, meta: {
+  limit, hasMore, nextBefore } }`, not the numbered `page/total` one.
+- **Masking is done for you.** Until the pair share an accepted or completed
+  booking, `body` already contains `[phone hidden]`, `[email hidden]`,
+  `[link hidden]` or `[handle hidden]` and `masked` is `true`. **The original
+  text is never sent to a participant** — there is nothing to reveal client
+  side. `contactUnmasked` on the conversation says when that stops.
+- A message an admin hid comes back as `[removed by Eventor]`; a deleted one is
+  simply absent.
+- **No participant's email or phone is ever in these payloads.** A support or
+  dispute participant is named "Eventor support".
+- Writing is refused with **409 `CONVERSATION_CLOSED`** (an admin closed the
+  chat) or **403 `CONVERSATION_READ_ONLY`** (your account is muted there). A
+  chat you are not in is **403 `NOT_A_PARTICIPANT`**, never 404.
+- **Reports are idempotent per reporter and target**: reporting twice answers
+  201 with `created: false` and returns the first report's id.
+
+### Reviews and disputes — `app-reviews`
+
+| Screen | Endpoints |
+| --- | --- |
+| — Leave a review | `POST /app/bookings/{id}/review {rating, comment}` |
+| — Edit it | `PATCH /app/reviews/{id}` |
+| — My reviews | `GET /app/me/reviews` |
+| — Provider reply | `POST /app/reviews/{id}/reply {body}` · `PATCH`/`DELETE /app/reviews/replies/{id}` |
+| — Report a problem | `POST /app/bookings/{id}/disputes {type, description, evidenceFileIds?}` |
+| — My disputes | `GET /app/disputes` · `GET /app/disputes/{id}` |
+| — Dispute chat | `POST /app/disputes/{id}/messages {body}` |
+| — Evidence | `POST /app/disputes/{id}/evidence` (multipart `file`, optional `note`) |
+| — Withdraw | `POST /app/disputes/{id}/withdraw {note}` |
+
+- A review is written by the **client of a completed booking**, one per
+  booking, **from 24 h after the completion until 60 days after it**, and never
+  while a dispute is open. The detail's `reviewWindowOpen` and its
+  `allowedActions` containing `review` are the two flags to trust. Outside the
+  window: 422 `REVIEW_WINDOW_CLOSED`; already written: 409 `REVIEW_EXISTS`.
+- The comment is **scanned for phone numbers, emails, links and insults**. A
+  flagged review is **still published** and quietly opens a report for an
+  admin — do not warn the user, and do not filter locally.
+- **48 hours** to edit a review, and the same for a provider's reply
+  (422 `REVIEW_EDIT_WINDOW_CLOSED`). `editable` / `replyEditable` say so.
+- A review an admin hid or redacted **keeps its row** in `GET /app/me/reviews`
+  with `status` telling you which — the author is never left wondering.
+- A **dispute** can be opened by either party from the event start until 72 h
+  after the event end, or within 7 days of a contested cancellation
+  (422 `DISPUTE_WINDOW_CLOSED`), one at a time per booking
+  (409 `DISPUTE_ALREADY_OPEN`). Opening one **pauses the automatic completion
+  and the reviews**, attaches a snapshot of your chat as evidence and opens a
+  conversation with the other party and Eventor.
+- **There are no refunds and no fees.** A dispute is a way to hand the problem
+  to an admin, who answers with a decision note (`decisionNote`).
+- Evidence is **private to the two parties and Eventor**, one file per call,
+  5 MB each, capped per party (422 `DISPUTE_EVIDENCE_LIMIT`).
+- Only the person who opened a dispute can **withdraw** it, and only while it
+  is open or in review (409 `DISPUTE_NOT_WITHDRAWABLE`).
+
+### Part-2 error codes
+
+Beyond the part-1 list: `NOT_OWNER`, `NOT_A_PARTICIPANT`,
+`CONVERSATION_READ_ONLY`, `CONVERSATION_CLOSED`, `CONVERSATION_NOT_FOUND`,
+`MESSAGE_NOT_FOUND`, `RECIPIENT_INVALID`, `BOOKING_NOT_FOUND`,
+`BOOKING_INVALID_TRANSITION`, `BOOKING_NOT_EDITABLE`, `BOOKING_DATE_PAST`,
+`DATE_UNAVAILABLE`, `MIN_NOTICE`, `PROVIDER_NOT_ACCEPTING`,
+`SERVICE_UNAVAILABLE_FOR_BOOKING`, `PACK_UNAVAILABLE`, `BOOKING_EXTRA_INVALID`,
+`COMMUNE_NOT_FOUND`, `COMMUNE_WILAYA_MISMATCH`, `RESCHEDULE_NOT_FOUND`,
+`RESCHEDULE_NOT_PENDING`, `RESCHEDULE_PENDING_EXISTS`, `CHECK_IN_NOT_ALLOWED`,
+`CHECK_IN_TOO_EARLY`, `CHECK_IN_DISPUTED`, `INVOICE_NOT_FOUND`,
+`PROVIDER_NOT_VERIFIED`, `SERVICE_PUBLISH_INVALID`, `SERVICE_INVALID_TRANSITION`,
+`SERVICE_HAS_BOOKINGS`, `SERVICE_IN_PACKS`, `PHOTO_LIMIT_REACHED`,
+`PHOTO_NOT_FOUND`, `PHOTO_ORDER_INVALID`, `PACK_PUBLISH_INVALID`,
+`PACK_INVALID_TRANSITION`, `PACK_SERVICE_NOT_FOUND`,
+`PACK_SERVICE_OTHER_PROVIDER`, `PACK_HAS_BOOKINGS`,
+`AVAILABILITY_DATE_PAST`, `AVAILABILITY_SERVICE_INVALID`,
+`AVAILABILITY_BLOCK_NOT_FOUND`, `AVAILABILITY_BLOCK_NOT_REMOVABLE`,
+`CATEGORY_HIDDEN`, `WILAYA_CLOSED`, `REVIEW_EXISTS`, `REVIEW_NOT_ALLOWED`,
+`REVIEW_WINDOW_CLOSED`, `REVIEW_EDIT_WINDOW_CLOSED`, `REVIEW_NOT_FOUND`,
+`REVIEW_REPLY_EXISTS`, `REVIEW_REPLY_NOT_FOUND`, `REPORT_TARGET_NOT_FOUND`,
+`DISPUTE_NOT_FOUND`, `DISPUTE_ALREADY_OPEN`, `DISPUTE_WINDOW_CLOSED`,
+`BOOKING_NOT_DISPUTABLE`, `DISPUTE_EVIDENCE_LIMIT`, `EVIDENCE_FILE_INVALID`,
+`DISPUTE_NOT_WITHDRAWABLE`.
+
+## 10. Live updates: the `/app` socket
+
+```ts
+import { io } from 'socket.io-client';
+
+const socket = io(`${API_URL}/app`, {
+  transports: ['websocket'],
+  auth: { token: accessToken },   // the same 15-minute app access token
+});
+```
+
+- **Namespace `/app`**, same host, port and CORS policy as the API. A dashboard
+  token is refused here exactly as it is over HTTP.
+- A refused handshake fires **`connect_error`** whose `error.data.code` is an
+  API error code: `AUTH_TOKEN_MISSING`, `AUTH_TOKEN_INVALID`,
+  `AUTH_TOKEN_EXPIRED`, `AUTH_SESSION_REVOKED`, `ACCOUNT_BLOCKED`,
+  `FORBIDDEN_AUDIENCE`, `FORBIDDEN_ROLE`. On `AUTH_TOKEN_EXPIRED`, refresh and
+  reconnect; the socket does **not** refresh for you.
+- On success the server emits **`ready`** `{ userId, role }`. Every socket
+  automatically joins your own room — you do not subscribe to get your events.
+
+| Event | Payload | When |
+| --- | --- | --- |
+| `message:new` | an app message, **already masked for you** | somebody writes in one of your chats |
+| `conversation:updated` | `{ conversationId, reason }` | a message, a read, a chat created or closed |
+| `booking:updated` | `{ bookingId, reference, status }` | any booking of yours moves |
+| `notification:new` | the row `GET /app/me/notifications` returns | a notification is written for you |
+
+Client → server, both acknowledged:
+
+| Call | Answer |
+| --- | --- |
+| `conversation:join` `{ conversationId }` | `{ ok: true, room }`, or `{ ok: false, code: 'NOT_A_PARTICIPANT' }` |
+| `conversation:leave` `{ conversationId }` | `{ ok: true }` |
+
+Joining a room you are not a participant of is refused, so ids cannot be
+guessed. You do **not** need to join to receive `message:new` for your own
+chats — the room is there for screens that want only one conversation's
+traffic.
+
+**Treat the socket as an optimisation, never as the source of truth.** Reload
+the list on reconnect; a dropped event must never lose a message.
+
+## 11. What is still not built
+
+- `POST /app/events` validates and answers 202 but **stores nothing in V1**
+  (analytics is V2 per the signed offer). Nothing in the UI may depend on it.
+- Typing indicators and presence on the socket: not implemented. Screen 15's
+  "online" dot has no data behind it yet.
+- The academic side of the app (screens 22, 22a, 08b, 08c) was **removed** by
+  the decisions of 15 Sep 2026. "New event request" opens the admin-built web
+  form `/f/:slug` in a WebView.
+
+## 12. Rate limits
 
 100 requests/min per user or IP globally; **10/min** on `/app/auth/*`; **30/min**
 on uploads. 429 carries `Retry-After`. Back off — do not hammer `refresh` in a

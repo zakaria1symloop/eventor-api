@@ -1,5 +1,5 @@
 import type { SessionAudience } from '../common/enums/auth.enums.js';
-import type { UserRole } from '../common/enums/user.enums.js';
+import type { Language, UserRole } from '../common/enums/user.enums.js';
 
 /** Claims inside an access token. */
 export interface AccessTokenPayload {
@@ -16,4 +16,6 @@ export interface AuthUser {
   role: UserRole;
   audience: SessionAudience;
   sessionId: string | null;
+  /** The account's own language, the fallback when `Accept-Language` says nothing. */
+  language: Language;
 }

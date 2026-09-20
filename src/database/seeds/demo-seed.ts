@@ -38,6 +38,7 @@ import { algiersDay } from '../../stats/stats.policy.js';
 import { rollupStats } from '../../stats/stats.rollup.js';
 import { addDays } from '../../bookings/bookings.policy.js';
 import { seedAcademic } from './demo-academic.js';
+import { seedAppData } from './demo-app.js';
 import { seedBookings, type BookingSeedSummary } from './demo-bookings.js';
 import { seedDisputes } from './demo-disputes.js';
 import { seedAdminNotifications, seedReviews } from './demo-reviews.js';
@@ -593,6 +594,8 @@ async function main(): Promise<void> {
       Object.assign(extra, await seedAcademic({ em, files, admin: omar }));
       Object.assign(extra, await seedReviews({ em, admin: omar, rand }));
       Object.assign(extra, await seedAdminNotifications(em));
+      // Mobile-only rows (favourites, budget, devices): nothing else creates them.
+      Object.assign(extra, await seedAppData(em));
       await recomputeCachedCounters(em);
     });
     for (const callback of afterCommitCallbacks) await callback();

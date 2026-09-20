@@ -161,6 +161,24 @@ describe('QueueService (BullMQ branch)', () => {
     expect(queues[0]!.close).toHaveBeenCalled();
   });
 
+  it('fails loudly, rather than falling back to inline, when the Redis driver cannot be built', () => {
+    // What a missing or mismatched `ioredis` looks like: BullMQ only needs the
+    // package once it builds a connection, so it throws from the constructor.
+    const service = new QueueService(env({ REDIS_URL: 'not-a-redis-url' }));
+    expect(service.driver).toBe('bullmq');
+
+    expect(() => service.onModuleInit()).toThrow(/REDIS_URL is set but the BullMQ Redis driver could not be loaded/);
+    // A silent downgrade would drop delayed jobs and retries in production.
+    expect(service.driver).toBe('bullmq');
+  });
+
+  it('logs connection errors the worker reports', () => {
+    const service = new QueueService(env({ REDIS_URL }));
+    service.onModuleInit();
+
+    expect(workers[0]!.on).toHaveBeenCalledWith('error', expect.any(Function));
+  });
+
   it('never connects during the OpenAPI export', () => {
     process.env.OPENAPI_EXPORT = '1';
     const service = new QueueService(env({ REDIS_URL }));

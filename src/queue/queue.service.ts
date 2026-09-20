@@ -55,14 +55,31 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
       return;
     }
     const connection = { url: this.env.REDIS_URL };
-    this.queue = new Queue(QUEUE_NAME, { connection });
-    this.worker = new Worker(QUEUE_NAME, (job: Job) => this.dispatch(job.name, job.data), {
-      connection,
-      concurrency: 4,
-    });
+    try {
+      this.queue = new Queue(QUEUE_NAME, { connection });
+      this.worker = new Worker(QUEUE_NAME, (job: Job) => this.dispatch(job.name, job.data), {
+        connection,
+        concurrency: 4,
+      });
+    } catch (error) {
+      // BullMQ keeps `ioredis` as an optional peer dependency and only requires
+      // it when a Redis connection is actually built, so a missing or mismatched
+      // install shows up here rather than at import time. Falling back to the
+      // inline driver would silently drop delayed jobs and retries in
+      // production, so this is fatal on purpose: REDIS_URL asked for Redis.
+      throw new Error(
+        `REDIS_URL is set but the BullMQ Redis driver could not be loaded: ${
+          error instanceof Error ? error.message : String(error)
+        }. Install the "ioredis" package (a peer dependency of bullmq) or clear REDIS_URL to run jobs in-process.`,
+        { cause: error },
+      );
+    }
     this.worker.on('failed', (job, error) =>
       this.logger.error(`Job ${job?.name}#${job?.id} failed: ${error.message}`, error.stack),
     );
+    // A Redis that is unreachable at boot is retried by ioredis, but a wrong URL
+    // or refused auth must be visible in the logs rather than swallowed.
+    this.worker.on('error', (error) => this.logger.error(`Queue connection error: ${error.message}`));
     this.logger.log('BullMQ queue connected');
   }
 

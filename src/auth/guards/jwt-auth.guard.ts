@@ -9,6 +9,7 @@ import { getRequestContext } from '../../common/request-context/request-context.
 import { User } from '../../users/entities/user.entity.js';
 import type { AuthUser } from '../auth.types.js';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator.js';
+import { audienceForPath } from './roles.guard.js';
 import { Session } from '../entities/session.entity.js';
 import { SessionsService } from '../sessions.service.js';
 import { TokenService } from '../token.service.js';
@@ -42,11 +43,28 @@ export class JwtAuthGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
+    const request = context.switchToHttp().getRequest<Request & { user?: AuthUser }>();
     if (isPublic) {
+      // A public route still attaches `request.user` when the caller happens to
+      // send a good token, so browsing endpoints can personalise (`isFavourite`)
+      // without a second, authenticated copy of every route. A missing, expired
+      // or foreign-audience token simply leaves the request anonymous.
+      if (request.headers.authorization) {
+        await this.authenticate(request).catch(() => undefined);
+        const expected = audienceForPath(request.originalUrl ?? request.url ?? '');
+        if (request.user && expected && request.user.audience !== expected) {
+          // A dashboard token browsing `/app/**` reads as a visitor rather than
+          // personalising the response with an admin's favourites.
+          request.user = undefined;
+        }
+      }
       return true;
     }
+    await this.authenticate(request);
+    return true;
+  }
 
-    const request = context.switchToHttp().getRequest<Request & { user?: AuthUser }>();
+  private async authenticate(request: Request & { user?: AuthUser }): Promise<void> {
     const [scheme, token] = (request.headers.authorization ?? '').split(' ');
     if (scheme?.toLowerCase() !== 'bearer' || !token) {
       throw AppException.of('AUTH_TOKEN_MISSING');
@@ -78,14 +96,18 @@ export class JwtAuthGuard implements CanActivate {
     }
     if (user.status === UserStatus.Blocked) {
       await this.sessions.revokeAllForUser(user.id);
-      throw new AppException(401, 'ACCOUNT_BLOCKED');
+      throw new AppException(401, 'ACCOUNT_BLOCKED', {
+        reason: user.blockedReason,
+        message: user.blockedMessage,
+        until: user.blockedUntil ? user.blockedUntil.toISOString() : null,
+      });
     }
-
     request.user = {
       id: user.id,
       role: user.role,
       audience: session.audience,
       sessionId: session.id,
+      language: user.language,
     };
     const store = getRequestContext();
     if (store) {
@@ -94,7 +116,6 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     await this.touch(user, session, now);
-    return true;
   }
 
   private async touch(user: User, session: Session, now: Date): Promise<void> {

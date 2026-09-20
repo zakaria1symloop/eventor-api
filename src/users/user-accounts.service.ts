@@ -318,6 +318,21 @@ export class UserAccountsService implements OnModuleInit {
     return { impact, cancelledBookings, sessionsRevoked };
   }
 
+  /**
+   * `DELETE /app/me`: the account closes itself. The same guards as the admin
+   * route below — upcoming bookings or an open dispute refuse it — except that
+   * the confirmation is the account's own password, checked by the caller,
+   * rather than typing the name back.
+   */
+  async removeSelf(auth: AuthUser, user: User): Promise<void> {
+    await runInTransaction(this.dataSource, async (em, afterCommit) => {
+      const locked = await this.users.load(user.id, em, true);
+      const blocking = activeItemsBlockingDelete(await this.activeItems(locked, em));
+      if (blocking) throw AppException.of('ACCOUNT_HAS_ACTIVE_ITEMS', blocking);
+      await this.deleteInTransaction(em, afterCommit, auth, locked);
+    });
+  }
+
   async remove(auth: AuthUser, id: string, dto: DeleteUserDto): Promise<void> {
     await runInTransaction(this.dataSource, async (em, afterCommit) => {
       const user = await this.users.load(id, em, true);

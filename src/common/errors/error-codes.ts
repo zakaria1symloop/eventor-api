@@ -846,6 +846,87 @@ export const ERROR_CODES = {
     en: 'The date range is invalid: "from" must be on or before "to", at most 366 days.',
     ar: 'نطاق التاريخ غير صالح: يجب أن يكون "from" قبل "to" أو يساويه، بحد أقصى 366 يومًا.',
   },
+  // ── mobile app API (module 15) ────────────────────────────
+  FORBIDDEN_AUDIENCE: {
+    status: HttpStatus.FORBIDDEN,
+    en: 'This token belongs to another application.',
+    ar: 'هذا الرمز يخص تطبيقًا آخر.',
+  },
+  EMAIL_NOT_VERIFIED: {
+    status: HttpStatus.FORBIDDEN,
+    en: 'Verify your email address before signing in.',
+    ar: 'يرجى تأكيد بريدك الإلكتروني قبل تسجيل الدخول.',
+  },
+  EMAIL_ALREADY_VERIFIED: {
+    status: HttpStatus.CONFLICT,
+    en: 'This email address is already verified.',
+    ar: 'تم تأكيد هذا البريد الإلكتروني من قبل.',
+  },
+  PASSWORD_ALREADY_SET: {
+    status: HttpStatus.CONFLICT,
+    en: 'This account already has a password. Sign in instead.',
+    ar: 'هذا الحساب لديه كلمة مرور بالفعل. سجّل الدخول.',
+  },
+  ROLE_NOT_ALLOWED_IN_APP: {
+    status: HttpStatus.FORBIDDEN,
+    en: 'Only client and provider accounts can use the app.',
+    ar: 'حسابات العملاء ومقدمي الخدمات فقط يمكنها استخدام التطبيق.',
+  },
+  PROVIDER_FIELDS_REQUIRED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'A provider account needs a business name and a category.',
+    ar: 'حساب مقدم الخدمة يحتاج إلى اسم النشاط والفئة.',
+  },
+  PROVIDER_FIELDS_NOT_ALLOWED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'These fields belong to provider accounts only.',
+    ar: 'هذه الحقول خاصة بحسابات مقدمي الخدمات فقط.',
+  },
+  PROVIDER_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    en: 'This provider was not found.',
+    ar: 'لم يتم العثور على مقدم الخدمة.',
+  },
+  FAVOURITE_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    en: 'This favourite was not found.',
+    ar: 'لم يتم العثور على هذا المفضل.',
+  },
+  FAVOURITE_TARGET_INVALID: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'Send exactly one of serviceId or packId.',
+    ar: 'أرسل إما serviceId أو packId، وليس كليهما.',
+  },
+  BUDGET_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    en: 'You have not created a budget yet.',
+    ar: 'لم تنشئ ميزانية بعد.',
+  },
+  BUDGET_ITEM_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    en: 'This budget line was not found.',
+    ar: 'لم يتم العثور على هذا البند.',
+  },
+  BUDGET_ITEM_LIMIT: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'A budget cannot hold more than {max} lines.',
+    ar: 'لا يمكن أن تحتوي الميزانية على أكثر من {max} بند.',
+  },
+  NOTIFICATION_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    en: 'This notification was not found.',
+    ar: 'لم يتم العثور على هذا الإشعار.',
+  },
+  DEVICE_TOKEN_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    en: 'This device token is not registered.',
+    ar: 'رمز الجهاز هذا غير مسجل.',
+  },
+  MONTH_INVALID: {
+    status: HttpStatus.BAD_REQUEST,
+    en: 'The month must look like YYYY-MM.',
+    ar: 'يجب أن يكون الشهر بالصيغة YYYY-MM.',
+  },
 } as const satisfies Record<string, ErrorDefinition>;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

@@ -9,6 +9,7 @@ Read before adding an endpoint:
 - [`docs/db-schema.md`](docs/db-schema.md): schema v1 (authoritative)
 - [`docs/status-rules.md`](docs/status-rules.md): every status transition
 - [`docs/tech-decisions.md`](docs/tech-decisions.md): stack, auth, jobs
+- [`docs/mobile-api.md`](docs/mobile-api.md): the `/app/**` contract handed to the mobile developer
 
 ## Requirements
 
@@ -88,7 +89,7 @@ random values of at least 32 characters.
 | `pnpm stats:backfill --days 120` | Recompute `stats_daily` for the last N Africa/Algiers days up to yesterday (the nightly job at 01:00 Algiers re-rolls the last 2 days) |
 | `pnpm perf:seed [--reset]` | Build `eventor_admin_perf` (`PERF_DB_DATABASE`) with production-like volumes: 50k users, 20k services, 50k bookings, 20k reviews, 2k disputes, 100k audit entries. Refuses `NODE_ENV=production` and refuses to target `DB_DATABASE` / `DB_DATABASE_TEST`; a second run is a no-op |
 | `pnpm perf:check` | p50 / p95 / max over `PERF_REQUESTS` (30) requests on each admin list endpoint, against the perf database. Exits 1 when a p95 exceeds `PERF_P95_MS` (300). `PERF_BASE_URL` + `PERF_TOKEN` measure an already-running server instead |
-| `pnpm seed:demo` | Idempotent demo data in `DB_DATABASE` (categories, communes, 40 clients, 25 providers, documents in every verification state, notes, audit entries, services, packs, ~180 bookings with invoices, reschedules and price changes, ~150 conversations with masked contact details and reported messages, 8 disputes (DSP-000024…031) in every status with evidence and dispute chats, request forms with versions and ~25 academic requests, ~70 reviews (FR/EN/AR, flagged ones with automatic reports, some hidden / redacted) with ~40% provider replies, reports on reviews, replies, messages, services, a pack and users in every status (one converted to DSP-000025), admin notifications, `stats_daily` backfilled for 120 days, admin `omar.belaid@eventor.dz` / `SEED_DEMO_ADMIN_PASSWORD`, default `Eventor-demo-2026`); refuses `NODE_ENV=production` |
+| `pnpm seed:demo` | Idempotent demo data in `DB_DATABASE` (categories, communes, 40 clients, 25 providers, documents in every verification state, notes, audit entries, services, packs, ~180 bookings with invoices, reschedules and price changes, ~150 conversations with masked contact details and reported messages, 8 disputes (DSP-000024…031) in every status with evidence and dispute chats, request forms with versions and ~25 academic requests, ~70 reviews (FR/EN/AR, flagged ones with automatic reports, some hidden / redacted) with ~40% provider replies, reports on reviews, replies, messages, services, a pack and users in every status (one converted to DSP-000025), admin notifications, mobile-only rows for the app API (favourites, one client budget whose lines link to real bookings, notification preferences, a device token), `stats_daily` backfilled for 120 days, admin `omar.belaid@eventor.dz` / `SEED_DEMO_ADMIN_PASSWORD`, default `Eventor-demo-2026`); refuses `NODE_ENV=production` |
 
 ## Schema
 
@@ -224,12 +225,41 @@ server's zone (AMPPS runs at UTC+1). Rows written before this fix are one hour a
 - **Notifications**: `NotificationsService` (`src/notifications`) writes `notifications` rows and sends a push
   (stub); dispute emails use the `case-update` template; socket event `dispute:new` on `/admin`.
 
+### Module 15 (part 1): the mobile app API
+
+- **`src/app-api`** serves the Flutter app under **`/api/v1/app/**`**, separate from
+  `/admin/**` because the two surfaces differ in audience, response shape and limits — not
+  in business rules, which are reused (`services.policy.ts` visibility, `packs.policy.ts`
+  pricing, `verification.policy.ts` document states, `UserAccountsService.removeSelf` for
+  account deletion). Tags: `app-auth`, `app-me`, `app-catalog`, `app-config`.
+- **Audiences never cross.** `RolesGuard` enforces `app` for `/app/**` and `dashboard` for
+  `/admin/**` (403 `FORBIDDEN_AUDIENCE`), *after* the role check, so a client token on
+  `/admin/**` keeps answering the more specific `FORBIDDEN_ROLE` it always has. Mobile gets
+  its refresh token **in the response body**, not a cookie.
+- **Optional auth:** `JwtAuthGuard` attaches `request.user` on `@Public()` routes when a
+  good token is sent, so the browsing endpoints fill `isFavourite` without a second,
+  authenticated copy of each route. A foreign-audience token there reads as anonymous.
+- **Language:** `@ReqLang()` resolves `Accept-Language` → the account's `language` → `en`;
+  `pickText` falls back to the other language rather than returning an empty string, so a
+  half-translated row still renders.
+- **Privacy:** provider phone and email are never serialised, review authors are shortened
+  to "Yasmine K.", invisible rows answer 404 rather than 403, and the budget is readable
+  only by its owner (`assertBudgetOwner`) — no admin route exposes it.
+- `pnpm seed:demo` also fills the mobile-only tables (favourites, one budget with lines
+  linked to real bookings, notification preferences, a device token) through
+  `seeds/demo-app.ts`; nothing else creates them, so without it screens 17 and 18 look broken.
+
 ## Queues and cron
 
 `QueueModule` hides the driver:
 
 - **`REDIS_URL` set** (staging, production): BullMQ queue `eventor` on Redis with a worker in
-  the API process (concurrency 4, exponential backoff, failed jobs kept).
+  the API process (concurrency 4, exponential backoff, failed jobs kept). BullMQ keeps
+  **`ioredis` as an optional peer dependency** and only requires it when it opens a
+  connection, so it is pinned here explicitly (`^5`, the range `typeorm` also wants):
+  without it a `REDIS_URL` deployment builds and tests green, then crashes at boot. If the
+  driver cannot be built, `QueueService` throws with that message instead of quietly
+  downgrading to inline — a silent downgrade would drop delayed jobs and retries.
 - **`REDIS_URL` empty** (dev machine without Redis, tests): the **inline driver**.
   `queueService.add()` runs the handler immediately in-process and awaits it, retrying up to
   `attempts`; failures are logged and never thrown to the caller. There is no persistence or
@@ -244,13 +274,16 @@ What the API does by default, and where to change it.
 
 - **Authentication.** Every route is guarded: `JwtAuthGuard` and `RolesGuard` are global
   (`APP_GUARD` in `AuthModule`), so a route is only reachable without a token when it is
-  explicitly marked `@Public()`. The full list is six controllers — admin auth, public
-  catalog, public forms, file download, health, and nothing else; `pnpm spec:export` makes
-  any addition visible in the diff. Access tokens are HS256, 15 min, and carry the session
+  explicitly marked `@Public()`. The full list is nine controllers — admin auth, public
+  catalog, public forms, file download, health, plus the mobile app's auth, catalogue and
+  config (module 15), and nothing else; `pnpm spec:export` makes any addition visible in the
+  diff. A `@Public()` route still *resolves* a bearer token when one is sent, so browsing can
+  fill `isFavourite`, but never requires one. Access tokens are HS256, 15 min, and carry the session
   id: revoking the session (`sessions.revoked_at`) kills the token immediately. Refresh
   tokens live in an httpOnly, `SameSite=Strict`, `Secure`-in-production cookie scoped to
   `/api/v1/admin/auth`, are hashed at rest, and rotate on every use — replaying a rotated
-  token revokes the whole session.
+  token revokes the whole session. The mobile app receives its refresh token in the response
+  body instead (a device has no cookie jar), with the same rotation and reuse detection.
 - **Passwords.** argon2id with the parameters pinned in `ARGON2_OPTIONS`
   (`src/auth/password.service.ts`): 64 MiB, 3 passes, 4 lanes, well above the OWASP
   minimum, and pinned so a dependency bump cannot silently weaken them. `verify()` hashes a
@@ -258,7 +291,8 @@ What the API does by default, and where to change it.
   exists. 5 failed attempts within 15 min lock an account for 15 min.
 - **Rate limits.** Global `THROTTLE_LIMIT` (100/min per user or IP, `UserOrIpThrottlerGuard`),
   with tighter per-group overrides defined once in `src/common/http/throttles.ts`:
-  `AUTH_THROTTLE` (10/min) on `/admin/auth/*` and the public form code / submit routes,
+  `AUTH_THROTTLE` (10/min) on `/admin/auth/*`, `/app/auth/*` and the public form code /
+  submit routes,
   `UPLOAD_THROTTLE` (30/min) on every multipart route, `MAIL_THROTTLE` (20/min) on the admin
   routes that email a third party. Import the constants rather than redefining them.
 - **Anti-enumeration.** `POST /admin/auth/forgot` always answers 202 whether or not the

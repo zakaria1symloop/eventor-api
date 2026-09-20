@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# One run per branch: a new push cancels the previous, still-running build.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The e2e suite reads .env when present and the environment otherwise
+  # (test/utils/test-env.ts), so CI passes everything explicitly.
+  DB_HOST: 127.0.0.1
+  DB_PORT: '3306'
+  DB_USERNAME: root
+  DB_PASSWORD: mysql
+  DB_DATABASE: eventor_admin_test
+  DB_DATABASE_TEST: eventor_admin_test
+  NODE_ENV: test
+  LOG_REQUESTS: 'false'
+  SMTP_HOST: ''
+  REDIS_URL: ''
+  JWT_ACCESS_SECRET: ci-access-secret-0123456789abcdef
+  FILES_SIGNING_SECRET: ci-files-secret-fedcba9876543210
+  SEED_ADMIN_EMAIL: ''
+  SEED_ADMIN_PASSWORD: ''
+  SEED_ADMIN_NAME: ''
+
+jobs:
+  ci:
+    name: lint · build · test · spec
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: mysql
+          MYSQL_DATABASE: eventor_admin_test
+          TZ: UTC
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pmysql"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Wait for MySQL
+        run: |
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -pmysql --silent; then
+              echo "MySQL is up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "MySQL did not become ready"; exit 1
+
+      - name: e2e tests
+        run: pnpm test:e2e
+
+      # openapi.json is committed: the dashboard generates its typed client from
+      # it, so a route or DTO change that is not re-exported fails the build.
+      - name: Check openapi.json is up to date
+        run: |
+          cp openapi.json /tmp/openapi.committed.json
+          pnpm spec:export
+          if ! diff -u /tmp/openapi.committed.json openapi.json > /tmp/openapi.diff; then
+            echo "::error file=openapi.json::openapi.json is out of date - run 'pnpm spec:export' and commit the result."
+            head -c 20000 /tmp/openapi.diff
+            exit 1
+          fi
+          echo "openapi.json is up to date."

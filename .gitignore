@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+coverage/
+*.tsbuildinfo
+
+# Environment: .env holds real credentials, .env.example is the template
+.env
+.env.*
+!.env.example
+
+# Uploaded files. Anchored on purpose: an unanchored "storage/" also ignores src/storage.
+/storage/
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json

@@ -1,0 +1,6 @@
+allowBuilds:
+  esbuild: true
+  '@scarf/scarf': false
+  argon2: true
+  msgpackr-extract: true
+  sharp: true

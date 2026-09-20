@@ -1,0 +1,37 @@
+# NOTE: Docker reads the .dockerignore next to the build context root, i.e.
+# backend/.dockerignore. Copy or symlink this file there:
+#   cp deploy/.dockerignore .dockerignore
+# (BuildKit also honours deploy/Dockerfile.dockerignore if you prefer to keep
+# the repository root clean: cp deploy/.dockerignore deploy/Dockerfile.dockerignore)
+
+node_modules
+**/node_modules
+dist
+**/dist
+storage
+**/storage
+coverage
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+.github
+
+_archive
+
+# Deployment artefacts are not needed inside the image
+deploy/nginx
+deploy/README.md
+deploy/*.sh
+
+# Editor / OS noise
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.log

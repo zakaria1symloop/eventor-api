@@ -1,0 +1,46 @@
+import { Injectable } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
+import { DocumentRejectReason, DocumentType } from '../common/enums/file.enums.js';
+import type { Lang } from '../common/i18n/language.js';
+import { MailService } from '../mail/mail.service.js';
+import { VERIFICATION_EVENTS, type DocumentRejectedEvent, type ProviderVerifiedEvent } from './verification.events.js';
+
+const DOCUMENT_LABELS: Record<DocumentType, Record<Lang, string>> = {
+  [DocumentType.NationalId]: { en: 'National ID card', ar: 'بطاقة التعريف الوطنية' },
+  [DocumentType.CommercialRegisterOrArtisanCard]: { en: 'Commercial register or artisan card', ar: 'السجل التجاري أو بطاقة الحرفي' },
+  [DocumentType.TaxCard]: { en: 'Tax card (NIF)', ar: 'البطاقة الجبائية (NIF)' },
+};
+
+const REASON_LABELS: Record<DocumentRejectReason, Record<Lang, string>> = {
+  [DocumentRejectReason.Unreadable]: { en: 'unreadable', ar: 'غير مقروءة' },
+  [DocumentRejectReason.Expired]: { en: 'expired', ar: 'منتهية الصلاحية' },
+  [DocumentRejectReason.NameMismatch]: { en: 'name does not match the account', ar: 'الاسم لا يطابق الحساب' },
+  [DocumentRejectReason.WrongDocument]: { en: 'wrong document', ar: 'وثيقة خاطئة' },
+  [DocumentRejectReason.Other]: { en: 'other reason', ar: 'سبب آخر' },
+};
+
+/** Verification emails (EN/AR, the provider's language). */
+@Injectable()
+export class VerificationMailListener {
+  constructor(private readonly mail: MailService) {}
+
+  @OnEvent(VERIFICATION_EVENTS.verified)
+  async onVerified(event: ProviderVerifiedEvent): Promise<void> {
+    await this.mail.enqueue({ to: event.email, template: 'provider-verified', lang: event.lang, data: { name: event.name } });
+  }
+
+  @OnEvent(VERIFICATION_EVENTS.documentRejected)
+  async onRejected(event: DocumentRejectedEvent): Promise<void> {
+    await this.mail.enqueue({
+      to: event.email,
+      template: 'document-rejected',
+      lang: event.lang,
+      data: {
+        name: event.name,
+        document: DOCUMENT_LABELS[event.type][event.lang],
+        reason: REASON_LABELS[event.reasonCode][event.lang],
+        message: event.message,
+      },
+    });
+  }
+}

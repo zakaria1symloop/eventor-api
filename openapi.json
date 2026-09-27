@@ -60576,8 +60576,8 @@
     }
   },
   "info": {
-    "title": "Eventor Admin API",
-    "description": "Admin API for the Eventor event-services marketplace.\n\n- Routes are private by default: send `Authorization: Bearer <access token>`. Public routes say so.\n- Single objects return `{ data }`; lists return `{ data, meta: { page, limit, total, totalPages } }`.\n- Errors return `{ statusCode, error, code, message, details, path, timestamp, requestId }`; `message` follows `Accept-Language` (en | ar), `code` is stable.\n- Money is a string with 2 decimals in DZD.",
+    "title": "Eventor API",
+    "description": "API for the Eventor marketplace: the mobile app (`/api/v1/app/**`, tags `app-*`) and the admin dashboard (`/api/v1/admin/**`, tags `admin-*`). Separate views: `/api/v1/docs/mobile` and `/api/v1/docs/admin`.\n\n- Routes are private by default: send `Authorization: Bearer <access token>`. Public routes say so.\n- Single objects return `{ data }`; lists return `{ data, meta: { page, limit, total, totalPages } }`.\n- Errors return `{ statusCode, error, code, message, details, path, timestamp, requestId }`; `message` follows `Accept-Language` (en | ar), `code` is stable.\n- Money is a string with 2 decimals in DZD.",
     "version": "1.0.0",
     "contact": {}
   },

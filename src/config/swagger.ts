@@ -37,9 +37,9 @@ const TAG_ORDER: ReadonlyArray<[name: string, description: string]> = [
 /** Shared by the running app and `pnpm spec:export`, so both describe the same API. */
 export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
   const config = new DocumentBuilder()
-    .setTitle('Eventor Admin API')
+    .setTitle('Eventor API')
     .setDescription(
-      'Admin API for the Eventor event-services marketplace.\n\n' +
+      'API for the Eventor marketplace: the mobile app (`/api/v1/app/**`, tags `app-*`) and the admin dashboard (`/api/v1/admin/**`, tags `admin-*`). Separate views: `/api/v1/docs/mobile` and `/api/v1/docs/admin`.\n\n' +
         '- Routes are private by default: send `Authorization: Bearer <access token>`. Public routes say so.\n' +
         '- Single objects return `{ data }`; lists return `{ data, meta: { page, limit, total, totalPages } }`.\n' +
         '- Errors return `{ statusCode, error, code, message, details, path, timestamp, requestId }`; ' +

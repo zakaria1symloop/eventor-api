@@ -16,6 +16,7 @@ import {
   createApp,
   expectError,
   loginAs,
+  makeAcademicRequest,
   makeBooking,
   makeCategory,
   makeNotification,
@@ -453,6 +454,24 @@ describe('App me (e2e)', () => {
       expect(res.body.data.marked).toBe(0);
     });
 
+    it('deletes one of my notifications for good, and only mine', async () => {
+      const me = await loginAs(t, UserRole.Client);
+      const mine = await makeNotification(db(), { userId: me.user.id });
+      const someoneElses = await makeNotification(db());
+
+      await request(t.http).delete(`${BASE}/notifications/${mine.id}`).set(me.headers).expect(204);
+      expect(await db().query('SELECT id FROM notifications WHERE id = ?', [mine.id])).toHaveLength(0);
+
+      // Somebody else's row: 404, and the row survives.
+      expectError(await request(t.http).delete(`${BASE}/notifications/${someoneElses.id}`).set(me.headers), 404, 'NOTIFICATION_NOT_FOUND');
+      expect(await db().query('SELECT id FROM notifications WHERE id = ?', [someoneElses.id])).toHaveLength(1);
+
+      // Deleting again: 404, with an Arabic message on demand.
+      const again = await request(t.http).delete(`${BASE}/notifications/${mine.id}`).set(me.headers).set('Accept-Language', 'ar');
+      expectError(again, 404, 'NOTIFICATION_NOT_FOUND');
+      expect(again.body.message).toMatch(/[؀-ۿ]/);
+    });
+
     it('400 VALIDATION_FAILED without ids or all', async () => {
       expectError(await request(t.http).post(`${BASE}/notifications/read`).set(client.headers).send({}), 400, 'VALIDATION_FAILED');
     });
@@ -506,6 +525,37 @@ describe('App me (e2e)', () => {
       expect((await request(t.http).get(`${BASE}/favourites?kind=service`).set(me.headers)).body.meta.total).toBe(2);
     });
 
+    it('removes a favourite by its target, idempotently', async () => {
+      const me = await loginAs(t, UserRole.Client);
+      const service = await visibleService();
+      const saved = await request(t.http).post(`${BASE}/favourites`).set(me.headers).send({ serviceId: service.id });
+      expect(saved.status).toBe(201);
+
+      await request(t.http).delete(`${BASE}/favourites?serviceId=${service.id}`).set(me.headers).expect(204);
+      expect(await db().getRepository(Favourite).countBy({ userId: me.user.id, serviceId: service.id })).toBe(0);
+
+      // Idempotent: un-saving something that is not saved is still 204.
+      await request(t.http).delete(`${BASE}/favourites?serviceId=${service.id}`).set(me.headers).expect(204);
+
+      const pack = await makePack(db());
+      await request(t.http).post(`${BASE}/favourites`).set(me.headers).send({ packId: pack.id }).expect(201);
+      await request(t.http).delete(`${BASE}/favourites?packId=${pack.id}`).set(me.headers).expect(204);
+
+      // Exactly one target.
+      expectError(await request(t.http).delete(`${BASE}/favourites`).set(me.headers), 422, 'FAVOURITE_TARGET_INVALID');
+      expectError(await request(t.http).delete(`${BASE}/favourites?serviceId=${service.id}&packId=${pack.id}`).set(me.headers), 422, 'FAVOURITE_TARGET_INVALID');
+    });
+
+    it('never removes another client’s favourite by target', async () => {
+      const owner = await loginAs(t, UserRole.Client);
+      const other = await loginAs(t, UserRole.Client);
+      const service = await visibleService();
+      await request(t.http).post(`${BASE}/favourites`).set(owner.headers).send({ serviceId: service.id }).expect(201);
+
+      await request(t.http).delete(`${BASE}/favourites?serviceId=${service.id}`).set(other.headers).expect(204);
+      expect(await db().getRepository(Favourite).countBy({ userId: owner.user.id, serviceId: service.id })).toBe(1);
+    });
+
     it('422 FAVOURITE_TARGET_INVALID with both or neither target', async () => {
       const service = await visibleService();
       const pack = await makePack(db());
@@ -533,6 +583,50 @@ describe('App me (e2e)', () => {
 
       expectError(await request(t.http).delete(`${BASE}/favourites/${added.body.data.id}`).set(client.headers), 404, 'FAVOURITE_NOT_FOUND');
       expect(await db().getRepository(Favourite).countBy({ id: added.body.data.id })).toBe(1);
+    });
+  });
+
+  describe('academic requests (My event requests)', () => {
+    it('lists only the requests linked to my account, newest first', async () => {
+      const me = await loginAs(t, UserRole.Client);
+      const older = await makeAcademicRequest(db(), { requesterId: me.user.id, submittedAt: new Date('2026-01-01T10:00:00Z'), eventDate: '2026-06-30' });
+      const newer = await makeAcademicRequest(db(), { requesterId: me.user.id, submittedAt: new Date('2026-02-01T10:00:00Z') });
+      await makeAcademicRequest(db()); // anonymous / somebody else's
+
+      const res = await request(t.http).get(`${BASE}/academic-requests`).set(me.headers).expect(200);
+
+      expect(res.body.meta).toMatchObject({ total: 2 });
+      expect(res.body.data.map((r: { id: string }) => r.id)).toEqual([newer.id, older.id]);
+      expect(res.body.data[1]).toEqual({
+        id: older.id,
+        reference: older.reference,
+        title: older.title,
+        status: 'pending',
+        eventDate: '2026-06-30',
+        submittedAt: '2026-01-01T10:00:00.000Z',
+      });
+    });
+
+    it('renders the answers of one of my requests with its own form version', async () => {
+      const me = await loginAs(t, UserRole.Client);
+      const mine = await makeAcademicRequest(db(), { requesterId: me.user.id });
+
+      const res = await request(t.http).get(`${BASE}/academic-requests/${mine.id}`).set(me.headers).expect(200);
+
+      expect(res.body.data).toMatchObject({ id: mine.id, reference: mine.reference, title: mine.title });
+      expect(res.body.data.answers).toEqual([
+        expect.objectContaining({ key: 'title', type: 'short_text', labelEn: 'Title', labelAr: 'العنوان', value: mine.title, displayValue: mine.title }),
+      ]);
+    });
+
+    it('404s on somebody else’s request or an unknown id, and needs a token', async () => {
+      const me = await loginAs(t, UserRole.Client);
+      const other = await makeAcademicRequest(db());
+      expectError(await request(t.http).get(`${BASE}/academic-requests/${other.id}`).set(me.headers), 404, 'ACADEMIC_REQUEST_NOT_FOUND');
+      const ar = await request(t.http).get(`${BASE}/academic-requests/11111111-1111-4111-8111-111111111111`).set(me.headers).set('Accept-Language', 'ar');
+      expectError(ar, 404, 'ACADEMIC_REQUEST_NOT_FOUND');
+      expect(ar.body.message).toMatch(/[؀-ۿ]/);
+      expect((await request(t.http).get(`${BASE}/academic-requests`)).status).toBe(401);
     });
   });
 
@@ -601,6 +695,36 @@ describe('App me (e2e)', () => {
 
       expect(ar.body.data.items[0].category.name).toBe('القاعة');
       expect(ar.body.data.items[0].category.nameEn).toBe('Venue');
+    });
+
+    it('409 BUDGET_BOOKING_ALREADY_LINKED when a second line takes the same booking', async () => {
+      const me = await loginAs(t, UserRole.Client);
+      await request(t.http).put(`${BASE}/budget`).set(me.headers).send({ title: 'Wedding', totalAmount: '400000.00' });
+      const booking = await makeBooking(db(), { clientId: me.user.id, status: BookingStatus.Accepted });
+
+      const first = await request(t.http).post(`${BASE}/budget/items`).set(me.headers).send({ label: 'Venue', bookingId: booking.id });
+      expect(first.status).toBe(201);
+      const firstItem = first.body.data.items[0];
+
+      const refused = await request(t.http).post(`${BASE}/budget/items`).set(me.headers).send({ label: 'Venue again', bookingId: booking.id });
+      expectError(refused, 409, 'BUDGET_BOOKING_ALREADY_LINKED');
+      expect(refused.body.details).toMatchObject({ bookingId: booking.id, itemId: firstItem.id });
+
+      // Same rule on PATCH: another line cannot steal the booking...
+      const other = await request(t.http).post(`${BASE}/budget/items`).set(me.headers).send({ label: 'Photos' });
+      const otherItem = other.body.data.items.find((i: { label: string }) => i.label === 'Photos');
+      const patched = await request(t.http).patch(`${BASE}/budget/items/${otherItem.id}`).set(me.headers).send({ bookingId: booking.id }).set('Accept-Language', 'ar');
+      expectError(patched, 409, 'BUDGET_BOOKING_ALREADY_LINKED');
+      expect(patched.body.message).toMatch(/[؀-ۿ]/);
+
+      // ...but the line already holding it can be re-saved with it.
+      const keep = await request(t.http).patch(`${BASE}/budget/items/${firstItem.id}`).set(me.headers).send({ bookingId: booking.id, label: 'Venue!' });
+      expect(keep.status).toBe(200);
+
+      // A cancelled booking keeps its line and its link (documented behaviour).
+      await db().query('UPDATE bookings SET status = ? WHERE id = ?', [BookingStatus.Cancelled, booking.id]);
+      const after = await request(t.http).get(`${BASE}/budget`).set(me.headers);
+      expect(after.body.data.items.find((i: { id: string }) => i.id === firstItem.id).bookingId).toBe(booking.id);
     });
 
     it('404 BOOKING_NOT_FOUND when linking a booking that is not mine', async () => {

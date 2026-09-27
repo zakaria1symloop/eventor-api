@@ -168,6 +168,19 @@ export class AppForgotPasswordDto {
   email: string;
 }
 
+export class AppVerifyResetCodeDto {
+  @ApiProperty({ format: 'email', example: 'amina.benali@email.com' })
+  @Transform(normaliseEmail)
+  @IsEmail()
+  @MaxLength(190)
+  email: string;
+
+  @ApiProperty({ example: '284917', description: 'The 6-digit code emailed by `/app/auth/forgot`. Checking it here does **not** consume it.' })
+  @Transform(trim)
+  @Matches(/^\d{6}$/, { message: 'code must be 6 digits' })
+  code: string;
+}
+
 export class AppResetPasswordDto {
   @ApiProperty({ format: 'email', example: 'amina.benali@email.com' })
   @Transform(normaliseEmail)

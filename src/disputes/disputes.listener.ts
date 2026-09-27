@@ -77,7 +77,7 @@ export class DisputesListener {
         lines: [`تم فتح نزاع (${type.ar}) على حجزك ${event.bookingReference}.`, 'سيتواصل معك دعم Eventor في محادثة النزاع. الإتمام التلقائي والتقييمات متوقفة مؤقتًا.'],
       },
     });
-    const data = { disputeId: event.disputeId, reference: event.reference, bookingId: event.bookingId };
+    const data = { disputeId: event.disputeId, reference: event.reference, bookingId: event.bookingId, conversationId: event.conversationId };
     await this.notifications.notify([event.againstUserId], { type: 'dispute.opened', title: `Dispute ${event.reference}`, body: `A dispute was opened on booking ${event.bookingReference}.`, data }, { push: true });
     await this.notifications.notifyAdmins({
       type: 'dispute.opened',
@@ -102,7 +102,7 @@ export class DisputesListener {
         type: event.evidenceRequestedFrom ? 'dispute.evidence_requested' : 'dispute.message',
         title: `Dispute ${event.reference}`,
         body: event.evidenceRequestedFrom ? 'Eventor support asked you for more evidence.' : 'New message from Eventor support.',
-        data: { disputeId: event.disputeId, messageId: event.messageId },
+        data: { disputeId: event.disputeId, bookingId: event.bookingId, conversationId: event.conversationId, messageId: event.messageId },
       },
       { push: true },
     );
@@ -117,7 +117,7 @@ export class DisputesListener {
       ar: { subject: `تم حل النزاع ${event.reference}`, lines: [`تم حل النزاع على الحجز ${event.bookingReference}.`, outcome.ar, `القرار: ${event.decisionNote}`, 'الدفع نقدًا؛ لا تتولى Eventor أي استرداد.'] },
     };
     for (const party of parties.values()) await this.email(party, text);
-    await this.notifications.notify([event.clientId, event.providerId], { type: 'dispute.resolved', title: `Dispute ${event.reference} resolved`, body: event.decisionNote.slice(0, 500), data: { disputeId: event.disputeId } }, { push: true });
+    await this.notifications.notify([event.clientId, event.providerId], { type: 'dispute.resolved', title: `Dispute ${event.reference} resolved`, body: event.decisionNote.slice(0, 500), data: { disputeId: event.disputeId, bookingId: event.bookingId, conversationId: event.conversationId } }, { push: true });
   }
 
   @OnEvent(DISPUTE_EVENTS.closed)
@@ -126,7 +126,7 @@ export class DisputesListener {
       type: 'dispute.closed',
       title: `Dispute ${event.reference} closed`,
       body: `The dispute on booking ${event.bookingReference} was closed without action; the booking continues normally.`,
-      data: { disputeId: event.disputeId },
+      data: { disputeId: event.disputeId, bookingId: event.bookingId, conversationId: event.conversationId },
     });
   }
 }

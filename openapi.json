@@ -1890,6 +1890,45 @@
         "security": []
       }
     },
+    "/api/v1/health": {
+      "get": {
+        "description": "Public. An alias of `GET /health/live`, so `GET {API_URL}/api/v1/health` answers 200 instead of 404.",
+        "operationId": "HealthController_root",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Liveness (alias)",
+        "tags": [
+          "health"
+        ],
+        "x-public": true,
+        "security": []
+      }
+    },
     "/api/v1/health/live": {
       "get": {
         "description": "Public. The process is running.",
@@ -1931,7 +1970,7 @@
     },
     "/api/v1/health/ready": {
       "get": {
-        "description": "Public. The database answers.",
+        "description": "Public. The database answers; `queue` and `mail` say which drivers are configured (`mail: \"console\"` means no SMTP — no email leaves the server).",
         "operationId": "HealthController_ready",
         "parameters": [
           {
@@ -36108,7 +36147,7 @@
     },
     "/api/v1/app/auth/login": {
       "post": {
-        "description": "Public route. Screen 07 Login. Client and provider accounts only. Returns `refreshToken` **in the body** (mobile has no cookie jar): store it in the OS keychain / keystore, never in plain preferences. It rotates on every `/app/auth/refresh`, and replaying a rotated one revokes the whole session. 5 failed attempts for an email within 15 min lock it for 15 min (429 `ACCOUNT_LOCKED`, `details.retryAfterSeconds`). An unverified account gets 403 `EMAIL_NOT_VERIFIED` with `details.email` — send the user to screen 10 and call `/app/auth/verify-email/resend`. A blocked account gets 403 `ACCOUNT_BLOCKED` with the admin’s `details.message`.",
+        "description": "Public route. Screen 07 Login. Client and provider accounts only. Returns `refreshToken` **in the body** (mobile has no cookie jar): store it in the OS keychain / keystore, never in plain preferences. It rotates on every `/app/auth/refresh`, and replaying a rotated one revokes the whole session. 5 failed attempts for an email within 15 min lock it for 15 min (429 `ACCOUNT_LOCKED`, `details.retryAfterSeconds`). An unverified account gets 403 `EMAIL_NOT_VERIFIED` with `details.email` — send the user to screen 10 and call `/app/auth/verify-email/resend`. A blocked account gets 403 `ACCOUNT_BLOCKED` with `details: { reason, message, blockedUntil }` — show `message` (the admin’s own words) and `blockedUntil` (ISO date-time, null for an indefinite block).",
         "operationId": "AppAuthController_login",
         "parameters": [
           {
@@ -36573,6 +36612,132 @@
           }
         },
         "summary": "Request a password reset code",
+        "tags": [
+          "app-auth"
+        ],
+        "x-public": true,
+        "security": []
+      }
+    },
+    "/api/v1/app/auth/reset/verify": {
+      "post": {
+        "description": "Public route. Screen 10a: validate the emailed code **before** the user types a new password twice. 204 when the code is valid — it is **not consumed**, so the same code then works on `POST /app/auth/reset`. A wrong code still burns one of the 5 attempts (422 `CODE_INVALID`); a spent or stale one answers 422 `CODE_EXPIRED`.",
+        "operationId": "AppAuthController_verifyReset",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppVerifyResetCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "The code is valid and still usable."
+          },
+          "400": {
+            "description": "`VALIDATION_FAILED`: Some fields are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "value": {
+                      "statusCode": 400,
+                      "error": "Bad Request",
+                      "code": "VALIDATION_FAILED",
+                      "message": "Some fields are invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`CODE_INVALID`: The verification code is incorrect.<br>`CODE_EXPIRED`: The verification code has expired. Ask for a new one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "CODE_INVALID": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "CODE_INVALID",
+                      "message": "The verification code is incorrect.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "CODE_EXPIRED": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "CODE_EXPIRED",
+                      "message": "The verification code has expired. Ask for a new one.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`RATE_LIMITED`: Too many requests. Please try again later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "RATE_LIMITED": {
+                    "value": {
+                      "statusCode": 429,
+                      "error": "Too Many Requests",
+                      "code": "RATE_LIMITED",
+                      "message": "Too many requests. Please try again later.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Check a reset code before asking for the new password",
         "tags": [
           "app-auth"
         ],
@@ -39803,6 +39968,146 @@
         ]
       }
     },
+    "/api/v1/app/me/notifications/{id}": {
+      "delete": {
+        "description": "Screen 16, swipe-to-delete. Removes one of **my** notifications for good (hard delete) — it will not come back on the next sync.",
+        "operationId": "AppMeController_deleteNotification",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "description": "`AUTH_SESSION_REVOKED`: Your session has ended. Please sign in again.\n\n`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FORBIDDEN_ROLE": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "FORBIDDEN_ROLE",
+                      "message": "Your account role cannot access this.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`NOTIFICATION_NOT_FOUND`: This notification was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "NOTIFICATION_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "NOTIFICATION_NOT_FOUND",
+                      "message": "This notification was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a notification",
+        "tags": [
+          "app-me"
+        ]
+      }
+    },
     "/api/v1/app/me/favourites": {
       "get": {
         "description": "Screen 17 Favorites. Services and packs together, newest first. A row whose target stopped being visible stays in the list with `available: false`, so the grid does not silently shrink. `categoryId` is the chip row (services only, since packs have no single category).",
@@ -40241,11 +40546,183 @@
         "tags": [
           "app-me"
         ]
+      },
+      "delete": {
+        "description": "Un-save straight from a card: `?serviceId=` or `?packId=` (exactly one), no favourite row id needed. **Idempotent** — removing something that is not saved still answers 204, so a double tap on ♥ never errors.",
+        "operationId": "AppMeController_removeFavouriteByTarget",
+        "parameters": [
+          {
+            "name": "serviceId",
+            "required": false,
+            "in": "query",
+            "description": "Exactly one of `serviceId` / `packId` (422 FAVOURITE_TARGET_INVALID).",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "packId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Not a favourite any more (whether or not it was one)."
+          },
+          "400": {
+            "description": "`VALIDATION_FAILED`: Some fields are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "value": {
+                      "statusCode": 400,
+                      "error": "Bad Request",
+                      "code": "VALIDATION_FAILED",
+                      "message": "Some fields are invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_SESSION_REVOKED`: Your session has ended. Please sign in again.\n\n`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FORBIDDEN_ROLE": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "FORBIDDEN_ROLE",
+                      "message": "Your account role cannot access this.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`FAVOURITE_TARGET_INVALID`: Send exactly one of serviceId or packId.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FAVOURITE_TARGET_INVALID": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "FAVOURITE_TARGET_INVALID",
+                      "message": "Send exactly one of serviceId or packId.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove a favourite by its target",
+        "tags": [
+          "app-me"
+        ]
       }
     },
     "/api/v1/app/me/favourites/{id}": {
       "delete": {
-        "description": "Screen 17, the ♥ on a card. `:id` is the **favourite** id, not the service id.",
+        "description": "Screen 17, the ♥ on a card. `:id` is the **favourite** id, not the service id (or use `DELETE /app/me/favourites?serviceId=`).",
         "operationId": "AppMeController_removeFavourite",
         "parameters": [
           {
@@ -40876,6 +41353,30 @@
               }
             }
           },
+          "409": {
+            "description": "`BUDGET_BOOKING_ALREADY_LINKED`: This booking is already linked to another budget line.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "BUDGET_BOOKING_ALREADY_LINKED": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "BUDGET_BOOKING_ALREADY_LINKED",
+                      "message": "This booking is already linked to another budget line.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "422": {
             "description": "`BUDGET_ITEM_LIMIT`: A budget cannot hold more than {max} lines.",
             "content": {
@@ -41124,6 +41625,30 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "`BUDGET_BOOKING_ALREADY_LINKED`: This booking is already linked to another budget line.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "BUDGET_BOOKING_ALREADY_LINKED": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "BUDGET_BOOKING_ALREADY_LINKED",
+                      "message": "This booking is already linked to another budget line.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -41297,6 +41822,371 @@
           }
         ],
         "summary": "Delete a budget line",
+        "tags": [
+          "app-me"
+        ]
+      }
+    },
+    "/api/v1/app/me/academic-requests": {
+      "get": {
+        "description": "The academic requests **this account** submitted through the web form while signed in (linked by `requester_id`), newest first. Requests sent without an account are not listed — they are followed by email.",
+        "operationId": "AppAcademicController_list",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "`en` or `ar`. Falls back to the account’s language, then `en`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Object"
+                }
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Object"
+                }
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "`field:asc` or `field:desc`. Each endpoint lists the fields it can sort by.",
+            "schema": {
+              "example": "createdAt:desc",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppAcademicRequestRowDto"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/PageMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VALIDATION_FAILED`: Some fields are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "value": {
+                      "statusCode": 400,
+                      "error": "Bad Request",
+                      "code": "VALIDATION_FAILED",
+                      "message": "Some fields are invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FORBIDDEN_ROLE": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "FORBIDDEN_ROLE",
+                      "message": "Your account role cannot access this.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "My event requests",
+        "tags": [
+          "app-me"
+        ]
+      }
+    },
+    "/api/v1/app/me/academic-requests/{id}": {
+      "get": {
+        "description": "The request with its answers rendered through the **form version it was submitted with** (immutable, status-rules §7), so the app can show exactly what was sent. Somebody else’s request answers 404 — the API does not confirm it exists.",
+        "operationId": "AppAcademicController_detail",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "`en` or `ar`. Falls back to the account’s language, then `en`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppAcademicRequestDetailDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FORBIDDEN_ROLE": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "FORBIDDEN_ROLE",
+                      "message": "Your account role cannot access this.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`ACADEMIC_REQUEST_NOT_FOUND`: The academic request was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "ACADEMIC_REQUEST_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "ACADEMIC_REQUEST_NOT_FOUND",
+                      "message": "The academic request was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "One of my event requests",
         "tags": [
           "app-me"
         ]
@@ -41518,7 +42408,7 @@
     },
     "/api/v1/app/wilayas": {
       "get": {
-        "description": "Public. The city selector on screen 11 and the wilaya filter on 11a. Only wilayas open for bookings. Text comes back in the caller’s language: `Accept-Language: ar|en`, then the signed-in account’s `language`, then `en`. The `*En` / `*Ar` fields are always present too, for screens that show both.",
+        "description": "Public. The city selector on screen 11 and the wilaya filter on 11a. Only wilayas open for bookings, each with `servicesCount` (services visible in the app that cover it). The list is ordered by that count, highest first — use the top rows as \"top wilayas\"; there is no separate `position`. Text comes back in the caller’s language: `Accept-Language: ar|en`, then the signed-in account’s `language`, then `en`. The `*En` / `*Ar` fields are always present too, for screens that show both.",
         "operationId": "AppCatalogController_wilayas",
         "parameters": [
           {
@@ -41558,7 +42448,7 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/AppWilayaRefDto"
+                        "$ref": "#/components/schemas/AppWilayaListDto"
                       }
                     }
                   }
@@ -41592,6 +42482,157 @@
           }
         },
         "summary": "Open wilayas",
+        "tags": [
+          "app-catalog"
+        ],
+        "x-public": true,
+        "security": []
+      }
+    },
+    "/api/v1/app/wilayas/{code}/communes": {
+      "get": {
+        "description": "Public. The commune picker of the booking sheet: `POST /app/bookings` takes one of these ids as `communeId` (it must belong to the booking's `wilayaCode`, 422 `COMMUNE_WILAYA_MISMATCH` otherwise). Sorted by name; `q` filters on the name (EN or AR) or postal code. Text comes back in the caller’s language: `Accept-Language: ar|en`, then the signed-in account’s `language`, then `en`. The `*En` / `*Ar` fields are always present too, for screens that show both.",
+        "operationId": "AppCatalogController_communes",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "`en` or `ar`. Falls back to the account’s language, then `en`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "description": "Wilaya code (1–58).",
+            "schema": {
+              "example": 16,
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Filter on the commune name (EN or AR) or postal code.",
+            "schema": {
+              "example": "hyd",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppCommuneDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VALIDATION_FAILED`: Some fields are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "value": {
+                      "statusCode": 400,
+                      "error": "Bad Request",
+                      "code": "VALIDATION_FAILED",
+                      "message": "Some fields are invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`WILAYA_NOT_FOUND`: The wilaya was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "WILAYA_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "WILAYA_NOT_FOUND",
+                      "message": "The wilaya was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`RATE_LIMITED`: Too many requests. Please try again later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "RATE_LIMITED": {
+                    "value": {
+                      "statusCode": 429,
+                      "error": "Too Many Requests",
+                      "code": "RATE_LIMITED",
+                      "message": "Too many requests. Please try again later.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Communes of a wilaya",
         "tags": [
           "app-catalog"
         ],
@@ -41666,10 +42707,13 @@
             "name": "categoryId",
             "required": false,
             "in": "query",
-            "description": "Category chip (screen 11).",
+            "description": "Category chip (screen 11). Repeat the parameter to search several categories at once, like `wilaya`.",
             "schema": {
-              "format": "uuid",
-              "type": "string"
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
             }
           },
           {
@@ -43264,7 +44308,7 @@
     },
     "/api/v1/app/config": {
       "get": {
-        "description": "Public (no token). Screen 01 Splash calls it on every cold start. Compare `minAppVersion` with the installed build and show the store prompt when it is lower; when `maintenanceMode` is true, show `maintenanceMessage` and stop. Also carries the upload limits, the password rule the register screens print, and the legal links the \"By continuing you agree…\" line points at. Cacheable for 60 s.",
+        "description": "Public (no token). Screen 01 Splash calls it on every cold start. Compare `minAppVersion` with the installed build and show the store prompt when it is lower; when `maintenanceMode` is true, show `maintenanceMessage` and stop. Also carries the upload limits, the business `limits` object (budget lines, photos, evidence, message length, document types as MIME **and** extensions, the event-request form slug), the password rule the register screens print, and the legal links the \"By continuing you agree…\" line points at. Cacheable for 60 s.",
         "operationId": "AppConfigController_config",
         "parameters": [
           {
@@ -45268,6 +46312,215 @@
         ]
       }
     },
+    "/api/v1/app/bookings/{id}/reschedules/{rid}/withdraw": {
+      "post": {
+        "description": "Only the **proposer** can withdraw, and only while the proposal is still pending (409 `RESCHEDULE_NOT_PENDING` otherwise). Withdrawing somebody else’s proposal is 403 `NOT_OWNER` — answer it with `/accept` or `/reject` instead. The booking keeps its current date.",
+        "operationId": "AppBookingsController_withdrawReschedule",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "`en` or `ar`. Falls back to the account’s language, then `en`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "rid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppBookingDetailDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`NOT_OWNER`: You do not own this item.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "NOT_OWNER": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "NOT_OWNER",
+                      "message": "You do not own this item.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`BOOKING_NOT_FOUND`: The booking was not found.<br>`RESCHEDULE_NOT_FOUND`: The reschedule proposal was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "BOOKING_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "BOOKING_NOT_FOUND",
+                      "message": "The booking was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "RESCHEDULE_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "RESCHEDULE_NOT_FOUND",
+                      "message": "The reschedule proposal was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`RESCHEDULE_NOT_PENDING`: This reschedule proposal is already {status}.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "RESCHEDULE_NOT_PENDING": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "RESCHEDULE_NOT_PENDING",
+                      "message": "This reschedule proposal is already {status}.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Withdraw my own reschedule proposal",
+        "tags": [
+          "app-bookings"
+        ]
+      }
+    },
     "/api/v1/app/bookings/{id}/check-in": {
       "post": {
         "description": "status-rules §5, after the event: `{\"answer\":\"ok\"}` is **All good**. When both the client and the provider have tapped it the booking completes immediately instead of waiting out the 72-hour dispute window. `{\"answer\":\"problem\"}` deliberately answers **422 `CHECK_IN_NOT_ALLOWED`** with `details.next` pointing at `POST /app/bookings/{id}/disputes` — reporting a problem is opening a dispute, and it needs a description.",
@@ -46052,7 +47305,7 @@
     },
     "/api/v1/app/provider/profile": {
       "patch": {
-        "description": "The Profile tab and the **\"Available for bookings\"** toggle on screen 21. Turning `acceptingBookings` off keeps the services visible and refuses new bookings (status-rules §3). `wilayaCodes` replaces the set and every added wilaya must be open. The account’s own name, phone, language and avatar live on `PATCH /app/me`.",
+        "description": "The Profile tab and the **\"Available for bookings\"** toggle on screen 21. Turning `acceptingBookings` off keeps the services visible and refuses new bookings (status-rules §3). `wilayaCodes` replaces the set and every added wilaya must be open. The account’s own name, phone, language and avatar live on `PATCH /app/me`. **Deliberately answers with the whole account (`AppMeDto`)**, provider profile included, so one round trip refreshes everything the Profile tab shows — this differs from the other provider routes on purpose.",
         "operationId": "AppProviderController_updateProfile",
         "parameters": [
           {
@@ -48426,6 +49679,632 @@
         ]
       }
     },
+    "/api/v1/app/provider/bookings/{id}/reschedules/{rid}/withdraw": {
+      "post": {
+        "description": "Only the **proposer** can withdraw, and only while the proposal is pending (409 `RESCHEDULE_NOT_PENDING` otherwise). The client’s proposal is answered with `/accept` or `/reject`, never withdrawn (403 `NOT_OWNER`).",
+        "operationId": "AppProviderController_withdrawReschedule",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "`en` or `ar`. Falls back to the account’s language, then `en`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "rid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppBookingDetailDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`NOT_OWNER`: You do not own this item.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "NOT_OWNER": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "NOT_OWNER",
+                      "message": "You do not own this item.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`BOOKING_NOT_FOUND`: The booking was not found.<br>`RESCHEDULE_NOT_FOUND`: The reschedule proposal was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "BOOKING_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "BOOKING_NOT_FOUND",
+                      "message": "The booking was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "RESCHEDULE_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "RESCHEDULE_NOT_FOUND",
+                      "message": "The reschedule proposal was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`RESCHEDULE_NOT_PENDING`: This reschedule proposal is already {status}.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "RESCHEDULE_NOT_PENDING": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "RESCHEDULE_NOT_PENDING",
+                      "message": "This reschedule proposal is already {status}.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`NOT_A_PROVIDER`: This action is only available for provider accounts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "NOT_A_PROVIDER": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "NOT_A_PROVIDER",
+                      "message": "This action is only available for provider accounts.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Withdraw my own reschedule proposal",
+        "tags": [
+          "app-provider"
+        ]
+      }
+    },
+    "/api/v1/app/provider/bookings/{id}/invoice": {
+      "get": {
+        "description": "The provider side of the invoice Eventor issues when a booking is accepted (status-rules §5). Readable only on **accepted or completed** bookings of yours — anything else answers 404 `INVOICE_NOT_FOUND`.",
+        "operationId": "AppProviderController_invoice",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "`en` or `ar`. Falls back to the account’s language, then `en`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InvoiceDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`NOT_OWNER`: You do not own this item.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "NOT_OWNER": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "NOT_OWNER",
+                      "message": "You do not own this item.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`BOOKING_NOT_FOUND`: The booking was not found.<br>`INVOICE_NOT_FOUND`: This booking has no invoice.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "BOOKING_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "BOOKING_NOT_FOUND",
+                      "message": "The booking was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "INVOICE_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "INVOICE_NOT_FOUND",
+                      "message": "This booking has no invoice.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`NOT_A_PROVIDER`: This action is only available for provider accounts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "NOT_A_PROVIDER": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "NOT_A_PROVIDER",
+                      "message": "This action is only available for provider accounts.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The invoice of my booking",
+        "tags": [
+          "app-provider"
+        ]
+      }
+    },
+    "/api/v1/app/provider/bookings/{id}/invoice.pdf": {
+      "get": {
+        "description": "The same invoice as a downloadable PDF, for the share sheet. Accepted or completed bookings of yours only.",
+        "operationId": "AppProviderController_invoicePdf",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "`en` or `ar`. Falls back to the account’s language, then `en`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The PDF bytes.",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`NOT_OWNER`: You do not own this item.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "NOT_OWNER": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "NOT_OWNER",
+                      "message": "You do not own this item.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`BOOKING_NOT_FOUND`: The booking was not found.<br>`INVOICE_NOT_FOUND`: This booking has no invoice.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "BOOKING_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "BOOKING_NOT_FOUND",
+                      "message": "The booking was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "INVOICE_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "INVOICE_NOT_FOUND",
+                      "message": "This booking has no invoice.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`NOT_A_PROVIDER`: This action is only available for provider accounts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "NOT_A_PROVIDER": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "NOT_A_PROVIDER",
+                      "message": "This action is only available for provider accounts.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The invoice as a PDF",
+        "tags": [
+          "app-provider"
+        ]
+      }
+    },
     "/api/v1/app/provider/bookings/{id}/check-in": {
       "post": {
         "description": "The provider half of status-rules §5: `{\"answer\":\"ok\"}` confirms the event went well, and when the client has confirmed too the booking completes immediately. `{\"answer\":\"problem\"}` answers 422 with `details.next` pointing at `POST /app/bookings/{id}/disputes`.",
@@ -49090,6 +50969,192 @@
       }
     },
     "/api/v1/app/provider/services/{id}": {
+      "get": {
+        "description": "The editing screen’s source of truth: the same `ServiceDetailDto` the PATCH and publish routes answer with, so an edit form never has to work from a list row. Yours only: another provider’s row answers **403 `NOT_OWNER`**, an unknown id **404**.",
+        "operationId": "AppProviderController_getService",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "`en` or `ar`. Falls back to the account’s language, then `en`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ServiceDetailDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`NOT_OWNER`: You do not own this item.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "NOT_OWNER": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "NOT_OWNER",
+                      "message": "You do not own this item.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`SERVICE_NOT_FOUND`: The service was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "SERVICE_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "SERVICE_NOT_FOUND",
+                      "message": "The service was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`NOT_A_PROVIDER`: This action is only available for provider accounts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "NOT_A_PROVIDER": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "NOT_A_PROVIDER",
+                      "message": "This action is only available for provider accounts.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "One of my services",
+        "tags": [
+          "app-provider"
+        ]
+      },
       "patch": {
         "description": "Partial update of one of your services; `wilayaCodes` and `extras` replace their set. Yours only: another provider’s row answers **403 `NOT_OWNER`**, an unknown id **404**.",
         "operationId": "AppProviderController_updateService",
@@ -51138,6 +53203,192 @@
       }
     },
     "/api/v1/app/provider/packs/{id}": {
+      "get": {
+        "description": "The pack editing screen’s source of truth: the same `PackDetailDto` the PATCH and publish routes answer with, including `attentionReasons` and the `publishMissing` checklist. Yours only: another provider’s row answers **403 `NOT_OWNER`**, an unknown id **404**.",
+        "operationId": "AppProviderController_getPack",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "`en` or `ar`. Falls back to the account’s language, then `en`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PackDetailDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`NOT_OWNER`: You do not own this item.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "NOT_OWNER": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "NOT_OWNER",
+                      "message": "You do not own this item.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`PACK_NOT_FOUND`: The pack was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "PACK_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "PACK_NOT_FOUND",
+                      "message": "The pack was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`NOT_A_PROVIDER`: This action is only available for provider accounts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "NOT_A_PROVIDER": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "NOT_A_PROVIDER",
+                      "message": "This action is only available for provider accounts.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "One of my packs",
+        "tags": [
+          "app-provider"
+        ]
+      },
       "patch": {
         "description": "`serviceIds` replaces the items, in order. Yours only: another provider’s row answers **403 `NOT_OWNER`**, an unknown id **404**.",
         "operationId": "AppProviderController_updatePack",
@@ -53594,7 +55845,7 @@
     },
     "/api/v1/app/conversations": {
       "get": {
-        "description": "Screen 14 Messages: the avatar, the name, the last message, the time and the unread badge. The **All / Unread** chips are `filter=all|unread`; `filter=booking` keeps the chats attached to a booking. `q` searches the other person's name. Live updates come from the Socket.IO namespace **`/app`** (`message:new`, `conversation:updated`), authenticated with the same access token. Polling is a fallback, not the design.",
+        "description": "Screen 14 Messages: the avatar, the name, the last message, the time and the unread badge. The **All / Unread** chips are `filter=all|unread`; `filter=booking` keeps the chats attached to a booking. `q` searches the other person's name. `userId` returns only the **direct** chat with that user (empty list when there is none) — the \"Message\" button uses it instead of matching names. Live updates come from the Socket.IO namespace **`/app`** (`message:new`, `conversation:updated`), authenticated with the same access token. Polling is a fallback, not the design.",
         "operationId": "AppMessagesController_list",
         "parameters": [
           {
@@ -53658,6 +55909,16 @@
                 "unread",
                 "booking"
               ]
+            }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "description": "Return only the **direct** conversation with this user — the \"Message\" button checks for an existing chat with it. Empty list when the two of you have never talked.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
             }
           },
           {
@@ -54458,7 +56719,7 @@
         ]
       },
       "post": {
-        "description": "JSON `{ \"body\": \"…\" }` for text, or `multipart/form-data` with `file` for an image (and an optional `body` caption). The type is sniffed from the bytes. Contact details in the text are masked for the other party until you share an accepted booking. A chat an admin closed answers 403 `CONVERSATION_CLOSED`.",
+        "description": "JSON `{ \"body\": \"…\" }` for text, or `multipart/form-data` with `file` for an image (and an optional `body` caption). The type is sniffed from the bytes. Contact details in the text are masked for the other party until you share an accepted booking. A chat an admin closed answers **409 `CONVERSATION_CLOSED`** (a state conflict, api-standards §5). Works in every conversation you are in — direct, support and **dispute** chats alike.",
         "operationId": "AppMessagesController_send",
         "parameters": [
           {
@@ -54784,6 +57045,219 @@
           }
         ],
         "summary": "Send a message",
+        "tags": [
+          "app-messages"
+        ]
+      }
+    },
+    "/api/v1/app/conversations/support": {
+      "post": {
+        "description": "The \"Contact support\" action. One **support** conversation per user (status-rules §10): the first call creates it and sends your message, later calls add to the same thread. Eventor support appears among the participants once an admin answers. Returns the conversation detail, ready to open as screen 15.",
+        "operationId": "AppMessagesController_startSupport",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "description": "`en` or `ar`. Falls back to the account’s language, then `en`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppStartSupportConversationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppConversationDetailDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VALIDATION_FAILED`: Some fields are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "value": {
+                      "statusCode": 400,
+                      "error": "Bad Request",
+                      "code": "VALIDATION_FAILED",
+                      "message": "Some fields are invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`CONVERSATION_READ_ONLY`: You cannot write in this conversation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "CONVERSATION_READ_ONLY": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "CONVERSATION_READ_ONLY",
+                      "message": "You cannot write in this conversation.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`USER_NOT_FOUND`: The user was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "USER_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "USER_NOT_FOUND",
+                      "message": "The user was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`CONVERSATION_CLOSED`: This conversation is closed. Reopen it to write.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "CONVERSATION_CLOSED": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "CONVERSATION_CLOSED",
+                      "message": "This conversation is closed. Reopen it to write.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Contact Eventor support",
         "tags": [
           "app-messages"
         ]
@@ -57327,7 +59801,7 @@
     },
     "/api/v1/app/disputes/{id}/messages": {
       "post": {
-        "description": "The dispute conversation holds you, the other party and Eventor support. Messages are never masked here — an admin is reading.",
+        "description": "The dispute conversation holds you, the other party and Eventor support. This route is a **text-only convenience**: the normal `POST /app/conversations/{conversationId}/messages` route works in the dispute chat too while it is open — including multipart images — using the `conversationId` from the dispute detail. Messages are never masked here — an admin is reading. A closed dispute chat answers **409 `CONVERSATION_CLOSED`**.",
         "operationId": "AppReviewsController_disputeMessage",
         "parameters": [
           {
@@ -57541,7 +60015,7 @@
             "bearer": []
           }
         ],
-        "summary": "Write in the dispute chat",
+        "summary": "Write in the dispute chat (text convenience)",
         "tags": [
           "app-reviews"
         ]
@@ -58273,6 +60747,7 @@
               "PACK_SERVICE_NOT_FOUND",
               "PACK_SERVICE_OTHER_PROVIDER",
               "PACK_PUBLISH_INVALID",
+              "PACK_WILAYA_NOT_COVERED",
               "PACK_INVALID_TRANSITION",
               "PACK_HAS_BOOKINGS",
               "BOOKING_NOT_FOUND",
@@ -58356,6 +60831,7 @@
               "BUDGET_NOT_FOUND",
               "BUDGET_ITEM_NOT_FOUND",
               "BUDGET_ITEM_LIMIT",
+              "BUDGET_BOOKING_ALREADY_LINKED",
               "NOTIFICATION_NOT_FOUND",
               "DEVICE_TOKEN_NOT_FOUND",
               "MONTH_INVALID",
@@ -59073,12 +61549,22 @@
               "bullmq",
               "inline"
             ]
+          },
+          "mail": {
+            "type": "string",
+            "example": "smtp",
+            "enum": [
+              "smtp",
+              "console"
+            ],
+            "description": "`smtp` when outgoing mail is configured; `console` means emails only reach the server log — codes and invoices are not delivered."
           }
         },
         "required": [
           "status",
           "database",
-          "queue"
+          "queue",
+          "mail"
         ]
       },
       "UpdateMeDto": {
@@ -64396,7 +66882,7 @@
           "body": {
             "type": "string",
             "example": "Bonjour Amina, nous avons bien reçu votre signalement.",
-            "maxLength": 5000
+            "maxLength": 4000
           },
           "bookingId": {
             "type": "string",
@@ -64625,7 +67111,7 @@
           "body": {
             "type": "string",
             "example": "Merci, nous vérifions avec le prestataire.",
-            "maxLength": 5000
+            "maxLength": 4000
           }
         },
         "required": [
@@ -65259,6 +67745,30 @@
           "nameAr"
         ]
       },
+      "AttentionReasonDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "item_not_published",
+              "item_deleted",
+              "provider_blocked",
+              "provider_not_verified",
+              "provider_deleted"
+            ]
+          },
+          "serviceId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "required": [
+          "code",
+          "serviceId"
+        ]
+      },
       "PackRowDto": {
         "type": "object",
         "properties": {
@@ -65353,6 +67863,13 @@
             "type": "boolean",
             "example": false
           },
+          "attentionReasons": {
+            "description": "Why the pack needs attention (empty when healthy) — same values as the detail, so a list row can say which item to fix.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttentionReasonDto"
+            }
+          },
           "visibleInApp": {
             "type": "boolean",
             "example": true
@@ -65385,6 +67902,7 @@
           "bookingsCount",
           "status",
           "needsAttention",
+          "attentionReasons",
           "visibleInApp",
           "createdAt",
           "updatedAt"
@@ -65581,30 +68099,6 @@
           "createdAt"
         ]
       },
-      "AttentionReasonDto": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "enum": [
-              "item_not_published",
-              "item_deleted",
-              "provider_blocked",
-              "provider_not_verified",
-              "provider_deleted"
-            ]
-          },
-          "serviceId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          }
-        },
-        "required": [
-          "code",
-          "serviceId"
-        ]
-      },
       "PackDetailDto": {
         "type": "object",
         "properties": {
@@ -65699,6 +68193,13 @@
             "type": "boolean",
             "example": false
           },
+          "attentionReasons": {
+            "description": "Why the pack needs attention (empty when healthy) — same values as the detail, so a list row can say which item to fix.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttentionReasonDto"
+            }
+          },
           "visibleInApp": {
             "type": "boolean",
             "example": true
@@ -65736,16 +68237,9 @@
               "$ref": "#/components/schemas/PhotoDto"
             }
           },
-          "attentionReasons": {
-            "description": "Why the pack needs attention (empty when healthy).",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AttentionReasonDto"
-            }
-          },
           "publishMissing": {
             "type": "array",
-            "description": "Publish checklist: what is still missing.",
+            "description": "Publish checklist: what is still missing (status-rules §4). `wilayaNotCovered` means the pack wilaya is not covered by every item — publishing then answers 422 `PACK_WILAYA_NOT_COVERED`.",
             "items": {
               "type": "string",
               "enum": [
@@ -65755,7 +68249,8 @@
                 "unpublishedItems",
                 "providerBlocked",
                 "providerNotVerified",
-                "priceNotBelowSum"
+                "priceNotBelowSum",
+                "wilayaNotCovered"
               ]
             }
           },
@@ -65791,6 +68286,7 @@
           "bookingsCount",
           "status",
           "needsAttention",
+          "attentionReasons",
           "visibleInApp",
           "createdAt",
           "updatedAt",
@@ -65799,7 +68295,6 @@
           "maxGuests",
           "items",
           "photos",
-          "attentionReasons",
           "publishMissing",
           "stats",
           "createdBy"
@@ -68055,7 +70550,7 @@
           "body": {
             "type": "string",
             "example": "Hello both, we are looking into this booking. Please share any proof you have.",
-            "maxLength": 5000
+            "maxLength": 4000
           }
         },
         "required": [
@@ -68073,7 +70568,7 @@
           "message": {
             "type": "string",
             "example": "Could you send a photo of the venue at 21:00 and your call log?",
-            "maxLength": 5000
+            "maxLength": 4000
           }
         },
         "required": [
@@ -72233,6 +74728,25 @@
           "email"
         ]
       },
+      "AppVerifyResetCodeDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "amina.benali@email.com"
+          },
+          "code": {
+            "type": "string",
+            "example": "284917",
+            "description": "The 6-digit code emailed by `/app/auth/forgot`. Checking it here does **not** consume it."
+          }
+        },
+        "required": [
+          "email",
+          "code"
+        ]
+      },
       "AppResetPasswordDto": {
         "type": "object",
         "properties": {
@@ -72670,25 +75184,45 @@
           },
           "type": {
             "type": "string",
-            "example": "booking.accepted"
+            "enum": [
+              "dispute.opened",
+              "dispute.message",
+              "dispute.evidence_requested",
+              "dispute.resolved",
+              "dispute.closed",
+              "review.new",
+              "review.shown",
+              "review.hidden",
+              "review.redacted",
+              "review_reply.hidden",
+              "review_reply.shown",
+              "report.resolved",
+              "report.dismissed",
+              "academic_request.cancelled",
+              "verification.approved",
+              "verification.rejected"
+            ],
+            "example": "dispute.message",
+            "description": "Stable machine type. `dispute.*` and message-related types carry `data.conversationId`, so a tap opens the right chat without parsing URLs."
           },
           "title": {
             "type": "string",
-            "example": "Booking accepted"
+            "example": "Dispute DSP-000012"
           },
           "body": {
             "type": "string",
-            "example": "Studio Lumière accepted your request for Sat 14 Mar."
+            "example": "New message from Eventor support."
           },
           "data": {
             "type": "object",
             "additionalProperties": true,
             "nullable": true,
             "example": {
+              "disputeId": "…",
               "bookingId": "…",
-              "href": "booking/…"
+              "conversationId": "…"
             },
-            "description": "Deep-link payload."
+            "description": "Typed ids for the deep link: `bookingId`, `conversationId`, `disputeId`, `requestId`, `reviewId`, `reportId` as the type requires. When a `href` appears it is a web path relative to `APP_PUBLIC_URL` — prefer the ids; never parse URLs."
           },
           "group": {
             "type": "string",
@@ -72936,21 +75470,22 @@
           "totalAmount": {
             "type": "string",
             "example": "400000.00",
-            "description": "The plan (\"of 400 000 DA planned\")."
+            "description": "The client’s declared plan ceiling (\"of 400 000 DA planned\"), set with `PUT /app/me/budget`. **Intentionally independent of the lines**: it may be above or below `plannedTotal`."
           },
           "plannedTotal": {
             "type": "string",
             "example": "380000.00",
-            "description": "Sum of the lines’ planned amounts."
+            "description": "Sum of the lines’ planned amounts. May diverge from `totalAmount` — that gap is the screen’s \"unallocated / over plan\" signal, not an error."
           },
           "spentTotal": {
             "type": "string",
-            "example": "180000.00"
+            "example": "180000.00",
+            "description": "Sum of the lines’ spent amounts."
           },
           "remaining": {
             "type": "string",
             "example": "220000.00",
-            "description": "`totalAmount` − `spentTotal`; may be negative."
+            "description": "`totalAmount` − `spentTotal` (the ceiling, **not** `plannedTotal`); may be negative."
           },
           "spentPercent": {
             "type": "number",
@@ -73044,7 +75579,7 @@
             "type": "string",
             "format": "uuid",
             "nullable": true,
-            "description": "One of my bookings; 404 BOOKING_NOT_FOUND when it is not."
+            "description": "One of my bookings; 404 BOOKING_NOT_FOUND when it is not. **One line per booking**: linking a booking already held by another line answers 409 `BUDGET_BOOKING_ALREADY_LINKED` with `details.itemId`. A cancelled booking keeps its line and its link."
           }
         },
         "required": [
@@ -73078,9 +75613,161 @@
             "type": "string",
             "format": "uuid",
             "nullable": true,
-            "description": "One of my bookings; 404 BOOKING_NOT_FOUND when it is not."
+            "description": "One of my bookings; 404 BOOKING_NOT_FOUND when it is not. **One line per booking**: linking a booking already held by another line answers 409 `BUDGET_BOOKING_ALREADY_LINKED` with `details.itemId`. A cancelled booking keeps its line and its link."
           }
         }
+      },
+      "AppAcademicRequestRowDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reference": {
+            "type": "string",
+            "example": "ACR-000142"
+          },
+          "title": {
+            "type": "string",
+            "example": "Graduation ceremony · Faculty of Medicine"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "changes_requested",
+              "approved",
+              "in_progress",
+              "rejected",
+              "completed",
+              "cancelled"
+            ],
+            "example": "pending"
+          },
+          "eventDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2026-06-30"
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "reference",
+          "title",
+          "status",
+          "eventDate",
+          "submittedAt"
+        ]
+      },
+      "AppAcademicAnswerDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "attendees"
+          },
+          "type": {
+            "type": "string",
+            "example": "number",
+            "description": "The field type of the form version."
+          },
+          "labelEn": {
+            "type": "string",
+            "example": "Expected attendees"
+          },
+          "labelAr": {
+            "type": "string",
+            "example": "عدد الحضور المتوقع"
+          },
+          "section": {
+            "type": "string",
+            "nullable": true,
+            "example": "General",
+            "description": "The form section the field belongs to."
+          },
+          "value": {
+            "type": "object",
+            "nullable": true,
+            "description": "The raw answer as submitted."
+          },
+          "displayValue": {
+            "type": "string",
+            "nullable": true,
+            "example": "250",
+            "description": "The answer rendered for display (choices resolved, wilaya and file names filled in)."
+          }
+        },
+        "required": [
+          "key",
+          "type",
+          "labelEn",
+          "labelAr",
+          "section",
+          "value",
+          "displayValue"
+        ]
+      },
+      "AppAcademicRequestDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reference": {
+            "type": "string",
+            "example": "ACR-000142"
+          },
+          "title": {
+            "type": "string",
+            "example": "Graduation ceremony · Faculty of Medicine"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "changes_requested",
+              "approved",
+              "in_progress",
+              "rejected",
+              "completed",
+              "cancelled"
+            ],
+            "example": "pending"
+          },
+          "eventDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2026-06-30"
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "answers": {
+            "description": "Every answer, rendered with the form version the request was submitted with.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppAcademicAnswerDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "reference",
+          "title",
+          "status",
+          "eventDate",
+          "submittedAt",
+          "answers"
+        ]
       },
       "AppCategoryDto": {
         "type": "object",
@@ -73246,7 +75933,8 @@
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "The provider’s **user id** — the same id `GET /app/providers/{id}` takes and `POST /app/conversations` accepts as `userId` for the \"Message\" button."
           },
           "businessName": {
             "type": "string",
@@ -73399,8 +76087,9 @@
             "nullable": true
           },
           "avgRating": {
-            "type": "string",
-            "example": "4.90"
+            "type": "number",
+            "example": 4.9,
+            "description": "A number (0–5, 2 decimals), like every pack rating."
           },
           "ratingCount": {
             "type": "number",
@@ -73417,6 +76106,12 @@
           "isFavourite": {
             "type": "boolean",
             "example": false
+          },
+          "favouriteId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The caller’s favourite row over this pack (null when not saved, or anonymous). Un-save with `DELETE /app/me/favourites/{favouriteId}` — or by target with `DELETE /app/me/favourites?packId=`."
           }
         },
         "required": [
@@ -73437,7 +76132,8 @@
           "ratingCount",
           "bookingsCount",
           "provider",
-          "isFavourite"
+          "isFavourite",
+          "favouriteId"
         ]
       },
       "AppServiceCardDto": {
@@ -73520,6 +76216,12 @@
             "type": "boolean",
             "example": false,
             "description": "Always false for anonymous callers."
+          },
+          "favouriteId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The caller’s favourite row over this service (null when not saved, or anonymous). Un-save with `DELETE /app/me/favourites/{favouriteId}` — or by target with `DELETE /app/me/favourites?serviceId=`."
           }
         },
         "required": [
@@ -73537,7 +76239,8 @@
           "coverUrl",
           "wilayas",
           "provider",
-          "isFavourite"
+          "isFavourite",
+          "favouriteId"
         ]
       },
       "AppHomeDto": {
@@ -73611,6 +76314,80 @@
           "budget",
           "packs",
           "nearbyServices"
+        ]
+      },
+      "AppWilayaListDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "number",
+            "example": 16
+          },
+          "name": {
+            "type": "string",
+            "example": "Alger",
+            "description": "In the caller’s language."
+          },
+          "nameEn": {
+            "type": "string",
+            "example": "Alger"
+          },
+          "nameAr": {
+            "type": "string",
+            "example": "الجزائر"
+          },
+          "servicesCount": {
+            "type": "number",
+            "example": 42,
+            "description": "Services visible in the app that cover this wilaya. The list is ordered by this count (highest first) — there is no separate `position`."
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "nameEn",
+          "nameAr",
+          "servicesCount"
+        ]
+      },
+      "AppCommuneDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Send it as `communeId` on `POST /app/bookings`."
+          },
+          "wilayaCode": {
+            "type": "number",
+            "example": 16
+          },
+          "name": {
+            "type": "string",
+            "example": "Hydra",
+            "description": "In the caller’s language."
+          },
+          "nameEn": {
+            "type": "string",
+            "example": "Hydra"
+          },
+          "nameAr": {
+            "type": "string",
+            "example": "حيدرة"
+          },
+          "postalCode": {
+            "type": "string",
+            "nullable": true,
+            "example": "16035"
+          }
+        },
+        "required": [
+          "id",
+          "wilayaCode",
+          "name",
+          "nameEn",
+          "nameAr",
+          "postalCode"
         ]
       },
       "AppServiceFactDto": {
@@ -73882,6 +76659,12 @@
             "example": false,
             "description": "Always false for anonymous callers."
           },
+          "favouriteId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The caller’s favourite row over this service (null when not saved, or anonymous). Un-save with `DELETE /app/me/favourites/{favouriteId}` — or by target with `DELETE /app/me/favourites?serviceId=`."
+          },
           "description": {
             "type": "string",
             "example": "We cover the whole day…"
@@ -73978,6 +76761,7 @@
           "wilayas",
           "provider",
           "isFavourite",
+          "favouriteId",
           "description",
           "descriptionEn",
           "descriptionAr",
@@ -74088,7 +76872,8 @@
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "The provider’s **user id** — the same id `GET /app/providers/{id}` takes and `POST /app/conversations` accepts as `userId` for the \"Message\" button."
           },
           "businessName": {
             "type": "string",
@@ -74387,8 +77172,9 @@
             "nullable": true
           },
           "avgRating": {
-            "type": "string",
-            "example": "4.90"
+            "type": "number",
+            "example": 4.9,
+            "description": "A number (0–5, 2 decimals), like every pack rating."
           },
           "ratingCount": {
             "type": "number",
@@ -74405,6 +77191,12 @@
           "isFavourite": {
             "type": "boolean",
             "example": false
+          },
+          "favouriteId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The caller’s favourite row over this pack (null when not saved, or anonymous). Un-save with `DELETE /app/me/favourites/{favouriteId}` — or by target with `DELETE /app/me/favourites?packId=`."
           },
           "description": {
             "type": "string",
@@ -74469,6 +77261,7 @@
           "bookingsCount",
           "provider",
           "isFavourite",
+          "favouriteId",
           "description",
           "descriptionEn",
           "descriptionAr",
@@ -74511,6 +77304,95 @@
         },
         "required": [
           "type"
+        ]
+      },
+      "AppConfigLimitsDto": {
+        "type": "object",
+        "properties": {
+          "budgetItemsMax": {
+            "type": "number",
+            "example": 60,
+            "description": "Maximum budget lines per client (`422 BUDGET_ITEM_LIMIT` past it, with `details.max`)."
+          },
+          "photosPerService": {
+            "type": "number",
+            "example": 12,
+            "description": "`max_photos_per_service` (422 `PHOTO_LIMIT_REACHED`)."
+          },
+          "photosPerPack": {
+            "type": "number",
+            "example": 6,
+            "description": "`max_photos_per_pack`."
+          },
+          "documentMaxMb": {
+            "type": "number",
+            "example": 5,
+            "description": "`max_document_upload_mb` — verification documents and dispute evidence."
+          },
+          "photoMaxMb": {
+            "type": "number",
+            "example": 10,
+            "description": "`max_photo_upload_mb`."
+          },
+          "disputeEvidenceMax": {
+            "type": "number",
+            "example": 10,
+            "description": "Evidence files each party may attach to a dispute (422 `DISPUTE_EVIDENCE_LIMIT`)."
+          },
+          "messageMaxLength": {
+            "type": "number",
+            "example": 4000,
+            "description": "Maximum length of a message body, everywhere a message can be sent."
+          },
+          "eventRequestFormSlug": {
+            "type": "string",
+            "nullable": true,
+            "example": "event-request",
+            "description": "Slug of the default published academic-request form — open `{APP_PUBLIC_URL}/f/{slug}` in a WebView. Null while no form is published."
+          },
+          "documentAcceptedMimeTypes": {
+            "example": [
+              "application/pdf",
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "image/heic",
+              "image/heif"
+            ],
+            "description": "MIME types accepted for documents — what the server sniffs from the bytes.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "documentAcceptedExtensions": {
+            "example": [
+              "pdf",
+              "jpg",
+              "jpeg",
+              "png",
+              "webp",
+              "heic",
+              "heif"
+            ],
+            "description": "File extensions matching those MIME types — what a file picker filters on. Match pickers on these; the server still decides from the bytes.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "budgetItemsMax",
+          "photosPerService",
+          "photosPerPack",
+          "documentMaxMb",
+          "photoMaxMb",
+          "disputeEvidenceMax",
+          "messageMaxLength",
+          "eventRequestFormSlug",
+          "documentAcceptedMimeTypes",
+          "documentAcceptedExtensions"
         ]
       },
       "AppConfigDto": {
@@ -74592,6 +77474,14 @@
             },
             "description": "Upload limits, so the app can refuse a file before sending it."
           },
+          "limits": {
+            "description": "Business limits the app should enforce locally before the server refuses.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AppConfigLimitsDto"
+              }
+            ]
+          },
           "passwordPolicy": {
             "type": "object",
             "example": {
@@ -74622,6 +77512,7 @@
           "termsUrl",
           "privacyUrl",
           "uploads",
+          "limits",
           "passwordPolicy",
           "booking"
         ]
@@ -74841,8 +77732,19 @@
         "properties": {
           "type": {
             "type": "string",
+            "enum": [
+              "created",
+              "pending",
+              "accepted",
+              "declined",
+              "cancelled",
+              "completed",
+              "rescheduled",
+              "checked_in",
+              "dispute_opened"
+            ],
             "example": "accepted",
-            "description": "`created`, a booking status, `rescheduled`, `checked_in`, `dispute_opened`, `review_left`."
+            "description": "`created`, the booking status the entry moved to, or one of the milestones `rescheduled` / `checked_in` / `dispute_opened`."
           },
           "toStatus": {
             "type": "string",
@@ -75002,11 +77904,28 @@
           },
           "status": {
             "type": "string",
+            "enum": [
+              "open",
+              "in_review",
+              "resolved",
+              "closed"
+            ],
             "example": "open"
           },
           "type": {
             "type": "string",
-            "example": "service_not_delivered"
+            "enum": [
+              "provider_no_show",
+              "client_no_show",
+              "service_not_as_described",
+              "incomplete_or_late",
+              "price_disagreement",
+              "cancellation_disagreement",
+              "damage_or_safety",
+              "behaviour",
+              "other"
+            ],
+            "example": "provider_no_show"
           },
           "openedByMe": {
             "type": "boolean",
@@ -75108,6 +78027,16 @@
             "type": "string",
             "nullable": true,
             "format": "uuid"
+          },
+          "category": {
+            "nullable": true,
+            "description": "The booked service’s category (\"Photography · Sat 14 Mar\"). Null for a pack booking — use `eventType` there.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AppCategoryRefDto"
+              }
+            ]
           },
           "coverUrl": {
             "type": "string",
@@ -75305,6 +78234,7 @@
           "titleAr",
           "serviceId",
           "packId",
+          "category",
           "coverUrl",
           "wilaya",
           "guests",
@@ -75499,6 +78429,16 @@
             "nullable": true,
             "format": "uuid"
           },
+          "category": {
+            "nullable": true,
+            "description": "The booked service’s category (\"Photography · Sat 14 Mar\"). Null for a pack booking — use `eventType` there.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AppCategoryRefDto"
+              }
+            ]
+          },
           "coverUrl": {
             "type": "string",
             "nullable": true
@@ -75574,6 +78514,7 @@
           "titleAr",
           "serviceId",
           "packId",
+          "category",
           "coverUrl",
           "wilaya",
           "guests",
@@ -75739,6 +78680,18 @@
             "type": "string",
             "example": "45000.00"
           },
+          "priceType": {
+            "type": "string",
+            "enum": [
+              "per_event",
+              "per_hour",
+              "per_person",
+              "per_day",
+              "on_quote"
+            ],
+            "example": "per_day",
+            "description": "So the row can print \"45 000 DA · per day\"."
+          },
           "avgRating": {
             "type": "string",
             "example": "4.80"
@@ -75774,6 +78727,7 @@
           "status",
           "visibleInApp",
           "basePrice",
+          "priceType",
           "avgRating",
           "ratingCount",
           "bookingsCount",
@@ -75793,7 +78747,7 @@
               "rejected",
               "blocked"
             ],
-            "description": "`verified` draws screen 21; anything else draws 21a."
+            "description": "`verified` draws screen 21 (the full home); `pending` and `rejected` draw 21a with `verificationSteps` and `documents`. `blocked` means an admin blocked the account: show a blocked state (use the `ACCOUNT_BLOCKED` details from sign-in for the message) — services and packs are hidden, chats are read-only and no request can be accepted until an admin unblocks the account."
           },
           "businessName": {
             "type": "string",
@@ -76457,6 +79411,35 @@
           "blocked"
         ]
       },
+      "AppLastMessageDto": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "example": "See you on the 14th!",
+            "description": "Already masked for you. Empty for an image without a caption — render \"📷 Photo\" from `kind`."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "attachment",
+              "system"
+            ],
+            "example": "text"
+          },
+          "mine": {
+            "type": "boolean",
+            "example": true,
+            "description": "You wrote it — screen 14 prefixes \"You: \"."
+          }
+        },
+        "required": [
+          "body",
+          "kind",
+          "mine"
+        ]
+      },
       "AppChatBookingDto": {
         "type": "object",
         "properties": {
@@ -76533,9 +79516,14 @@
             ]
           },
           "lastMessage": {
-            "type": "string",
             "nullable": true,
-            "example": "See you on the 14th!"
+            "description": "The newest message: its text (masked for you), its kind and whether you wrote it.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AppLastMessageDto"
+              }
+            ]
           },
           "lastMessageAt": {
             "type": "string",
@@ -76606,9 +79594,14 @@
             ]
           },
           "lastMessage": {
-            "type": "string",
             "nullable": true,
-            "example": "See you on the 14th!"
+            "description": "The newest message: its text (masked for you), its kind and whether you wrote it.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AppLastMessageDto"
+              }
+            ]
           },
           "lastMessageAt": {
             "type": "string",
@@ -76650,10 +79643,10 @@
             "format": "uuid",
             "description": "The dispute this chat belongs to, when it is a dispute chat."
           },
-          "closedReason": {
-            "type": "string",
-            "nullable": true,
-            "description": "Why an admin closed the chat."
+          "closedByModeration": {
+            "type": "boolean",
+            "example": false,
+            "description": "True when Eventor closed this conversation. The moderation reason itself is internal and never sent to the app — show your own localised \"This conversation was closed by Eventor\" line."
           },
           "createdAt": {
             "type": "string",
@@ -76673,7 +79666,7 @@
           "participants",
           "contactUnmasked",
           "disputeId",
-          "closedReason",
+          "closedByModeration",
           "createdAt"
         ]
       },
@@ -76717,6 +79710,11 @@
             "example": false,
             "description": "Contact details were hidden in this message (status-rules §10)."
           },
+          "removed": {
+            "type": "boolean",
+            "example": false,
+            "description": "An admin removed this message: `body` is already replaced with `[removed by Eventor]` — render it as a removed bubble, do not match on the text."
+          },
           "imageUrl": {
             "type": "string",
             "nullable": true,
@@ -76740,6 +79738,7 @@
           "mine",
           "body",
           "masked",
+          "removed",
           "imageUrl",
           "imageLargeUrl",
           "createdAt"
@@ -76785,11 +79784,26 @@
           "body": {
             "type": "string",
             "example": "Hello, are you free on 14 November?",
-            "maxLength": 4000
+            "maxLength": 4000,
+            "description": "The limit is `limits.messageMaxLength` from `GET /app/config`."
           }
         },
         "required": [
           "userId",
+          "body"
+        ]
+      },
+      "AppStartSupportConversationDto": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "example": "Hello, I cannot open my invoice.",
+            "maxLength": 4000,
+            "description": "The first message of the support thread."
+          }
+        },
+        "required": [
           "body"
         ]
       },
@@ -76939,6 +79953,11 @@
           },
           "status": {
             "type": "string",
+            "enum": [
+              "published",
+              "hidden",
+              "redacted"
+            ],
             "example": "published",
             "description": "A review an admin hid or redacted keeps its row and says so here."
           },
@@ -77340,7 +80359,8 @@
           "body": {
             "type": "string",
             "example": "Here is the call log from that evening.",
-            "maxLength": 4000
+            "maxLength": 4000,
+            "description": "The limit is `limits.messageMaxLength` from `GET /app/config`."
           }
         },
         "required": [

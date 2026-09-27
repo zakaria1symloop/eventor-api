@@ -1,9 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min } from 'class-validator';
 import { trim, trimToNull } from '../../common/dto/transforms.js';
 import { BookingStatus } from '../../common/enums/booking.enums.js';
-import { ConversationKind, ConversationStatus, MessageKind } from '../../common/enums/messaging.enums.js';
+import { ConversationKind, ConversationStatus, MESSAGE_MAX_LENGTH, MessageKind } from '../../common/enums/messaging.enums.js';
 import { ReportReason, ReportTargetType } from '../../common/enums/moderation.enums.js';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto.js';
 
@@ -15,6 +15,14 @@ export class AppConversationsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsIn(CONVERSATION_FILTERS)
   filter: ConversationFilter = 'all';
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: 'Return only the **direct** conversation with this user — the "Message" button checks for an existing chat with it. Empty list when the two of you have never talked.',
+  })
+  @IsOptional()
+  @IsUUID('all')
+  userId?: string;
 
   @ApiPropertyOptional({ example: 'studio', description: 'Search the other participant’s name.' })
   @IsOptional()
@@ -49,23 +57,34 @@ export class AppStartConversationDto {
   @IsUUID('all')
   bookingId?: string;
 
-  @ApiProperty({ example: 'Hello, are you free on 14 November?', maxLength: 4000 })
+  @ApiProperty({ example: 'Hello, are you free on 14 November?', maxLength: MESSAGE_MAX_LENGTH, description: 'The limit is `limits.messageMaxLength` from `GET /app/config`.' })
   @Transform(trim)
   @IsString()
-  @Length(1, 4000)
+  @Length(1, MESSAGE_MAX_LENGTH)
+  @MaxLength(MESSAGE_MAX_LENGTH)
+  body: string;
+}
+
+export class AppStartSupportConversationDto {
+  @ApiProperty({ example: 'Hello, I cannot open my invoice.', maxLength: MESSAGE_MAX_LENGTH, description: 'The first message of the support thread.' })
+  @Transform(trim)
+  @IsString()
+  @Length(1, MESSAGE_MAX_LENGTH)
+  @MaxLength(MESSAGE_MAX_LENGTH)
   body: string;
 }
 
 export class AppSendMessageDto {
   @ApiPropertyOptional({
     example: 'We can be there from 17:00.',
-    maxLength: 4000,
-    description: 'Optional only when an image is attached; a message with neither answers 400 `VALIDATION_FAILED`.',
+    maxLength: MESSAGE_MAX_LENGTH,
+    description: 'Optional only when an image is attached; a message with neither answers 400 `VALIDATION_FAILED`. The limit is `limits.messageMaxLength` from `GET /app/config`.',
   })
   @IsOptional()
   @Transform(trim)
   @IsString()
-  @Length(1, 4000)
+  @Length(1, MESSAGE_MAX_LENGTH)
+  @MaxLength(MESSAGE_MAX_LENGTH)
   body?: string;
 }
 
@@ -136,6 +155,8 @@ export class AppMessageDto {
   })
   body: string;
   @ApiProperty({ example: false, description: 'Contact details were hidden in this message (status-rules §10).' }) masked: boolean;
+  @ApiProperty({ example: false, description: 'An admin removed this message: `body` is already replaced with `[removed by Eventor]` — render it as a removed bubble, do not match on the text.' })
+  removed: boolean;
   @ApiProperty({ type: String, nullable: true, description: 'Signed URL of the image, for an `attachment` message.' }) imageUrl: string | null;
   @ApiProperty({ type: String, nullable: true, description: 'Full-size signed URL of the image.' }) imageLargeUrl: string | null;
   @ApiProperty({ format: 'date-time' }) createdAt: string;
@@ -147,12 +168,19 @@ export class AppMessagesPageDto {
   meta: { limit: number; hasMore: boolean; nextBefore: string | null };
 }
 
+export class AppLastMessageDto {
+  @ApiProperty({ example: 'See you on the 14th!', description: 'Already masked for you. Empty for an image without a caption — render "📷 Photo" from `kind`.' }) body: string;
+  @ApiProperty({ enum: MessageKind, example: MessageKind.Text }) kind: MessageKind;
+  @ApiProperty({ example: true, description: 'You wrote it — screen 14 prefixes "You: ".' }) mine: boolean;
+}
+
 export class AppConversationRowDto {
   @ApiProperty({ format: 'uuid' }) id: string;
   @ApiProperty({ enum: ConversationKind }) kind: ConversationKind;
   @ApiProperty({ enum: ConversationStatus }) status: ConversationStatus;
   @ApiProperty({ type: AppChatPersonDto, nullable: true, description: 'The other participant (Eventor support on a support or dispute chat).' }) other: AppChatPersonDto | null;
-  @ApiProperty({ type: String, nullable: true, example: 'See you on the 14th!' }) lastMessage: string | null;
+  @ApiProperty({ type: AppLastMessageDto, nullable: true, description: 'The newest message: its text (masked for you), its kind and whether you wrote it.' })
+  lastMessage: AppLastMessageDto | null;
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) lastMessageAt: string | null;
   @ApiProperty({ example: 2 }) unreadCount: number;
   @ApiProperty({ type: AppChatBookingDto, nullable: true }) booking: AppChatBookingDto | null;
@@ -167,7 +195,12 @@ export class AppConversationDetailDto extends AppConversationRowDto {
   })
   contactUnmasked: boolean;
   @ApiProperty({ type: String, nullable: true, format: 'uuid', description: 'The dispute this chat belongs to, when it is a dispute chat.' }) disputeId: string | null;
-  @ApiProperty({ type: String, nullable: true, description: 'Why an admin closed the chat.' }) closedReason: string | null;
+  @ApiProperty({
+    example: false,
+    description:
+      'True when Eventor closed this conversation. The moderation reason itself is internal and never sent to the app — show your own localised "This conversation was closed by Eventor" line.',
+  })
+  closedByModeration: boolean;
   @ApiProperty({ format: 'date-time' }) createdAt: string;
 }
 

@@ -10,9 +10,11 @@ import { AppException } from '../common/errors/app.exception.js';
 import { likeContains } from '../common/dto/transforms.js';
 import type { Lang } from '../common/i18n/language.js';
 import { paginate, type Paginated } from '../common/pagination/paginated.js';
+import { DomainEvents } from '../common/events/domain-events.js';
 import { runInTransaction } from '../database/transaction.js';
 import { FilesService } from '../files/files.service.js';
 import type { UploadedPhotoFile } from '../files/photo-gallery.js';
+import { MESSAGING_EVENTS, type ConversationUpdatedEvent } from '../messaging/messaging.events.js';
 import { MessagingService } from '../messaging/messaging.service.js';
 import { ReportsService } from '../reviews/reports.service.js';
 import { avatarUrl } from './app-refs.js';
@@ -64,6 +66,7 @@ export class AppMessagesService {
     private readonly messaging: MessagingService,
     private readonly reports: ReportsService,
     private readonly files: FilesService,
+    private readonly events: DomainEvents,
   ) {}
 
   // ── participants ──────────────────────────────────────────────
@@ -111,6 +114,11 @@ export class AppMessagesService {
       params.push(auth.id, auth.id);
     }
     if (query.filter === 'booking') clauses.push('c.booking_id IS NOT NULL');
+    if (query.userId) {
+      // The "Message" button: is there already a direct chat with this user?
+      clauses.push("c.kind = 'direct' AND EXISTS (SELECT 1 FROM conversation_participants up WHERE up.conversation_id = c.id AND up.user_id = ?)");
+      params.push(query.userId);
+    }
     if (query.q) {
       clauses.push(
         `EXISTS (SELECT 1 FROM conversation_participants qp JOIN users qu ON qu.id = qp.user_id
@@ -146,7 +154,7 @@ export class AppMessagesService {
   private async lastMessages(em: EntityManager, ids: string[]): Promise<Map<string, any>> {
     if (!ids.length) return new Map();
     const rows: any[] = await em.query(
-      `SELECT m.conversation_id, m.body, m.body_masked, m.kind, m.created_at FROM messages m
+      `SELECT m.conversation_id, m.body, m.body_masked, m.kind, m.status, m.sender_id, m.created_at FROM messages m
         JOIN (SELECT conversation_id, MAX(created_at) AS at FROM messages WHERE conversation_id IN (?) AND status <> 'deleted' GROUP BY conversation_id) last
           ON last.conversation_id = m.conversation_id AND last.at = m.created_at
        WHERE m.status <> 'deleted'`,
@@ -163,7 +171,13 @@ export class AppMessagesService {
       kind: r.kind as ConversationKind,
       status: r.status as ConversationStatus,
       other,
-      lastMessage: last ? (last.kind === MessageKind.Attachment ? '📷' : (!unmasked && last.body_masked ? last.body_masked : last.body)) : null,
+      lastMessage: last
+        ? {
+            body: last.status === MessageStatus.Hidden ? '[removed by Eventor]' : !unmasked && last.body_masked ? last.body_masked : (last.body ?? ''),
+            kind: last.kind as MessageKind,
+            mine: last.sender_id === auth.id,
+          }
+        : null,
       lastMessageAt: iso(r.last_message_at),
       unreadCount: Number(r.unread ?? 0),
       booking: r.booking_id
@@ -203,7 +217,8 @@ export class AppMessagesService {
       participants: people,
       contactUnmasked: Number(r.unmasked) === 1,
       disputeId: r.dispute_id ?? null,
-      closedReason: r.closed_reason ?? null,
+      // The admin's free-text close reason is internal; the app shows its own localised line.
+      closedByModeration: r.status === ConversationStatus.Closed && r.closed_by_id !== null,
       createdAt: iso(r.created_at)!,
     };
   }
@@ -252,6 +267,7 @@ export class AppMessagesService {
       mine: m.sender_id === meId,
       body: hidden ? '[removed by Eventor]' : masked ? m.body_masked : (m.body ?? ''),
       masked,
+      removed: hidden,
       imageUrl: m.file_id && !hidden ? this.files.signedUrl(m.file_id, { variant: FileVariantKind.Medium }) : null,
       imageLargeUrl: m.file_id && !hidden ? this.files.signedUrl(m.file_id) : null,
       createdAt: iso(m.created_at)!,
@@ -310,6 +326,53 @@ export class AppMessagesService {
       return conversationId;
     });
     return this.get(auth, id, lang);
+  }
+
+  /**
+   * "Contact support" (status-rules §10): one open support conversation per
+   * user. Reuses it when it exists, creates it otherwise (Eventor support joins
+   * when an admin first answers), sends the first message and returns the
+   * conversation detail so the app can open the thread straight away.
+   */
+  async startSupport(auth: AuthUser, body: string, lang: Lang): Promise<AppConversationDetailDto> {
+    const id = await runInTransaction(this.dataSource, async (em, afterCommit) => {
+      const [existing] = await em.query(
+        `SELECT c.id FROM conversations c JOIN conversation_participants cp ON cp.conversation_id = c.id AND cp.user_id = ?
+          WHERE c.kind = 'support' AND c.status = 'open' AND c.deleted_at IS NULL
+            AND NOT EXISTS (SELECT 1 FROM conversation_participants o WHERE o.conversation_id = c.id AND o.user_id <> ? AND o.role <> 'support')
+          ORDER BY c.created_at DESC LIMIT 1 FOR UPDATE`,
+        [auth.id, auth.id],
+      );
+      let conversationId: string = existing?.id;
+      if (!conversationId) {
+        const [me] = await em.query('SELECT id, role, status FROM users WHERE id = ? AND deleted_at IS NULL', [auth.id]);
+        if (!me) throw AppException.of('USER_NOT_FOUND');
+        const created: any = await em.query('SELECT UUID() AS id');
+        conversationId = created[0].id;
+        await em.query("INSERT INTO conversations (id, created_at, updated_at, kind, status) VALUES (?, NOW(6), NOW(6), 'support', 'open')", [conversationId]);
+        await em.query(
+          'INSERT INTO conversation_participants (id, created_at, conversation_id, user_id, role, can_write, last_read_at) VALUES (UUID(), NOW(6), ?, ?, ?, ?, NULL)',
+          [conversationId, auth.id, me.role === UserRole.Provider ? ParticipantRole.Provider : ParticipantRole.Client, me.status === UserStatus.Blocked ? 0 : 1],
+        );
+        this.events.emitAfterCommit<ConversationUpdatedEvent>(afterCommit, MESSAGING_EVENTS.conversationUpdated, { conversationId, reason: 'created' });
+      }
+      const [meRow] = await em.query('SELECT * FROM conversation_participants WHERE conversation_id = ? AND user_id = ?', [conversationId, auth.id]);
+      const [conversation] = await em.query('SELECT * FROM conversations WHERE id = ?', [conversationId]);
+      this.assertCanWrite(conversation, meRow);
+      await this.messaging.insertMessage(em, afterCommit, { conversationId, senderId: auth.id, body });
+      await em.query('UPDATE conversation_participants SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?', [new Date(), conversationId, auth.id]);
+      return conversationId;
+    });
+    return this.get(auth, id, lang);
+  }
+
+  /** One message in the app's shape, rendered for this caller (used by the dispute text route). */
+  async oneMessage(auth: AuthUser, conversationId: string, messageId: string): Promise<AppMessageDto> {
+    const em = this.dataSource.manager;
+    const [m] = await em.query('SELECT * FROM messages WHERE id = ? AND conversation_id = ?', [messageId, conversationId]);
+    if (!m) throw AppException.of('MESSAGE_NOT_FOUND');
+    const [flags] = await em.query(`SELECT ${UNMASKED_SQL} AS unmasked FROM conversations c WHERE c.id = ?`, [conversationId]);
+    return this.toMessage(m, auth.id, Number(flags?.unmasked ?? 0) === 1);
   }
 
   /** A text message, or an image when `file` is sent as multipart. */

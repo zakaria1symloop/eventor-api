@@ -108,6 +108,23 @@ export function appBookingActions(party: 'client' | 'provider', state: AppBookin
   return [...new Set(actions)];
 }
 
+/**
+ * Every `type` a booking timeline entry can carry: `created`, the status the
+ * booking moved to, or one of the extra milestones the detail view renders.
+ */
+export const APP_BOOKING_TIMELINE_TYPES = [
+  'created',
+  'pending',
+  'accepted',
+  'declined',
+  'cancelled',
+  'completed',
+  'rescheduled',
+  'checked_in',
+  'dispute_opened',
+] as const;
+export type AppBookingTimelineType = (typeof APP_BOOKING_TIMELINE_TYPES)[number];
+
 // ── check-in ────────────────────────────────────────────────────
 
 /**

@@ -193,6 +193,14 @@ describe('App reviews and disputes (e2e)', () => {
 
       const [row] = await db().query('SELECT dispute_status FROM bookings WHERE id = ?', [booking.id]);
       expect(row.dispute_status).toBe('open');
+
+      // #27: the other party's notification carries the typed ids, conversationId included.
+      const [notification] = await db().query(
+        "SELECT data FROM notifications WHERE user_id = ? AND type = 'dispute.opened' ORDER BY created_at DESC LIMIT 1",
+        [provider.user.id],
+      );
+      const data = typeof notification.data === 'string' ? JSON.parse(notification.data) : notification.data;
+      expect(data).toMatchObject({ disputeId: res.body.data.id, bookingId: booking.id, conversationId: res.body.data.conversationId });
     });
 
     it('refuses a second open dispute on the same booking', async () => {
@@ -280,6 +288,56 @@ describe('App reviews and disputes (e2e)', () => {
 
       expectError(await request(t.http).post(`${BASE}/disputes/${id}/evidence`).set(client.headers), 400, 'VALIDATION_FAILED');
       expectError(await request(t.http).post(`${BASE}/disputes/${id}/messages`).set(stranger.headers).send({ body: 'Not mine' }), 403, 'NOT_OWNER');
+    });
+
+    it('answers the dispute text route with the app message shape (mine, removed, masked)', async () => {
+      const booking = await disputableBooking();
+      const opened = await request(t.http)
+        .post(`${BASE}/bookings/${booking.id}/disputes`)
+        .set(client.headers)
+        .send({ type: DisputeType.Other, description: 'The message shape matters to the chat screen.' });
+
+      const message = await request(t.http).post(`${BASE}/disputes/${opened.body.data.id}/messages`).set(client.headers).send({ body: 'Shape check.' });
+      expect(message.status).toBe(201);
+      expect(message.body.data).toMatchObject({
+        conversationId: opened.body.data.conversationId,
+        body: 'Shape check.',
+        kind: 'text',
+        mine: true,
+        removed: false,
+        senderId: client.user.id,
+      });
+    });
+
+    it('accepts the normal conversation route in an open dispute chat, images included (#41)', async () => {
+      const booking = await disputableBooking();
+      const opened = await request(t.http)
+        .post(`${BASE}/bookings/${booking.id}/disputes`)
+        .set(client.headers)
+        .send({ type: DisputeType.Other, description: 'We will keep talking in the normal chat route.' });
+      const conversationId = opened.body.data.conversationId;
+      expect(conversationId).toEqual(expect.any(String));
+
+      // Text from the other party, through the generic route.
+      const text = await request(t.http).post(`/api/v1/app/conversations/${conversationId}/messages`).set(provider.headers).send({ body: 'Answering in the dispute chat.' });
+      expect(text.status).toBe(201);
+
+      // A photo, multipart — the dispute text route cannot do this.
+      const image = await request(t.http).post(`/api/v1/app/conversations/${conversationId}/messages`).set(client.headers).attach('file', PNG, 'proof.png');
+      expect(image.status).toBe(201);
+      expect(image.body.data.kind).toBe('attachment');
+
+      const page = await request(t.http).get(`/api/v1/app/conversations/${conversationId}/messages`).set(client.headers);
+      const bodies = page.body.data.map((m: { body: string }) => m.body);
+      expect(bodies).toContain('Answering in the dispute chat.');
+
+      // A stranger is still shut out, and a closed chat refuses with 409.
+      expectError(await request(t.http).post(`/api/v1/app/conversations/${conversationId}/messages`).set(stranger.headers).send({ body: 'Hi' }), 403, 'NOT_A_PARTICIPANT');
+      await db().query("UPDATE conversations SET status = 'closed', closed_scope = 'all' WHERE id = ?", [conversationId]);
+      const closed = await request(t.http).post(`/api/v1/app/conversations/${conversationId}/messages`).set(client.headers).send({ body: 'Too late' }).set('Accept-Language', 'ar');
+      expectError(closed, 409, 'CONVERSATION_CLOSED');
+      expect(closed.body.message).toMatch(/[؀-ۿ]/);
+      expectError(await request(t.http).post(`${BASE}/disputes/${opened.body.data.id}/messages`).set(client.headers).send({ body: 'Too late here too' }), 409, 'CONVERSATION_CLOSED');
     });
 
     it('lets the opener withdraw, and nobody else', async () => {

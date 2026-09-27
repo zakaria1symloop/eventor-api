@@ -143,7 +143,7 @@ export class AcademicMailListener {
     });
     await this.notifications.notify(
       event.providerIds,
-      { type: 'academic_request.cancelled', title: `Academic request ${event.reference} cancelled`, body: 'The related pending booking was cancelled.', data: { reference: event.reference } },
+      { type: 'academic_request.cancelled', title: `Academic request ${event.reference} cancelled`, body: 'The related pending booking was cancelled.', data: { requestId: event.requestId, reference: event.reference } },
       { push: true },
     );
   }

@@ -91,6 +91,8 @@ export class PackRowDto {
   @ApiProperty({ example: 21 }) bookingsCount: number;
   @ApiProperty({ enum: PackStatus }) status: PackStatus;
   @ApiProperty({ example: false }) needsAttention: boolean;
+  @ApiProperty({ type: () => [AttentionReasonDto], description: 'Why the pack needs attention (empty when healthy) — same values as the detail, so a list row can say which item to fix.' })
+  attentionReasons: AttentionReasonDto[];
   @ApiProperty({ example: true }) visibleInApp: boolean;
   @ApiProperty({ format: 'date-time' }) createdAt: string;
   @ApiProperty({ format: 'date-time' }) updatedAt: string;
@@ -132,8 +134,13 @@ export class PackDetailDto extends PackRowDto {
   @ApiProperty({ type: Number, nullable: true, example: 150 }) maxGuests: number | null;
   @ApiProperty({ type: [PackItemDto] }) items: PackItemDto[];
   @ApiProperty({ type: [PhotoDto] }) photos: PhotoDto[];
-  @ApiProperty({ type: [AttentionReasonDto], description: 'Why the pack needs attention (empty when healthy).' }) attentionReasons: AttentionReasonDto[];
-  @ApiProperty({ enum: PACK_PUBLISH_REQUIREMENTS, isArray: true, description: 'Publish checklist: what is still missing.' }) publishMissing: PackPublishRequirement[];
+  @ApiProperty({
+    enum: PACK_PUBLISH_REQUIREMENTS,
+    isArray: true,
+    description:
+      'Publish checklist: what is still missing (status-rules §4). `wilayaNotCovered` means the pack wilaya is not covered by every item — publishing then answers 422 `PACK_WILAYA_NOT_COVERED`.',
+  })
+  publishMissing: PackPublishRequirement[];
   @ApiProperty({ type: PackStatsDto }) stats: PackStatsDto;
   @ApiProperty({ type: PersonRefDto, nullable: true }) createdBy: PersonRefDto | null;
 }

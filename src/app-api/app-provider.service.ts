@@ -4,7 +4,7 @@ import type { DataSource, EntityManager } from 'typeorm';
 import type { AuthUser } from '../auth/auth.types.js';
 import { AuditService } from '../audit/audit.service.js';
 import { AuditLevel } from '../common/enums/admin.enums.js';
-import { ServiceStatus } from '../common/enums/catalog.enums.js';
+import { PriceType, ServiceStatus } from '../common/enums/catalog.enums.js';
 import { ReviewStatus, ReviewReplyStatus } from '../common/enums/moderation.enums.js';
 import { UserStatus, VerificationStatus } from '../common/enums/user.enums.js';
 import { AppException } from '../common/errors/app.exception.js';
@@ -143,7 +143,7 @@ export class AppProviderService {
 
   private async serviceRows(em: EntityManager, providerId: string, lang: Lang, limit?: number): Promise<AppProviderServiceRowDto[]> {
     const rows: any[] = await em.query(
-      `SELECT s.id, s.title_en, s.title_ar, s.status, s.base_price, s.avg_rating, s.rating_count, s.bookings_count,
+      `SELECT s.id, s.title_en, s.title_ar, s.status, s.base_price, s.price_type, s.avg_rating, s.rating_count, s.bookings_count,
               ${SERVICE_VISIBLE_SQL} AS visible,
               (SELECT COUNT(*) FROM service_photos sp WHERE sp.service_id = s.id) AS photos
          FROM services s JOIN users u ON u.id = s.provider_id
@@ -168,6 +168,7 @@ export class AppProviderService {
       status: r.status as ServiceStatus,
       visibleInApp: Number(r.visible) === 1,
       basePrice: String(r.base_price),
+      priceType: r.price_type as PriceType,
       avgRating: String(r.avg_rating ?? '0.00'),
       ratingCount: Number(r.rating_count ?? 0),
       bookingsCount: Number(r.bookings_count ?? 0),
@@ -186,6 +187,12 @@ export class AppProviderService {
     const [row] = await this.dataSource.query('SELECT provider_id FROM services WHERE id = ? AND deleted_at IS NULL', [id]);
     if (!row) throw AppException.of('SERVICE_NOT_FOUND');
     assertOwner(row.provider_id, auth.id);
+  }
+
+  /** One of my services, in the same shape the PATCH routes answer with. */
+  async getService(auth: AuthUser, id: string) {
+    await this.ownService(id, auth);
+    return this.services.get(id);
   }
 
   createService(auth: AuthUser, dto: AppCreateServiceDto) {
@@ -234,6 +241,12 @@ export class AppProviderService {
   async listPacks(auth: AuthUser) {
     const page = await this.packs.list({ page: 1, limit: 100, providerId: auth.id } as never);
     return page.data;
+  }
+
+  /** One of my packs, in the same shape the PATCH routes answer with. */
+  async getPack(auth: AuthUser, id: string) {
+    await this.ownPack(id, auth);
+    return this.packs.get(id);
   }
 
   createPack(auth: AuthUser, dto: AppCreatePackDto) {

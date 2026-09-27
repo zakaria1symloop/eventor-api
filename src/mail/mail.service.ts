@@ -51,6 +51,11 @@ export class MailService implements OnModuleInit {
     this.queue.registerHandler<MailRequest>(JOBS.sendMail, (request) => this.send(request));
   }
 
+  /** `smtp` when SMTP is configured, `console` when mail only reaches the log/outbox. Shown by `/health/ready`. */
+  get driver(): 'smtp' | 'console' {
+    return this.transporter ? 'smtp' : 'console';
+  }
+
   async enqueue<T extends MailTemplateName>(request: MailRequest<T>): Promise<void> {
     await this.queue.add(JOBS.sendMail, request, { attempts: 5 });
   }

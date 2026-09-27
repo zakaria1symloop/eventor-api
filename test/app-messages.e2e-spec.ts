@@ -91,6 +91,32 @@ describe('App messages (e2e)', () => {
     });
   });
 
+  describe('POST /app/conversations/support', () => {
+    it('creates my support thread once and reuses it afterwards', async () => {
+      const me = await loginAs(t, UserRole.Client);
+      const first = await request(t.http).post(`${BASE}/conversations/support`).set(me.headers).send({ body: 'I cannot open my invoice.' });
+      expect(first.status).toBe(201);
+      expect(first.body.data).toMatchObject({ kind: 'support', status: 'open', lastMessage: { body: 'I cannot open my invoice.', mine: true, kind: 'text' } });
+
+      const again = await request(t.http).post(`${BASE}/conversations/support`).set(me.headers).send({ body: 'Still stuck.' });
+      expect(again.body.data.id).toBe(first.body.data.id);
+      const rows = await db().query("SELECT id FROM conversations c WHERE c.kind = 'support' AND EXISTS (SELECT 1 FROM conversation_participants cp WHERE cp.conversation_id = c.id AND cp.user_id = ?)", [me.user.id]);
+      expect(rows).toHaveLength(1);
+
+      const messages = await request(t.http).get(`${BASE}/conversations/${first.body.data.id}/messages`).set(me.headers);
+      expect(messages.body.data.map((m: { body: string }) => m.body)).toEqual(['I cannot open my invoice.', 'Still stuck.']);
+    });
+
+    it('validates the body and refuses a message above the platform limit', async () => {
+      const me = await loginAs(t, UserRole.Client);
+      expectError(await request(t.http).post(`${BASE}/conversations/support`).set(me.headers).send({}), 400, 'VALIDATION_FAILED');
+      const ar = await request(t.http).post(`${BASE}/conversations/support`).set(me.headers).send({ body: 'x'.repeat(4001) }).set('Accept-Language', 'ar');
+      expectError(ar, 400, 'VALIDATION_FAILED');
+      expect(ar.body.message).toMatch(/[؀-ۿ]/);
+      expect((await request(t.http).post(`${BASE}/conversations/support`).send({ body: 'Hi' })).status).toBe(401);
+    });
+  });
+
   describe('GET /app/conversations', () => {
     it('lists my chats with the other person, the last message and the unread count', async () => {
       const id = await chat('The last thing I said');
@@ -102,7 +128,7 @@ describe('App messages (e2e)', () => {
       const row = res.body.data.find((c: { id: string }) => c.id === id);
       expect(row).toBeDefined();
       expect(row.other.id).toBe(client.user.id);
-      expect(row.lastMessage).toBe('The last thing I said');
+      expect(row.lastMessage).toEqual({ body: 'The last thing I said', kind: 'text', mine: false });
       expect(row.unreadCount).toBeGreaterThan(0);
     });
 
@@ -117,6 +143,19 @@ describe('App messages (e2e)', () => {
 
       const booking = await request(t.http).get(`${BASE}/conversations?filter=booking`).set(provider.headers);
       expect(booking.body.data.every((c: { booking: unknown }) => c.booking !== null)).toBe(true);
+    });
+
+    it('finds the direct conversation with one user via ?userId=', async () => {
+      const id = await chat();
+      const byUser = await request(t.http).get(`${BASE}/conversations?userId=${provider.user.id}`).set(client.headers).expect(200);
+      expect(byUser.body.data.map((c: { id: string }) => c.id)).toEqual([id]);
+
+      // No chat with this user yet → an empty list, not an error.
+      const nobody = await loginAs(t, UserRole.Provider);
+      const empty = await request(t.http).get(`${BASE}/conversations?userId=${nobody.user.id}`).set(client.headers).expect(200);
+      expect(empty.body.data).toEqual([]);
+
+      expectError(await request(t.http).get(`${BASE}/conversations?userId=nope`).set(client.headers), 400, 'VALIDATION_FAILED');
     });
 
     it('never lists a chat I am not in', async () => {
@@ -211,6 +250,32 @@ describe('App messages (e2e)', () => {
       await db().query('UPDATE conversations SET status = ?, closed_scope = ? WHERE id = ?', [ConversationStatus.Closed, 'all', id]);
       expectError(await request(t.http).post(`${BASE}/conversations/${id}/messages`).set(client.headers).send({ body: 'Hi' }), 409, 'CONVERSATION_CLOSED');
       await db().query('UPDATE conversations SET status = ?, closed_scope = NULL WHERE id = ?', [ConversationStatus.Open, id]);
+    });
+
+    it('flags a message an admin hid with removed: true and replaces its body', async () => {
+      const id = await chat('Something rude');
+      const list = await request(t.http).get(`${BASE}/conversations/${id}/messages`).set(provider.headers);
+      const messageId = list.body.data.at(-1).id;
+      expect(list.body.data.at(-1).removed).toBe(false);
+      await db().query("UPDATE messages SET status = 'hidden' WHERE id = ?", [messageId]);
+
+      const after = await request(t.http).get(`${BASE}/conversations/${id}/messages`).set(provider.headers);
+      const hidden = after.body.data.find((m: { id: string }) => m.id === messageId);
+      expect(hidden).toMatchObject({ removed: true, body: '[removed by Eventor]' });
+      await db().query("UPDATE messages SET status = 'visible' WHERE id = ?", [messageId]);
+    });
+
+    it('exposes closedByModeration instead of the admin’s free-text close reason', async () => {
+      const id = await chat();
+      const open = await request(t.http).get(`${BASE}/conversations/${id}`).set(client.headers);
+      expect(open.body.data.closedByModeration).toBe(false);
+      expect(open.body.data).not.toHaveProperty('closedReason');
+
+      await db().query("UPDATE conversations SET status = 'closed', closed_scope = 'all', closed_reason = 'internal moderation note', closed_by_id = ? WHERE id = ?", [admin.user.id, id]);
+      const closed = await request(t.http).get(`${BASE}/conversations/${id}`).set(client.headers);
+      expect(closed.body.data.closedByModeration).toBe(true);
+      expect(JSON.stringify(closed.body)).not.toContain('internal moderation note');
+      await db().query("UPDATE conversations SET status = 'open', closed_scope = NULL, closed_reason = NULL, closed_by_id = NULL WHERE id = ?", [id]);
     });
 
     it('404s on an unknown cursor', async () => {
@@ -342,6 +407,31 @@ describe('App messages (e2e)', () => {
 
       expect(await socket.emitWithAck('conversation:join', { conversationId: id })).toMatchObject({ ok: true });
       expect(await socket.emitWithAck('conversation:leave', { conversationId: id })).toMatchObject({ ok: true });
+    });
+
+    it('pushes notification:new with the same row GET /app/me/notifications returns', async () => {
+      const socket = await connect(client.token);
+      const arrived = new Promise<Record<string, unknown>>((resolve) => socket.once('notification:new', resolve));
+
+      const { NotificationsService } = await import('../src/notifications/notifications.service.js');
+      await t.get(NotificationsService).notify([client.user.id], {
+        type: 'dispute.message',
+        title: 'Dispute DSP-000001',
+        body: 'New message from Eventor support.',
+        data: { disputeId: '11111111-1111-4111-8111-111111111111', conversationId: '22222222-2222-4222-8222-222222222222' },
+      });
+
+      const event = await arrived;
+      expect(event).toMatchObject({
+        id: expect.any(String),
+        type: 'dispute.message',
+        title: 'Dispute DSP-000001',
+        body: 'New message from Eventor support.',
+        data: { disputeId: '11111111-1111-4111-8111-111111111111', conversationId: '22222222-2222-4222-8222-222222222222' },
+        readAt: null,
+      });
+      const rows = await request(t.http).get(`${BASE}/me/notifications`).set(client.headers);
+      expect(rows.body.data.map((n: { id: string }) => n.id)).toContain(event.id);
     });
 
     it('pushes booking:updated to both parties', async () => {

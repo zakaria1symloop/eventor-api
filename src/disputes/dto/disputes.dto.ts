@@ -3,6 +3,7 @@ import { Transform } from 'class-transformer';
 import { ArrayMaxSize, IsBoolean, IsEnum, IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength, ValidateIf } from 'class-validator';
 import { toArray, trim } from '../../common/dto/transforms.js';
 import { BookingDisputeStatus, BookingStatus } from '../../common/enums/booking.enums.js';
+import { MESSAGE_MAX_LENGTH } from '../../common/enums/messaging.enums.js';
 import { DisputeBookingOutcome, DisputeEvidenceKind, DisputeStatus, DisputeType } from '../../common/enums/moderation.enums.js';
 import { PartyRole, UserStatus } from '../../common/enums/user.enums.js';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto.js';
@@ -252,11 +253,11 @@ export class AssignDisputeDto {
 }
 
 export class DisputeMessageDto {
-  @ApiProperty({ example: 'Hello both, we are looking into this booking. Please share any proof you have.', maxLength: 5000 })
+  @ApiProperty({ example: 'Hello both, we are looking into this booking. Please share any proof you have.', maxLength: MESSAGE_MAX_LENGTH })
   @Transform(trim)
   @IsString()
   @MinLength(1)
-  @MaxLength(5000)
+  @MaxLength(MESSAGE_MAX_LENGTH)
   body: string;
 }
 
@@ -265,11 +266,11 @@ export class RequestEvidenceDto {
   @IsUUID('all')
   fromUserId: string;
 
-  @ApiProperty({ example: 'Could you send a photo of the venue at 21:00 and your call log?', maxLength: 5000 })
+  @ApiProperty({ example: 'Could you send a photo of the venue at 21:00 and your call log?', maxLength: MESSAGE_MAX_LENGTH })
   @Transform(trim)
   @IsString()
   @MinLength(1)
-  @MaxLength(5000)
+  @MaxLength(MESSAGE_MAX_LENGTH)
   message: string;
 }
 

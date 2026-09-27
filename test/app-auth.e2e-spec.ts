@@ -325,16 +325,23 @@ describe('App auth (e2e)', () => {
 
     it('403 ACCOUNT_BLOCKED carries the admin’s message', async () => {
       const { email, session } = await signedInClient();
+      const blockedUntil = new Date('2027-01-01T00:00:00.000Z');
       await db().getRepository(User).update(session.user.id, {
         status: UserStatus.Blocked,
         blockedReason: 'fraud',
         blockedMessage: 'Your account is under review.',
+        blockedUntil,
       });
 
       const res = await request(t.http).post(`${BASE}/login`).send({ email, password: PASSWORD });
 
       expectError(res, 403, 'ACCOUNT_BLOCKED');
-      expect(res.body.details).toMatchObject({ reason: 'fraud', message: 'Your account is under review.' });
+      expect(res.body.details).toMatchObject({ reason: 'fraud', message: 'Your account is under review.', blockedUntil: blockedUntil.toISOString() });
+
+      // The guard tells a blocked user the same things on any authenticated route.
+      const guarded = await request(t.http).get('/api/v1/app/me').set('Authorization', `Bearer ${session.accessToken}`);
+      expectError(guarded, 401, 'ACCOUNT_BLOCKED');
+      expect(guarded.body.details).toMatchObject({ reason: 'fraud', blockedUntil: blockedUntil.toISOString() });
     });
 
     it('403 ROLE_NOT_ALLOWED_IN_APP for an admin account', async () => {
@@ -452,6 +459,34 @@ describe('App auth (e2e)', () => {
       await request(t.http).post(`${BASE}/forgot`).send({ email });
 
       expect((await request(t.http).post(`${BASE}/forgot`).send({ email })).status).toBe(202);
+    });
+
+    it('verifies a reset code without consuming it (screen 10a pre-check)', async () => {
+      const { email } = await signedInClient();
+      await request(t.http).post(`${BASE}/forgot`).send({ email });
+      const code = await codeFor(email, VerificationCodePurpose.PasswordReset);
+
+      // 204, and the code is still live: the reset that follows works.
+      expect((await request(t.http).post(`${BASE}/reset/verify`).send({ email, code })).status).toBe(204);
+      expect((await request(t.http).post(`${BASE}/reset/verify`).send({ email, code })).status).toBe(204);
+      expect((await request(t.http).post(`${BASE}/reset`).send({ email, code, password: 'Bluebird99z' })).status).toBe(204);
+    });
+
+    it('a wrong code on reset/verify burns an attempt and answers CODE_INVALID / CODE_EXPIRED', async () => {
+      const { email } = await signedInClient();
+      await request(t.http).post(`${BASE}/forgot`).send({ email });
+      const code = await codeFor(email, VerificationCodePurpose.PasswordReset);
+
+      const ar = await request(t.http).post(`${BASE}/reset/verify`).send({ email, code: '000000' }).set('Accept-Language', 'ar');
+      expectError(ar, 422, 'CODE_INVALID');
+      expect(ar.body.message).toMatch(/[؀-ۿ]/);
+
+      // 4 more wrong guesses spend the budget; the right code is then expired too.
+      for (let i = 0; i < 4; i++) {
+        expectError(await request(t.http).post(`${BASE}/reset/verify`).send({ email, code: '000000' }), 422, 'CODE_INVALID');
+      }
+      expectError(await request(t.http).post(`${BASE}/reset/verify`).send({ email, code }), 422, 'CODE_EXPIRED');
+      expectError(await request(t.http).post(`${BASE}/reset/verify`).send({ email }), 400, 'VALIDATION_FAILED');
     });
 
     it('resets the password, revokes every session and lets the new one sign in', async () => {

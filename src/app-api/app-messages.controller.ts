@@ -29,6 +29,7 @@ import {
   AppReportResultDto,
   AppSendMessageDto,
   AppStartConversationDto,
+  AppStartSupportConversationDto,
 } from './dto/app-messages.dto.js';
 
 /** Multipart ceiling for a chat image; the stricter platform setting still applies. */
@@ -60,7 +61,8 @@ export class AppMessagesController {
     description:
       `Screen 14 Messages: the avatar, the name, the last message, the time and the unread badge. ` +
       `The **All / Unread** chips are \`filter=all|unread\`; \`filter=booking\` keeps the chats attached to a booking. ` +
-      `\`q\` searches the other person's name. ${SOCKET_NOTE}`,
+      `\`q\` searches the other person's name. \`userId\` returns only the **direct** chat with that user (empty list ` +
+      `when there is none) — the "Message" button uses it instead of matching names. ${SOCKET_NOTE}`,
   })
   @ApiPaginatedResponse(AppConversationRowDto)
   @ApiErrorResponses('VALIDATION_FAILED')
@@ -111,6 +113,20 @@ export class AppMessagesController {
     return { data: await this.messages.start(auth, dto, lang) };
   }
 
+  @Post('conversations/support')
+  @ApiOperation({
+    summary: 'Contact Eventor support',
+    description:
+      'The "Contact support" action. One **support** conversation per user (status-rules §10): the first call creates it ' +
+      'and sends your message, later calls add to the same thread. Eventor support appears among the participants once ' +
+      'an admin answers. Returns the conversation detail, ready to open as screen 15.',
+  })
+  @ApiDataResponse(AppConversationDetailDto, { status: 201 })
+  @ApiErrorResponses('VALIDATION_FAILED', 'CONVERSATION_CLOSED', 'CONVERSATION_READ_ONLY', 'USER_NOT_FOUND')
+  async startSupport(@CurrentUser() auth: AuthUser, @Body() dto: AppStartSupportConversationDto, @ReqLang() lang: Lang) {
+    return { data: await this.messages.startSupport(auth, dto.body, lang) };
+  }
+
   @Post('conversations/:id/messages')
   @Throttle(UPLOAD_THROTTLE)
   @UseInterceptors(FileInterceptor('file', { limits: uploadLimits(MAX_IMAGE_MB) }))
@@ -126,7 +142,8 @@ export class AppMessagesController {
     description:
       'JSON `{ "body": "…" }` for text, or `multipart/form-data` with `file` for an image (and an optional `body` ' +
       'caption). The type is sniffed from the bytes. Contact details in the text are masked for the other party until ' +
-      'you share an accepted booking. A chat an admin closed answers 403 `CONVERSATION_CLOSED`.',
+      'you share an accepted booking. A chat an admin closed answers **409 `CONVERSATION_CLOSED`** (a state conflict, ' +
+      'api-standards §5). Works in every conversation you are in — direct, support and **dispute** chats alike.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiDataResponse(AppMessageDto, { status: 201 })

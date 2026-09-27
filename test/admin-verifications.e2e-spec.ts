@@ -202,6 +202,10 @@ describe('Admin verifications (e2e)', () => {
       expect((await reloadUser(user.id)).verificationStatus).toBe(VerificationStatus.Verified);
       expect(verified).toEqual([{ userId: user.id, email: user.email, name: user.fullName, lang: 'ar' }]);
       expect(lastMailTo(user.email)!.subject).toBe('تمت الموافقة على ملفك');
+      // #44: the provider also gets an in-app notification row ("notification:new" on the /app socket).
+      const notifications = await db().query("SELECT type, title, data FROM notifications WHERE user_id = ? AND type = 'verification.approved'", [user.id]);
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].title).toBe('تم توثيق ملفك');
       const audit = await db().getRepository(AuditLog).findOneByOrFail({ action: 'document.approved', objectId: documents[2]!.id });
       expect(audit.changes).toMatchObject({ verificationStatus: { from: 'pending', to: 'verified' } });
 
@@ -233,6 +237,12 @@ describe('Admin verifications (e2e)', () => {
       const mail = lastMailTo(user.email)!;
       expect(mail.subject).toBe('A document needs to be sent again');
       expect(mail.text).toContain('The name does not match the account.');
+      // #44: the provider is told in-app too, with the document type in `data`.
+      const notifications = await db().query("SELECT type, body, data FROM notifications WHERE user_id = ? AND type = 'verification.rejected'", [user.id]);
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].body).toContain('The name does not match the account.');
+      const data = typeof notifications[0].data === 'string' ? JSON.parse(notifications[0].data) : notifications[0].data;
+      expect(data).toMatchObject({ documentType: 'national_id' });
       expect(await db().getRepository(AuditLog).findOneBy({ action: 'document.rejected', objectId: documents[0]!.id })).not.toBeNull();
     });
 

@@ -34,7 +34,7 @@ import {
   reviewWindow,
   type AppBookingTab,
 } from './app-bookings.policy.js';
-import { avatarUrl, hhmm, photoUrls, toWilayaRef } from './app-refs.js';
+import { avatarUrl, hhmm, photoUrls, toCategoryRef, toWilayaRef } from './app-refs.js';
 import { pickText, pickTextOrNull, replyTimeLabel } from './app.policy.js';
 import type {
   AppBookingCardDto,
@@ -243,10 +243,12 @@ export class AppBookingsService {
     JOIN users pu ON pu.id = b.provider_id
     LEFT JOIN provider_profiles pp ON pp.user_id = b.provider_id AND pp.deleted_at IS NULL
     LEFT JOIN services s ON s.id = b.service_id
+    LEFT JOIN categories sc ON sc.id = s.category_id AND sc.deleted_at IS NULL
     LEFT JOIN packs pk ON pk.id = b.pack_id
     LEFT JOIN wilayas w ON w.code = b.wilaya_code`;
 
   private readonly SELECT = `b.*, s.title_en, s.title_ar, s.price_type, s.cancellation_policy_en, s.cancellation_policy_ar,
+    sc.id AS cat_id, sc.slug AS cat_slug, sc.name_en AS cat_name_en, sc.name_ar AS cat_name_ar, sc.icon AS cat_icon,
     pk.name_en AS pack_name_en, pk.name_ar AS pack_name_ar,
     cu.full_name AS client_name, cu.avatar_file_id AS client_avatar, cu.email AS client_email, cu.phone AS client_phone,
     pu.full_name AS provider_name, pu.avatar_file_id AS provider_avatar, pu.phone AS provider_phone, pu.verification_status AS provider_verification,
@@ -320,7 +322,7 @@ export class AppBookingsService {
     });
 
     const timeline: AppBookingTimelineEntryDto[] = statusRows.map((s: any) => ({
-      type: s.from_status === null ? 'created' : String(s.to_status),
+      type: (s.from_status === null ? 'created' : String(s.to_status)) as AppBookingTimelineEntryDto['type'],
       toStatus: (s.to_status ?? null) as BookingStatus | null,
       actorLabel: s.full_name ?? null,
       reason: s.reason ?? null,
@@ -521,6 +523,7 @@ export class AppBookingsService {
       titleAr,
       serviceId: r.service_id ?? null,
       packId: r.pack_id ?? null,
+      category: toCategoryRef(lang, r.cat_id ? { id: r.cat_id, slug: r.cat_slug, name_en: r.cat_name_en, name_ar: r.cat_name_ar, icon: r.cat_icon } : null),
       coverUrl: extra.coverUrl,
       wilaya: toWilayaRef(lang, r.wilaya_code_ref ? { code: r.wilaya_code_ref, name: r.wilaya_name, name_ar: r.wilaya_name_ar } : null),
       guests: r.guests === null ? null : Number(r.guests),
@@ -605,14 +608,36 @@ export class AppBookingsService {
 
   // ── invoice ───────────────────────────────────────────────────
 
+  /** An invoice only exists from acceptance on; the provider side also refuses other statuses explicitly. */
+  private async assertInvoiceReadable(id: string, auth: AuthUser, party: Party): Promise<void> {
+    const { status } = await this.own(id, auth, party);
+    if (party === 'provider' && status !== BookingStatus.Accepted && status !== BookingStatus.Completed) {
+      throw AppException.of('INVOICE_NOT_FOUND', { status });
+    }
+  }
+
   async invoice(auth: AuthUser, id: string, party: Party) {
-    await this.own(id, auth, party);
+    await this.assertInvoiceReadable(id, auth, party);
     return this.invoices.latest(id);
   }
 
   async invoicePdf(auth: AuthUser, id: string, party: Party) {
-    await this.own(id, auth, party);
+    await this.assertInvoiceReadable(id, auth, party);
     return this.invoices.pdf(id);
+  }
+
+  /**
+   * The proposer withdraws their own **pending** reschedule proposal (the other
+   * party answers with accept / reject instead — answering your own proposal is
+   * 403 `NOT_OWNER`, and so is withdrawing somebody else's).
+   */
+  async withdrawReschedule(auth: AuthUser, id: string, party: Party, rescheduleId: string, lang: Lang): Promise<AppBookingDetailDto> {
+    await this.own(id, auth, party);
+    const [row] = await this.dataSource.query('SELECT id, proposed_by_id FROM booking_reschedules WHERE id = ? AND booking_id = ? AND deleted_at IS NULL', [rescheduleId, id]);
+    if (!row) throw AppException.of('RESCHEDULE_NOT_FOUND');
+    if (row.proposed_by_id !== auth.id) throw AppException.of('NOT_OWNER');
+    await this.bookings.cancelReschedule(auth, id, rescheduleId);
+    return this.detail(auth, id, party, lang);
   }
 
   /** Total of a booking in cents, for the provider home cards. */

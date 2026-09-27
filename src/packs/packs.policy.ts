@@ -13,6 +13,8 @@ export interface PackItemState {
   status: ServiceStatus;
   deleted: boolean;
   basePrice: string;
+  /** Wilaya codes this service covers; used by the publish coverage rule when provided. */
+  wilayaCodes?: number[];
 }
 
 export interface PackProviderState {
@@ -62,15 +64,32 @@ export function packAttentionReasons(items: PackItemState[], provider: PackProvi
   return reasons;
 }
 
-export const PACK_PUBLISH_REQUIREMENTS = ['nameEn', 'nameAr', 'items', 'unpublishedItems', 'providerBlocked', 'providerNotVerified', 'priceNotBelowSum'] as const;
+export const PACK_PUBLISH_REQUIREMENTS = ['nameEn', 'nameAr', 'items', 'unpublishedItems', 'providerBlocked', 'providerNotVerified', 'priceNotBelowSum', 'wilayaNotCovered'] as const;
 export type PackPublishRequirement = (typeof PACK_PUBLISH_REQUIREMENTS)[number];
+
+/** The pack's wilaya must belong to the intersection of the items' wilaya sets. */
+export function packWilayaCovered(wilayaCode: number, items: PackItemState[]): boolean {
+  const live = items.filter((i) => !i.deleted);
+  if (live.length === 0) return false;
+  return live.every((item) => (item.wilayaCodes ?? []).includes(wilayaCode));
+}
 
 /**
  * status-rules §4 publish guard: EN + AR name, 2+ items, every item a published
  * service (of the same provider, enforced on write), provider active and
- * verified, price below the sum of the items.
+ * verified, price below the sum of the items, and — when `wilayaCode` is given —
+ * the pack's wilaya covered by every item (`wilayaNotCovered` otherwise, which
+ * the publish route surfaces as 422 `PACK_WILAYA_NOT_COVERED`).
  */
-export function packPublishMissing(input: { nameEn: string; nameAr: string; price: string; items: PackItemState[]; provider: PackProviderState }): PackPublishRequirement[] {
+export function packPublishMissing(input: {
+  nameEn: string;
+  nameAr: string;
+  price: string;
+  items: PackItemState[];
+  provider: PackProviderState;
+  /** Pack wilaya to check coverage for; omit to skip the coverage rule. */
+  wilayaCode?: number;
+}): PackPublishRequirement[] {
   const missing: PackPublishRequirement[] = [];
   const blank = (v: string | null | undefined) => !v || v.trim() === '';
   if (blank(input.nameEn)) missing.push('nameEn');
@@ -81,6 +100,7 @@ export function packPublishMissing(input: { nameEn: string; nameAr: string; pric
   if (input.provider.deleted || input.provider.status === UserStatus.Blocked) missing.push('providerBlocked');
   if (input.provider.verificationStatus !== VerificationStatus.Verified) missing.push('providerNotVerified');
   if (!priceBelowSum(input.price, input.items)) missing.push('priceNotBelowSum');
+  if (input.wilayaCode !== undefined && !packWilayaCovered(input.wilayaCode, input.items)) missing.push('wilayaNotCovered');
   return missing;
 }
 

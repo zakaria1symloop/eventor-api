@@ -18,11 +18,21 @@ import {
 import { trim, trimToNull } from '../../common/dto/transforms.js';
 import { BookingDisputeStatus, BookingLineKind, BookingStatus, RescheduleStatus } from '../../common/enums/booking.enums.js';
 import { EventType } from '../../common/enums/catalog.enums.js';
+import { DisputeStatus, DisputeType } from '../../common/enums/moderation.enums.js';
 import { PartyRole } from '../../common/enums/user.enums.js';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto.js';
-import { APP_BOOKING_ACTIONS, CLIENT_BOOKING_TABS, PROVIDER_BOOKING_TABS, type AppBookingAction, type ClientBookingTab, type ProviderBookingTab } from '../app-bookings.policy.js';
+import {
+  APP_BOOKING_ACTIONS,
+  APP_BOOKING_TIMELINE_TYPES,
+  CLIENT_BOOKING_TABS,
+  PROVIDER_BOOKING_TABS,
+  type AppBookingAction,
+  type AppBookingTimelineType,
+  type ClientBookingTab,
+  type ProviderBookingTab,
+} from '../app-bookings.policy.js';
 import { AppProviderSummaryDto } from './app-catalog.dto.js';
-import { AppWilayaRefDto } from './app-me.dto.js';
+import { AppCategoryRefDto, AppWilayaRefDto } from './app-me.dto.js';
 
 export { AppProviderSummaryDto, AppWilayaRefDto };
 
@@ -229,7 +239,12 @@ export class AppBookingPartyDto {
 }
 
 export class AppBookingTimelineEntryDto {
-  @ApiProperty({ example: 'accepted', description: '`created`, a booking status, `rescheduled`, `checked_in`, `dispute_opened`, `review_left`.' }) type: string;
+  @ApiProperty({
+    enum: APP_BOOKING_TIMELINE_TYPES,
+    example: 'accepted',
+    description: '`created`, the booking status the entry moved to, or one of the milestones `rescheduled` / `checked_in` / `dispute_opened`.',
+  })
+  type: AppBookingTimelineType;
   @ApiProperty({ type: String, nullable: true, enum: BookingStatus }) toStatus: BookingStatus | null;
   @ApiProperty({ type: String, nullable: true, example: 'Yasmine K.' }) actorLabel: string | null;
   @ApiProperty({ type: String, nullable: true }) reason: string | null;
@@ -262,8 +277,8 @@ export class AppInvoiceSummaryDto {
 export class AppBookingDisputeSummaryDto {
   @ApiProperty({ format: 'uuid' }) id: string;
   @ApiProperty({ example: 'DSP-000012' }) reference: string;
-  @ApiProperty({ example: 'open' }) status: string;
-  @ApiProperty({ example: 'service_not_delivered' }) type: string;
+  @ApiProperty({ enum: DisputeStatus, example: DisputeStatus.Open }) status: DisputeStatus;
+  @ApiProperty({ enum: DisputeType, example: DisputeType.ProviderNoShow }) type: DisputeType;
   @ApiProperty({ example: true, description: 'True when this caller opened it.' }) openedByMe: boolean;
   @ApiProperty({ format: 'date-time' }) createdAt: string;
 }
@@ -282,6 +297,12 @@ export class AppBookingCardDto {
   @ApiProperty({ example: 'تغطية تصوير الأعراس' }) titleAr: string;
   @ApiProperty({ type: String, nullable: true, format: 'uuid' }) serviceId: string | null;
   @ApiProperty({ type: String, nullable: true, format: 'uuid' }) packId: string | null;
+  @ApiProperty({
+    type: AppCategoryRefDto,
+    nullable: true,
+    description: 'The booked service’s category ("Photography · Sat 14 Mar"). Null for a pack booking — use `eventType` there.',
+  })
+  category: AppCategoryRefDto | null;
   @ApiProperty({ type: String, nullable: true }) coverUrl: string | null;
   @ApiProperty({ type: AppWilayaRefDto, nullable: true }) wilaya: AppWilayaRefDto | null;
   @ApiProperty({ type: Number, nullable: true, example: 180 }) guests: number | null;

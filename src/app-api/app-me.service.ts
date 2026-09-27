@@ -540,7 +540,7 @@ export class AppMeService {
     return paginate(
       rows.map((row: any) => ({
         id: row.id,
-        type: row.type,
+        type: row.type as AppNotificationDto['type'],
         title: row.title,
         body: row.body,
         data: typeof row.data === 'string' ? JSON.parse(row.data) : (row.data ?? null),
@@ -560,6 +560,12 @@ export class AppMeService {
       [auth.id],
     );
     return { unread: Number(row.n) };
+  }
+
+  /** Hard-deletes one of the caller's notifications (screen 16 swipe-to-delete). */
+  async deleteNotification(auth: AuthUser, id: string): Promise<void> {
+    const result = await this.dataSource.query('DELETE FROM notifications WHERE id = ? AND user_id = ?', [id, auth.id]);
+    if (Number(result?.affectedRows ?? 0) === 0) throw AppException.of('NOTIFICATION_NOT_FOUND');
   }
 
   async markRead(auth: AuthUser, dto: MarkNotificationsReadDto): Promise<MarkedReadDto> {

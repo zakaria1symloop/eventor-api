@@ -372,6 +372,7 @@ export class DisputesService implements OnModuleInit {
     return {
       disputeId: dispute.id,
       reference: dispute.reference,
+      conversationId: dispute.conversationId ?? null,
       bookingId: dispute.bookingId,
       bookingReference: booking.reference,
       clientId: booking.clientId,

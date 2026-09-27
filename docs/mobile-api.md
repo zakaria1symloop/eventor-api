@@ -33,6 +33,7 @@ Provider only (08a) ─► POST /app/me/documents  × 3   (needs the token above
 
 Login (07)        ──► POST /app/auth/login    ──► 200 {accessToken, refreshToken, user}
 Forgot (09)       ──► POST /app/auth/forgot   ──► 202 (always)
+Check code (10a)  ──► POST /app/auth/reset/verify {email, code} ──► 204 (code NOT consumed)
 Reset (10a)       ──► POST /app/auth/reset {email, code, password} ──► 204, sign in again
 ```
 
@@ -60,7 +61,7 @@ Reset (10a)       ──► POST /app/auth/reset {email, code, password} ──�
 | --- | --- | --- |
 | `INVALID_CREDENTIALS` | 401 | "Wrong email or password" — never say which. |
 | `EMAIL_NOT_VERIFIED` | 403 | `details.email`. Go to screen 10 and call `verify-email/resend`. |
-| `ACCOUNT_BLOCKED` | 403 | Show `details.message` (the admin's own words); `details.until` may hold an end date. |
+| `ACCOUNT_BLOCKED` | 403 | `details: { reason, message, blockedUntil }`. Show `message` (the admin's own words); `blockedUntil` is an ISO date-time, null for an indefinite block. The same details come back on every authenticated call a blocked account makes. |
 | `ACCOUNT_LOCKED` | 429 | `details.retryAfterSeconds` — count down, do not retry silently. |
 | `ROLE_NOT_ALLOWED_IN_APP` | 403 | An admin account; only client and provider sign in here. |
 
@@ -74,6 +75,11 @@ inside the brake returns 429 `CODE_RESEND_TOO_SOON` with
 
 `forgot` and `verify-email/resend` **always answer the same way** for an unknown
 address, on purpose: never tell the user "no account with that email".
+
+**Checking a reset code early**: `POST /app/auth/reset/verify {email, code}`
+answers 204 when the code is valid **without consuming it** — call it before
+asking the user to type a new password twice. A wrong code still burns one of
+the 5 attempts; the errors are the same `CODE_INVALID` / `CODE_EXPIRED`.
 
 ### Accounts an admin created
 
@@ -171,7 +177,12 @@ ordering is `?order=` with a fixed vocabulary (`relevance`, `price_asc`,
 - **Uploads** are `multipart/form-data`. The real type is sniffed from the
   bytes, so renaming a `.exe` to `.pdf` is refused with 415. Limits come from
   `GET /app/config` (`uploads.maxDocumentMb`, `uploads.maxPhotoMb`,
-  `uploads.imageTypes`) — check locally before sending, and still handle 413.
+  `uploads.imageTypes`, and the `limits` object below) — check locally before
+  sending, and still handle 413.
+- **Documents** are described **both ways** in `GET /app/config`:
+  `limits.documentAcceptedMimeTypes` (what the server matches on the bytes) and
+  `limits.documentAcceptedExtensions` (what a file picker filters on). Use the
+  extensions in pickers; the server always decides from the MIME it sniffs.
 - Documents accept PDF, JPEG, PNG, WebP and HEIC. **HEIC photos cannot be
   resized by the server**: prefer JPEG for avatars.
 
@@ -213,7 +224,7 @@ means the endpoint is not built yet.
 | 08a Register · provider | `POST /app/auth/register` then `POST /app/me/documents` ×3 |
 | 09 Forgot password | `POST /app/auth/forgot` |
 | 10 Verify code | `POST /app/auth/verify-email` · `POST /app/auth/verify-email/resend` |
-| 10a Set new password | `POST /app/auth/reset` |
+| 10a Set new password | `POST /app/auth/reset/verify` (check the code first) · `POST /app/auth/reset` |
 | — Set password (admin-created account) | `POST /app/auth/set-password` |
 | — Log out | `DELETE /app/me/device-tokens/{token}` then `POST /app/auth/logout` |
 
@@ -229,15 +240,15 @@ means the endpoint is not built yet.
 | Screen | Endpoints |
 | --- | --- |
 | 11 Home · Client | **`GET /app/home`** (one call: greeting, wilaya, categories, 2 upcoming bookings, budget summary, packs, nearby services, unread counts) |
-| 11a Filters | `GET /app/categories` · `GET /app/wilayas` |
-| — Search | `GET /app/services?q&categoryId&wilaya&priceMin&priceMax&rating&eventDate&order&page` · `POST /app/events` |
+| 11a Filters | `GET /app/categories` · `GET /app/wilayas` (rows carry `servicesCount`; ordered by it — no `position`) |
+| — Search | `GET /app/services?q&categoryId&wilaya&priceMin&priceMax&rating&eventDate&order&page` (repeat `categoryId` and `wilaya` for several values) · `POST /app/events` |
 | 12 Service detail | `GET /app/services/{id}` · `GET /app/services/{id}/availability?month=YYYY-MM` · `GET /app/services/{id}/reviews` · `POST /app/me/favourites` / `DELETE /app/me/favourites/{id}` · `POST /app/events` |
 | 13 Provider profile | `GET /app/providers/{id}` · `GET /app/providers/{id}/reviews` |
-| 17 Favorites | `GET /app/me/favourites?categoryId&kind` · `DELETE /app/me/favourites/{id}` |
+| 17 Favorites | `GET /app/me/favourites?categoryId&kind` · `DELETE /app/me/favourites/{id}` · `DELETE /app/me/favourites?serviceId=\|packId=` |
 | 18 Budget | `GET /app/me/budget` · `PUT /app/me/budget` · `POST /app/me/budget/items` · `PATCH`/`DELETE /app/me/budget/items/{id}` |
 | 19 Ready Packs | `GET /app/packs?eventType&wilaya&order` |
 | 20 Pack detail | `GET /app/packs/{id}` · `GET /app/packs/{id}/availability?month=YYYY-MM` |
-| 16 Notifications | `GET /app/me/notifications` · `GET /app/me/notifications/unread-count` · `POST /app/me/notifications/read` · `POST /app/me/device-tokens` |
+| 16 Notifications | `GET /app/me/notifications` · `GET /app/me/notifications/unread-count` · `POST /app/me/notifications/read` · `DELETE /app/me/notifications/{id}` (hard delete) · `POST /app/me/device-tokens` |
 | — Profile & settings | `GET`/`PATCH /app/me` · `POST /app/me/avatar` · `POST /app/me/password` · `GET`/`DELETE /app/me/sessions` · `GET`/`PATCH /app/me/notification-preferences` · `DELETE /app/me` |
 | 14 Messages, 15 Chat | see **Messaging** below |
 | — Booking flow, Bookings tab, Leave a review | see **Bookings** below |
@@ -255,12 +266,23 @@ means the endpoint is not built yet.
   calendar is the intersection of all its providers, matching screen 20's "Only
   days when all providers are free".
 - **Favourites**: `POST` takes exactly one of `serviceId` / `packId` and is
-  idempotent (tapping ♥ twice is fine). `DELETE` takes the **favourite row id**
-  (`id`), not the service id. A row whose target stopped being visible stays in
-  the list with `available: false` — grey the card rather than dropping it.
+  idempotent (tapping ♥ twice is fine). Un-save either with the **favourite row
+  id** (`DELETE /app/me/favourites/{id}`) or **by target**
+  (`DELETE /app/me/favourites?serviceId=` / `?packId=`, idempotent 204). Every
+  catalog card also carries `favouriteId` when you are signed in, so one DELETE
+  does it. A row whose target stopped being visible stays in the list with
+  `available: false` — grey the card rather than dropping it.
 - **Budget**: `GET` answers 404 `BUDGET_NOT_FOUND` until the client creates one
   with `PUT`; treat that as the empty state, not an error. Every write returns
   the **whole recomputed budget**, so the header updates in one round trip.
+  - `totalAmount` is the client's **plan ceiling** (set in the header) and
+    `plannedTotal` the sum of the lines. They may diverge on purpose: the gap is
+    the "unallocated / over plan" signal, never an error. `remaining` is
+    `totalAmount − spentTotal`.
+  - **One line per booking**: linking a booking a second line already holds
+    answers 409 `BUDGET_BOOKING_ALREADY_LINKED` with `details.itemId`. When a
+    booking is **cancelled**, its line and its link are kept — the client
+    decides what to do with the amount.
 - **`POST /app/events`** validates and answers 202 but **stores nothing in V1**
   (analytics is V2 per the signed offer). Ship the calls; they start counting
   later. Nothing in the UI may depend on it.
@@ -274,12 +296,12 @@ is only the map from screen to endpoint, plus the traps.
 
 | Screen | Endpoints |
 | --- | --- |
-| 12 / 20 → booking sheet | `POST /app/bookings/quote` then `POST /app/bookings` |
+| 12 / 20 → booking sheet | `GET /app/wilayas/{code}/communes?q=` (the `communeId` picker) · `POST /app/bookings/quote` then `POST /app/bookings` |
 | — Bookings tab | `GET /app/bookings?tab=upcoming\|pending\|past\|cancelled&page` |
 | — Booking detail | `GET /app/bookings/{id}` |
 | — Cancel | `POST /app/bookings/{id}/cancel {reason}` |
 | — Reschedule | `POST /app/bookings/{id}/reschedule {date,startTime?,endTime?,reason}` |
-| — Answer a proposal | `POST /app/bookings/{id}/reschedules/{rid}/accept` · `/reject` |
+| — Answer a proposal | `POST /app/bookings/{id}/reschedules/{rid}/accept` · `/reject` · `/withdraw` (proposer only) |
 | — After the event | `POST /app/bookings/{id}/check-in {answer:"ok"\|"problem"}` |
 | — Invoice | `GET /app/bookings/{id}/invoice` · `GET /app/bookings/{id}/invoice.pdf` |
 
@@ -291,6 +313,14 @@ is only the map from screen to endpoint, plus the traps.
   the client owes `total` and Eventor takes nothing at the door.
 - Send **`X-Platform: android | ios | web`** on `POST /app/bookings`, so
   `bookings.source` is honest. It defaults to `android`.
+- **Reschedules**: either party proposes; the **other** answers with
+  `/accept` or `/reject`, and only the **proposer** may `/withdraw` a pending
+  proposal (403 `NOT_OWNER` the other way round, 409 `RESCHEDULE_NOT_PENDING`
+  once answered). The provider's mirror routes live under
+  `/app/provider/bookings/{id}/reschedules/{rid}/…`.
+- Cards and details carry **`category`** (`{id, slug, nameEn, nameAr}`) from
+  the booked service — "Photography · Sat 14 Mar". It is **null for a pack
+  booking**: use `eventType` there.
 - Every card and detail carries **`allowedActions`** — draw the buttons from it
   rather than re-deriving the status machine. The write endpoints enforce the
   same list, so the two can never disagree.
@@ -316,11 +346,12 @@ is only the map from screen to endpoint, plus the traps.
 | 21 / 21a Home · Provider | **`GET /app/provider/home`** (one call) |
 | — Available for bookings | `PATCH /app/provider/profile {acceptingBookings}` |
 | — Requests tab | `GET /app/provider/bookings?tab=requests\|upcoming\|past` · `GET /app/provider/bookings/{id}` |
+| — Invoice | `GET /app/provider/bookings/{id}/invoice` · `/invoice.pdf` (accepted or completed bookings only) |
 | — Accept / Decline / Complete | `POST /app/provider/bookings/{id}/accept` · `/decline {reason}` · `/complete` |
 | — Cancel, reschedule, check-in | `/cancel {reason}` · `/reschedule` · `/reschedules/{rid}/accept\|reject` · `/check-in` |
-| — Services tab | `GET/POST /app/provider/services` · `PATCH /app/provider/services/{id}` · `/publish` · `/unpublish` · `DELETE` |
+| — Services tab | `GET/POST /app/provider/services` · `GET /app/provider/services/{id}` · `PATCH /app/provider/services/{id}` · `/publish` · `/unpublish` · `DELETE` |
 | — Service photos | `POST /app/provider/services/{id}/photos` (multipart) · `PATCH …/photos/order` · `DELETE …/photos/{photoId}` |
-| — My packs | `GET/POST /app/provider/packs` · `PATCH /app/provider/packs/{id}` · `/publish` · `/unpublish` · `DELETE` · the same three photo routes |
+| — My packs | `GET/POST /app/provider/packs` · `GET /app/provider/packs/{id}` · `PATCH /app/provider/packs/{id}` · `/publish` · `/unpublish` · `DELETE` · the same three photo routes |
 | — Calendar | `GET /app/provider/availability?month=YYYY-MM` · `POST /app/provider/availability/blocks` · `DELETE /app/provider/availability/blocks/{id}` |
 | — Profile | `PATCH /app/provider/profile` |
 | — Reviews received | `GET /app/provider/reviews` · `POST /app/reviews/{id}/reply` · `PATCH`/`DELETE /app/reviews/replies/{id}` |
@@ -338,9 +369,23 @@ is only the map from screen to endpoint, plus the traps.
   `category`, `wilayas`. Render it as a to-do list, do not re-check locally.
 - You cannot remove the **last photo of a published service** (422
   `SERVICE_PUBLISH_INVALID`); unpublish it first.
+- Service rows carry `priceType` ("45 000 DA · per day") and pack rows carry
+  `attentionReasons` — the same values as the detail — so a list can say which
+  item to fix, not just `needsAttention: true`.
 - A **pack is built from your own published services** (at least two, one
   wilaya, price below the sum) — somebody else's service answers 422
   `PACK_SERVICE_OTHER_PROVIDER`.
+- **Publishing a pack enforces exactly** (status-rules §4): EN **and** AR name;
+  at least 2 items; every item a **published** service of yours; your account
+  active and verified; the price strictly below the sum of the items; and the
+  pack's `wilayaCode` **covered by every item's wilaya set**. The detail's
+  `publishMissing` lists what still fails (`nameEn`, `nameAr`, `items`,
+  `unpublishedItems`, `providerBlocked`, `providerNotVerified`,
+  `priceNotBelowSum`, `wilayaNotCovered`). A refusal is 422
+  `PACK_PUBLISH_INVALID` with `details.missing` — except the wilaya rule, which
+  answers its own **422 `PACK_WILAYA_NOT_COVERED`** so the app can point at the
+  wilaya picker. Note: at least one photo is **not** enforced by the server —
+  treat it as a quality prompt, not a publish rule.
 - Turning **`acceptingBookings` off keeps your services visible** and refuses
   new bookings. It is not a way to hide yourself.
 - Everything under `/app/provider/**` is **yours only**: another provider's row
@@ -350,7 +395,8 @@ is only the map from screen to endpoint, plus the traps.
 
 | Screen | Endpoints |
 | --- | --- |
-| 14 Messages | `GET /app/conversations?filter=all\|unread\|booking&q&page` |
+| 14 Messages | `GET /app/conversations?filter=all\|unread\|booking&q&userId&page` |
+| — Contact support | `POST /app/conversations/support {body}` (find-or-create my support thread) |
 | 15 Chat · header | `GET /app/conversations/{id}` |
 | 15 Chat · bubbles | `GET /app/conversations/{id}/messages?before&limit` |
 | 12 "Message" | `POST /app/conversations {userId, bookingId?, body}` |
@@ -362,7 +408,18 @@ is only the map from screen to endpoint, plus the traps.
 - **One direct conversation per client ↔ provider pair.** `POST
   /app/conversations` is idempotent: it reuses the existing chat and just adds
   your message. `bookingId` attaches the context card and must be a booking the
-  two of you share.
+  two of you share. To know whether a chat already exists **before** writing,
+  call `GET /app/conversations?userId=<their id>` — it returns only the direct
+  conversation with that user, or an empty list.
+- **Support**: `POST /app/conversations/support {body}` finds or creates your
+  one open support thread (status-rules §10) and sends the message; an admin
+  joins as "Eventor support" when they answer.
+- Conversation rows carry `lastMessage` as an **object**
+  `{ body, kind, mine }` — `mine` draws the "You: " prefix and
+  `kind: "attachment"` the "📷 Photo" line (its `body` is the caption, possibly
+  empty). The body is already masked for you.
+- Message bodies are capped at `limits.messageMaxLength` (4000) from
+  `GET /app/config`, on every send route.
 - **Messages page backwards.** `data` is oldest-first so you append at the
   bottom; scroll up with `before = meta.nextBefore` until `meta.hasMore` is
   `false`. Note the envelope here is the **cursor page** `{ data, meta: {
@@ -372,13 +429,18 @@ is only the map from screen to endpoint, plus the traps.
   `[link hidden]` or `[handle hidden]` and `masked` is `true`. **The original
   text is never sent to a participant** — there is nothing to reveal client
   side. `contactUnmasked` on the conversation says when that stops.
-- A message an admin hid comes back as `[removed by Eventor]`; a deleted one is
-  simply absent.
+- A message an admin hid comes back with **`removed: true`** and its `body`
+  replaced by `[removed by Eventor]` — key off the flag, never the text. A
+  deleted message is simply absent.
 - **No participant's email or phone is ever in these payloads.** A support or
   dispute participant is named "Eventor support".
 - Writing is refused with **409 `CONVERSATION_CLOSED`** (an admin closed the
-  chat) or **403 `CONVERSATION_READ_ONLY`** (your account is muted there). A
-  chat you are not in is **403 `NOT_A_PARTICIPANT`**, never 404.
+  chat — a state conflict, so 409 **everywhere**, including the dispute routes)
+  or **403 `CONVERSATION_READ_ONLY`** (your account is muted there). A chat you
+  are not in is **403 `NOT_A_PARTICIPANT`**, never 404.
+- A closed conversation says only **`closedByModeration: true`** — the admin's
+  free-text reason is internal and never sent. Show your own localised "This
+  conversation was closed by Eventor" line.
 - **Reports are idempotent per reporter and target**: reporting twice answers
   201 with `created: false` and returns the first report's id.
 
@@ -392,7 +454,7 @@ is only the map from screen to endpoint, plus the traps.
 | — Provider reply | `POST /app/reviews/{id}/reply {body}` · `PATCH`/`DELETE /app/reviews/replies/{id}` |
 | — Report a problem | `POST /app/bookings/{id}/disputes {type, description, evidenceFileIds?}` |
 | — My disputes | `GET /app/disputes` · `GET /app/disputes/{id}` |
-| — Dispute chat | `POST /app/disputes/{id}/messages {body}` |
+| — Dispute chat | `POST /app/disputes/{id}/messages {body}` (text convenience) · the normal `POST /app/conversations/{conversationId}/messages` also works, images included |
 | — Evidence | `POST /app/disputes/{id}/evidence` (multipart `file`, optional `note`) |
 | — Withdraw | `POST /app/disputes/{id}/withdraw {note}` |
 
@@ -444,9 +506,62 @@ Beyond the part-1 list: `NOT_OWNER`, `NOT_A_PARTICIPANT`,
 `REVIEW_REPLY_EXISTS`, `REVIEW_REPLY_NOT_FOUND`, `REPORT_TARGET_NOT_FOUND`,
 `DISPUTE_NOT_FOUND`, `DISPUTE_ALREADY_OPEN`, `DISPUTE_WINDOW_CLOSED`,
 `BOOKING_NOT_DISPUTABLE`, `DISPUTE_EVIDENCE_LIMIT`, `EVIDENCE_FILE_INVALID`,
-`DISPUTE_NOT_WITHDRAWABLE`.
+`DISPUTE_NOT_WITHDRAWABLE`, `BUDGET_BOOKING_ALREADY_LINKED`,
+`PACK_WILAYA_NOT_COVERED`, `NOTIFICATION_NOT_FOUND`, `ACADEMIC_REQUEST_NOT_FOUND`.
 
-## 10. Live updates: the `/app` socket
+## 10. `GET /app/config`: the `limits` object
+
+Beyond the version / maintenance / uploads fields, `/app/config` carries one
+`limits` object the app should enforce **before** the server refuses:
+
+| Field | Backs the error | Meaning |
+| --- | --- | --- |
+| `budgetItemsMax` | `422 BUDGET_ITEM_LIMIT` (with `details.max`) | Budget lines per client |
+| `photosPerService` / `photosPerPack` | `422 PHOTO_LIMIT_REACHED` | Gallery sizes |
+| `documentMaxMb` / `photoMaxMb` | `413 FILE_TOO_LARGE` | Upload ceilings |
+| `disputeEvidenceMax` | `422 DISPUTE_EVIDENCE_LIMIT` | Evidence files per party |
+| `messageMaxLength` | `400 VALIDATION_FAILED` | Message body cap (4000), on every send route |
+| `eventRequestFormSlug` | — | Slug of the default published form: open `{APP_PUBLIC_URL}/f/{slug}` in a WebView; null while none is published |
+| `documentAcceptedMimeTypes` / `documentAcceptedExtensions` | `415 FILE_TYPE_NOT_ALLOWED` | Documents both ways: MIME for the server, extensions for pickers |
+
+## 11. My event requests
+
+A request submitted through the web form **while signed in** links to the
+account, and the app lists it:
+
+| Screen | Endpoints |
+| --- | --- |
+| — My event requests | `GET /app/me/academic-requests` (reference, title, status, eventDate, submittedAt) |
+| — Request detail | `GET /app/me/academic-requests/{id}` — the answers rendered with the request's own immutable form version |
+
+Requests sent without an account are followed by email only. Editing answers
+still goes through the emailed token link (status-rules §7); these routes are
+read-only.
+
+## 12. Notifications: types and deep links
+
+`AppNotificationDto.type` is a **closed enum** (also in the spec):
+`dispute.opened`, `dispute.message`, `dispute.evidence_requested`,
+`dispute.resolved`, `dispute.closed`, `review.new`, `review.shown`,
+`review.hidden`, `review.redacted`, `review_reply.hidden`,
+`review_reply.shown`, `report.resolved`, `report.dismissed`,
+`academic_request.cancelled`, `verification.approved`, `verification.rejected`.
+
+**Deep links.** Web URLs (like the invite email's
+`{APP_PUBLIC_URL}/set-password?token=…`, or a `data.href`) are **for
+browsers**: `href` is a path relative to `APP_PUBLIC_URL`. The app should
+register `APP_PUBLIC_URL` links (iOS Universal Links / Android App Links) and
+handle `/set-password` and `/f/{slug}` at minimum. For everything in-app,
+**never parse URLs**: notification `data` carries typed ids — `bookingId`,
+`conversationId` (every `dispute.*` type carries the dispute chat's id),
+`disputeId`, `requestId`, `reviewId`, `reportId` — route on `type` + ids.
+
+Other enums that used to be free strings are now closed in the spec: the
+booking timeline entry `type` (`created`, a booking status, `rescheduled`,
+`checked_in`, `dispute_opened`) and the review `status`
+(`published | hidden | redacted`).
+
+## 13. Live updates: the `/app` socket
 
 ```ts
 import { io } from 'socket.io-client';
@@ -489,7 +604,14 @@ traffic.
 **Treat the socket as an optimisation, never as the source of truth.** Reload
 the list on reconnect; a dropped event must never lose a message.
 
-## 11. What is still not built
+`notification:new` fires for **every** notification row written for you —
+including `verification.approved` / `verification.rejected` when an admin
+decides on your documents — so a connected app learns about approval without
+reloading. **Push (FCM) is still a logging stub**: nothing reaches a closed
+app until Firebase credentials are configured server-side; the in-app rows and
+this socket event are the reliable channel today.
+
+## 14. What is still not built
 
 - `POST /app/events` validates and answers 202 but **stores nothing in V1**
   (analytics is V2 per the signed offer). Nothing in the UI may depend on it.
@@ -499,8 +621,52 @@ the list on reconnect; a dropped event must never lose a message.
   the decisions of 15 Sep 2026. "New event request" opens the admin-built web
   form `/f/:slug` in a WebView.
 
-## 12. Rate limits
+## 15. Rate limits
 
 100 requests/min per user or IP globally; **10/min** on `/app/auth/*`; **30/min**
 on uploads. 429 carries `Retry-After`. Back off — do not hammer `refresh` in a
 loop when it fails.
+
+## 16. Changelog
+
+### 2026-09-27 — integration fixes
+
+One entry per item of the mobile developer's issue report (2026-09-27):
+
+- **#1 (partial)** `/health/ready` now reports `mail: "smtp" | "console"` — `console` means no email leaves the server. (SMTP credentials themselves are an ops fix.)
+- **#2** `GET /api/v1/health` added as a public alias of `/health/live`.
+- **#6** `GET /app/wilayas/{code}/communes?q=` added (public, sorted by name).
+- **#7** `GET /app/provider/services/{id}` and `GET /app/provider/packs/{id}` added — the same detail DTOs the PATCH routes answer with.
+- **#8** `GET /app/provider/bookings/{id}/invoice` and `/invoice.pdf` added (accepted/completed bookings only).
+- **#9** `POST /app/conversations/support {body}` added — find-or-create my support thread.
+- **#10** `GET /app/me/academic-requests` and `/{id}` added (§11).
+- **#11** `POST …/reschedules/{rid}/withdraw` added on both sides (proposer only).
+- **#12** `GET /app/conversations?userId=` returns the direct chat with that user (empty list if none).
+- **#13** `DELETE /app/me/notifications/{id}` added (hard delete, 204).
+- **#14** `POST /app/auth/reset/verify {email, code}` added — 204 without consuming the code.
+- **#15–19, #46** `GET /app/config` gained the `limits` object (§10), including `messageMaxLength` (4000, enforced on every send route), `eventRequestFormSlug`, and the document types as both MIME and extensions. `BUDGET_ITEM_LIMIT` carries `details.max`.
+- **#20** `ACCOUNT_BLOCKED` carries `details: { reason, message, blockedUntil }` on login, refresh and every guarded call (`until` kept as a legacy alias).
+- **#21** Booking cards/details gained `category` (null for packs).
+- **#22** Provider service rows gained `priceType`.
+- **#23** Provider pack rows gained `attentionReasons` (same values as the detail).
+- **#24** `GET /app/wilayas` rows gained `servicesCount`; the list is ordered by it (no `position`).
+- **#25** Catalog cards gained `favouriteId`; `DELETE /app/me/favourites?serviceId=|packId=` removes by target, idempotently.
+- **#26** Messages gained `removed: boolean` (admin-hidden; body already replaced).
+- **#27** Every `dispute.*` notification's `data` carries `conversationId` (plus `bookingId`, `disputeId`).
+- **#28** Conversation rows: `lastMessage` is now an object `{ body, kind, mine }` (**breaking**: it was a string).
+- **#29** Conversation detail: `closedReason` replaced by `closedByModeration: boolean` (**breaking**); show a localised line.
+- **#30** The `/app` socket contract is documented in full (§13 and the spec header); `notification:new` is emitted and covered by e2e.
+- **#31/#33** Notification `type`, booking timeline `type` and review `status` are closed enums in the spec; `data.href` documented (§12).
+- **#32** Deep links documented (§12): web links are for browsers; `data` carries typed ids — never parse URLs.
+- **#34** `AppProviderHomeDto.state` documents `blocked` and what to show.
+- **#35** Documented on the DTO: catalog `provider.id` **is** the provider's user id.
+- **#36** `CONVERSATION_CLOSED` is 409 everywhere (it always was at runtime; the stray "403" docs were fixed).
+- **#37** Pack ratings are numbers in every DTO: `AppPackCardDto.avgRating` is now a number (**breaking**: was a string like "4.90").
+- **#38** One budget line per booking → 409 `BUDGET_BOOKING_ALREADY_LINKED`; a cancelled booking keeps its line and link.
+- **#39** `totalAmount` vs `plannedTotal` semantics documented (§8 Budget bullet + DTO descriptions) — the divergence is intended.
+- **#40** `/app/services` accepts repeated `categoryId`, like `wilaya`.
+- **#41** Confirmed + tested: the normal send route works in open dispute chats (images included); `/app/disputes/{id}/messages` is a text convenience and now answers the app message shape.
+- **#42** `PATCH /app/provider/profile` keeps answering `AppMeDto` — deliberate, now stated in its description.
+- **#43** Pack publishing additionally requires the pack wilaya to be covered by every item → 422 `PACK_WILAYA_NOT_COVERED`, `wilayaNotCovered` in `publishMissing`; the demo seed was fixed accordingly; the enforced checklist is spelled out in §9.
+- **#44** Provider verification approve/reject now writes an in-app notification (`verification.approved` / `verification.rejected`) and emits `notification:new`; FCM push remains a stub until Firebase credentials exist.
+- **#45** The mobile spec is pruned to mobile-reachable schemas, titled "Eventor Mobile API", with an app-specific description (socket contract included); the admin spec is pruned the same way.

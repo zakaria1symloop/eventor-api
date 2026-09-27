@@ -37,7 +37,12 @@ export class AppPhotoDto {
 
 /** The provider strip on screens 11, 12 and 19. Never carries a phone or an email. */
 export class AppProviderSummaryDto {
-  @ApiProperty({ format: 'uuid' }) id: string;
+  @ApiProperty({
+    format: 'uuid',
+    description:
+      'The provider’s **user id** — the same id `GET /app/providers/{id}` takes and `POST /app/conversations` accepts as `userId` for the "Message" button.',
+  })
+  id: string;
   @ApiProperty({ example: 'Studio Lumière' }) businessName: string;
   @ApiProperty({ type: AppCategoryRefDto, nullable: true }) category: AppCategoryRefDto | null;
   @ApiProperty({ type: String, nullable: true }) avatarUrl: string | null;
@@ -68,6 +73,13 @@ export class AppServiceCardDto {
   @ApiProperty({ type: [AppWilayaRefDto], description: 'Open wilayas the service covers.' }) wilayas: AppWilayaRefDto[];
   @ApiProperty({ type: AppProviderSummaryDto }) provider: AppProviderSummaryDto;
   @ApiProperty({ example: false, description: 'Always false for anonymous callers.' }) isFavourite: boolean;
+  @ApiProperty({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description: 'The caller’s favourite row over this service (null when not saved, or anonymous). Un-save with `DELETE /app/me/favourites/{favouriteId}` — or by target with `DELETE /app/me/favourites?serviceId=`.',
+  })
+  favouriteId: string | null;
 }
 
 export class AppServiceExtraDto {
@@ -122,11 +134,18 @@ export class AppPackCardDto {
   @ApiProperty({ type: [String], example: ['Venue', 'Photography', 'Catering'], description: 'Category names, in order ("Venue · Photo · Catering").' })
   categoryNames: string[];
   @ApiProperty({ type: String, nullable: true }) coverUrl: string | null;
-  @ApiProperty({ example: '4.90' }) avgRating: string;
+  @ApiProperty({ example: 4.9, type: Number, description: 'A number (0–5, 2 decimals), like every pack rating.' }) avgRating: number;
   @ApiProperty({ example: 18 }) ratingCount: number;
   @ApiProperty({ example: 12, description: '"booked 12 times this year".' }) bookingsCount: number;
   @ApiProperty({ type: AppProviderSummaryDto }) provider: AppProviderSummaryDto;
   @ApiProperty({ example: false }) isFavourite: boolean;
+  @ApiProperty({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description: 'The caller’s favourite row over this pack (null when not saved, or anonymous). Un-save with `DELETE /app/me/favourites/{favouriteId}` — or by target with `DELETE /app/me/favourites?packId=`.',
+  })
+  favouriteId: string | null;
 }
 
 export class AppPackItemDto {
@@ -193,6 +212,28 @@ export class AppProviderDetailDto extends AppProviderSummaryDto {
   @ApiProperty({ format: 'date-time', description: 'Account creation ("on Eventor since").' }) memberSince: string;
 }
 
+/** One row of `GET /app/wilayas`: the wilaya plus how many services it holds. */
+export class AppWilayaListDto extends AppWilayaRefDto {
+  @ApiProperty({ example: 42, description: 'Services visible in the app that cover this wilaya. The list is ordered by this count (highest first) — there is no separate `position`.' })
+  servicesCount: number;
+}
+
+/** A commune of a wilaya (`GET /app/wilayas/{code}/communes`), for the booking address picker. */
+export class AppCommuneDto {
+  @ApiProperty({ format: 'uuid', description: 'Send it as `communeId` on `POST /app/bookings`.' }) id: string;
+  @ApiProperty({ example: 16 }) wilayaCode: number;
+  @ApiProperty({ example: 'Hydra', description: 'In the caller’s language.' }) name: string;
+  @ApiProperty({ example: 'Hydra' }) nameEn: string;
+  @ApiProperty({ example: 'حيدرة' }) nameAr: string;
+  @ApiProperty({ type: String, nullable: true, example: '16035' }) postalCode: string | null;
+}
+
+export class AppCommunesQueryDto {
+  @ApiPropertyOptional({ example: 'hyd', description: 'Filter on the commune name (EN or AR) or postal code.' })
+  @IsOptional() @Transform(trim) @IsString() @Length(1, 80)
+  q?: string;
+}
+
 // ── availability (screens 12 / 20) ──────────────────────────
 
 export class AppAvailabilityDayDto {
@@ -215,9 +256,9 @@ export class AppServicesQueryDto extends PaginationQueryDto {
   @IsOptional() @Transform(trim) @IsString() @Length(1, 120)
   q?: string;
 
-  @ApiPropertyOptional({ format: 'uuid', description: 'Category chip (screen 11).' })
-  @IsOptional() @IsUUID('4')
-  categoryId?: string;
+  @ApiPropertyOptional({ type: [String], format: 'uuid', description: 'Category chip (screen 11). Repeat the parameter to search several categories at once, like `wilaya`.' })
+  @IsOptional() @Transform(toArray) @IsUUID('4', { each: true })
+  categoryId?: string[];
 
   @ApiPropertyOptional({ type: [Number], example: [16], description: 'Repeat for several wilayas.' })
   @IsOptional() @Transform(toArray) @Type(() => Number) @IsInt({ each: true }) @Min(1, { each: true }) @Max(58, { each: true })
@@ -364,6 +405,35 @@ export class TrackEventDto {
 
 // ── public config ───────────────────────────────────────────
 
+export class AppConfigLimitsDto {
+  @ApiProperty({ example: 60, description: 'Maximum budget lines per client (`422 BUDGET_ITEM_LIMIT` past it, with `details.max`).' }) budgetItemsMax: number;
+  @ApiProperty({ example: 12, description: '`max_photos_per_service` (422 `PHOTO_LIMIT_REACHED`).' }) photosPerService: number;
+  @ApiProperty({ example: 6, description: '`max_photos_per_pack`.' }) photosPerPack: number;
+  @ApiProperty({ example: 5, description: '`max_document_upload_mb` — verification documents and dispute evidence.' }) documentMaxMb: number;
+  @ApiProperty({ example: 10, description: '`max_photo_upload_mb`.' }) photoMaxMb: number;
+  @ApiProperty({ example: 10, description: 'Evidence files each party may attach to a dispute (422 `DISPUTE_EVIDENCE_LIMIT`).' }) disputeEvidenceMax: number;
+  @ApiProperty({ example: 4000, description: 'Maximum length of a message body, everywhere a message can be sent.' }) messageMaxLength: number;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'event-request',
+    description: 'Slug of the default published academic-request form — open `{APP_PUBLIC_URL}/f/{slug}` in a WebView. Null while no form is published.',
+  })
+  eventRequestFormSlug: string | null;
+  @ApiProperty({
+    type: [String],
+    example: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
+    description: 'MIME types accepted for documents — what the server sniffs from the bytes.',
+  })
+  documentAcceptedMimeTypes: string[];
+  @ApiProperty({
+    type: [String],
+    example: ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'],
+    description: 'File extensions matching those MIME types — what a file picker filters on. Match pickers on these; the server still decides from the bytes.',
+  })
+  documentAcceptedExtensions: string[];
+}
+
 export class AppConfigDto {
   @ApiProperty({ example: '1.0.0', description: 'Below this the app must ask the user to update.' }) minAppVersion: string;
   @ApiProperty({ example: false }) maintenanceMode: boolean;
@@ -383,6 +453,8 @@ export class AppConfigDto {
     description: 'Upload limits, so the app can refuse a file before sending it.',
   })
   uploads: { maxPhotoMb: number; maxDocumentMb: number; maxPhotosPerService: number; imageTypes: string[] };
+  @ApiProperty({ type: AppConfigLimitsDto, description: 'Business limits the app should enforce locally before the server refuses.' })
+  limits: AppConfigLimitsDto;
   @ApiProperty({ example: { minLength: 10, needsLetterAndDigit: true } }) passwordPolicy: { minLength: number; needsLetterAndDigit: boolean };
   @ApiProperty({ example: { minNoticeDays: 2, replyDeadlineHours: 48, cancellationWindowHours: 48 } })
   booking: { minNoticeDays: number; replyDeadlineHours: number; cancellationWindowHours: number };

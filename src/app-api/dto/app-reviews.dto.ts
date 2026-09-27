@@ -1,8 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsEnum, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsEnum, IsInt, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min } from 'class-validator';
 import { trim, trimToNull } from '../../common/dto/transforms.js';
-import { DisputeStatus, DisputeType } from '../../common/enums/moderation.enums.js';
+import { MESSAGE_MAX_LENGTH } from '../../common/enums/messaging.enums.js';
+import { DisputeStatus, DisputeType, ReviewStatus } from '../../common/enums/moderation.enums.js';
 import { PartyRole } from '../../common/enums/user.enums.js';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto.js';
 
@@ -63,10 +64,11 @@ export class AppOpenDisputeDto {
 }
 
 export class AppDisputeMessageDto {
-  @ApiProperty({ example: 'Here is the call log from that evening.', maxLength: 4000 })
+  @ApiProperty({ example: 'Here is the call log from that evening.', maxLength: MESSAGE_MAX_LENGTH, description: 'The limit is `limits.messageMaxLength` from `GET /app/config`.' })
   @Transform(trim)
   @IsString()
-  @Length(1, 4000)
+  @Length(1, MESSAGE_MAX_LENGTH)
+  @MaxLength(MESSAGE_MAX_LENGTH)
   body: string;
 }
 
@@ -102,7 +104,7 @@ export class AppMyReviewDto {
   @ApiProperty({ type: String, nullable: true, format: 'uuid' }) serviceId: string | null;
   @ApiProperty({ type: String, nullable: true }) serviceTitle: string | null;
   @ApiProperty({ example: 'Studio Lumière' }) providerName: string;
-  @ApiProperty({ example: 'published', description: 'A review an admin hid or redacted keeps its row and says so here.' }) status: string;
+  @ApiProperty({ enum: ReviewStatus, example: ReviewStatus.Published, description: 'A review an admin hid or redacted keeps its row and says so here.' }) status: ReviewStatus;
   @ApiProperty({ type: String, nullable: true, example: 'Thank you Yasmine!' }) reply: string | null;
   @ApiProperty({ example: true, description: 'Still inside the 48-hour edit window (status-rules §8).' }) editable: boolean;
   @ApiProperty({ format: 'date-time' }) createdAt: string;

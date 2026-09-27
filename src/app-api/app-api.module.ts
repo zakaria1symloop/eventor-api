@@ -23,6 +23,8 @@ import { AppCatalogService } from './app-catalog.service.js';
 import { AppConfigController } from './app-config.controller.js';
 import { AppFavouritesService } from './app-favourites.service.js';
 import { AppMailListener } from './app-mail.listener.js';
+import { AppAcademicController } from './app-academic.controller.js';
+import { AppAcademicService } from './app-academic.service.js';
 import { AppMeController } from './app-me.controller.js';
 import { AppMeService } from './app-me.service.js';
 
@@ -38,8 +40,31 @@ import { AppMeService } from './app-me.service.js';
  */
 @Module({
   imports: [UsersModule, BookingsModule, ServicesModule, PacksModule, MessagingModule, ReviewsModule, DisputesModule],
-  controllers: [AppAuthController, AppMeController, AppCatalogController, AppConfigController, AppBookingsController, AppProviderController, AppMessagesController, AppReviewsController],
-  providers: [AppAuthService, AppMeService, AppCatalogService, AppFavouritesService, AppBudgetService, AppMailListener, AppBookingsService, AppProviderService, AppMessagesService, AppReviewsService, AppGateway],
+  controllers: [
+    AppAuthController,
+    AppMeController,
+    AppAcademicController,
+    AppCatalogController,
+    AppConfigController,
+    AppBookingsController,
+    AppProviderController,
+    AppMessagesController,
+    AppReviewsController,
+  ],
+  providers: [
+    AppAuthService,
+    AppMeService,
+    AppAcademicService,
+    AppCatalogService,
+    AppFavouritesService,
+    AppBudgetService,
+    AppMailListener,
+    AppBookingsService,
+    AppProviderService,
+    AppMessagesService,
+    AppReviewsService,
+    AppGateway,
+  ],
   exports: [AppMeService],
 })
 export class AppApiModule {}

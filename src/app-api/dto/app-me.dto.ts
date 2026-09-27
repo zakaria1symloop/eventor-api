@@ -19,6 +19,7 @@ import { toArray, toBoolean, trim, trimToNull } from '../../common/dto/transform
 import { DevicePlatform } from '../../common/enums/messaging.enums.js';
 import { DocumentRejectReason, DocumentStatus, DocumentType } from '../../common/enums/file.enums.js';
 import { Language, UserRole, UserStatus, VerificationStatus } from '../../common/enums/user.enums.js';
+import { APP_NOTIFICATION_TYPES, type AppNotificationType } from '../../notifications/notifications.service.js';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto.js';
 import { toPhone } from '../../users/users.policy.js';
 
@@ -203,10 +204,23 @@ export class UpdateNotificationPreferencesDto {
 
 export class AppNotificationDto {
   @ApiProperty({ format: 'uuid' }) id: string;
-  @ApiProperty({ example: 'booking.accepted' }) type: string;
-  @ApiProperty({ example: 'Booking accepted' }) title: string;
-  @ApiProperty({ example: 'Studio Lumière accepted your request for Sat 14 Mar.' }) body: string;
-  @ApiProperty({ type: 'object', additionalProperties: true, nullable: true, example: { bookingId: '…', href: 'booking/…' }, description: 'Deep-link payload.' })
+  @ApiProperty({
+    enum: APP_NOTIFICATION_TYPES,
+    example: 'dispute.message',
+    description: 'Stable machine type. `dispute.*` and message-related types carry `data.conversationId`, so a tap opens the right chat without parsing URLs.',
+  })
+  type: AppNotificationType;
+  @ApiProperty({ example: 'Dispute DSP-000012' }) title: string;
+  @ApiProperty({ example: 'New message from Eventor support.' }) body: string;
+  @ApiProperty({
+    type: 'object',
+    additionalProperties: true,
+    nullable: true,
+    example: { disputeId: '…', bookingId: '…', conversationId: '…' },
+    description:
+      'Typed ids for the deep link: `bookingId`, `conversationId`, `disputeId`, `requestId`, `reviewId`, `reportId` as the type requires. ' +
+      'When a `href` appears it is a web path relative to `APP_PUBLIC_URL` — prefer the ids; never parse URLs.',
+  })
   data: Record<string, unknown> | null;
   @ApiProperty({ enum: ['today', 'this_week', 'earlier'], example: 'today', description: 'The section of screen 16 this row belongs to (Africa/Algiers).' })
   group: 'today' | 'this_week' | 'earlier';
@@ -270,6 +284,16 @@ export class AppFavouritesQueryDto extends PaginationQueryDto {
   kind?: 'service' | 'pack';
 }
 
+export class DeleteFavouriteByTargetDto {
+  @ApiPropertyOptional({ format: 'uuid', description: 'Exactly one of `serviceId` / `packId` (422 FAVOURITE_TARGET_INVALID).' })
+  @IsOptional() @IsUUID('4')
+  serviceId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional() @IsUUID('4')
+  packId?: string;
+}
+
 export class CreateFavouriteDto {
   @ApiPropertyOptional({ format: 'uuid', description: 'Exactly one of `serviceId` / `packId` (422 FAVOURITE_TARGET_INVALID).' })
   @IsOptional() @IsUUID('4')
@@ -300,10 +324,12 @@ export class AppBudgetDto {
   @ApiProperty({ format: 'uuid' }) id: string;
   @ApiProperty({ example: 'Our wedding' }) title: string;
   @ApiProperty({ type: String, format: 'date', nullable: true, example: '2026-03-14' }) eventDate: string | null;
-  @ApiProperty({ example: '400000.00', description: 'The plan ("of 400 000 DA planned").' }) totalAmount: string;
-  @ApiProperty({ example: '380000.00', description: 'Sum of the lines’ planned amounts.' }) plannedTotal: string;
-  @ApiProperty({ example: '180000.00' }) spentTotal: string;
-  @ApiProperty({ example: '220000.00', description: '`totalAmount` − `spentTotal`; may be negative.' }) remaining: string;
+  @ApiProperty({ example: '400000.00', description: 'The client’s declared plan ceiling ("of 400 000 DA planned"), set with `PUT /app/me/budget`. **Intentionally independent of the lines**: it may be above or below `plannedTotal`.' })
+  totalAmount: string;
+  @ApiProperty({ example: '380000.00', description: 'Sum of the lines’ planned amounts. May diverge from `totalAmount` — that gap is the screen’s "unallocated / over plan" signal, not an error.' })
+  plannedTotal: string;
+  @ApiProperty({ example: '180000.00', description: 'Sum of the lines’ spent amounts.' }) spentTotal: string;
+  @ApiProperty({ example: '220000.00', description: '`totalAmount` − `spentTotal` (the ceiling, **not** `plannedTotal`); may be negative.' }) remaining: string;
   @ApiProperty({ example: 45 }) spentPercent: number;
   @ApiProperty({ example: 6, description: '"3 of 6 services booked" — the 6.' }) itemsCount: number;
   @ApiProperty({ example: 3, description: 'Lines linked to a booking — the 3.' }) bookedCount: number;
@@ -342,7 +368,13 @@ export class CreateBudgetItemDto {
   @IsOptional() @Transform(trim) @Matches(/^\d{1,10}(\.\d{1,2})?$/, { message: 'spentAmount must be a positive amount with at most 2 decimals' })
   spentAmount?: string;
 
-  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: 'One of my bookings; 404 BOOKING_NOT_FOUND when it is not.' })
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description:
+      'One of my bookings; 404 BOOKING_NOT_FOUND when it is not. **One line per booking**: linking a booking already held by another line answers 409 `BUDGET_BOOKING_ALREADY_LINKED` with `details.itemId`. A cancelled booking keeps its line and its link.',
+  })
   @IsOptional() @IsUUID('4')
   bookingId?: string | null;
 }

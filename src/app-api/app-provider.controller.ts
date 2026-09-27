@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, HttpStatus, Param, Patch, Post, Query, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiHeader, ApiOperation, ApiParam, ApiProduces, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import type { AuthUser } from '../auth/auth.types.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
@@ -16,6 +17,7 @@ import { ApiPaginatedResponse } from '../common/pagination/paginated.js';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto.js';
 import { ApiDataResponse } from '../common/swagger/api-data-response.decorator.js';
 import { ApiAuthErrors, ApiErrorResponses } from '../common/swagger/api-error-responses.decorator.js';
+import { InvoiceDto } from '../bookings/dto/bookings.dto.js';
 import { AvailabilityBlockDto, AvailabilityMonthDto } from '../services/dto/availability.dto.js';
 import { ServiceDetailDto } from '../services/dto/services.dto.js';
 import { PackDetailDto, PackRowDto } from '../packs/dto/packs.dto.js';
@@ -94,7 +96,9 @@ export class AppProviderController {
     description:
       'The Profile tab and the **"Available for bookings"** toggle on screen 21. Turning `acceptingBookings` off keeps ' +
       'the services visible and refuses new bookings (status-rules §3). `wilayaCodes` replaces the set and every added ' +
-      'wilaya must be open. The account’s own name, phone, language and avatar live on `PATCH /app/me`.',
+      'wilaya must be open. The account’s own name, phone, language and avatar live on `PATCH /app/me`. ' +
+      '**Deliberately answers with the whole account (`AppMeDto`)**, provider profile included, so one round trip ' +
+      'refreshes everything the Profile tab shows — this differs from the other provider routes on purpose.',
   })
   @ApiDataResponse(AppMeDto)
   @ApiErrorResponses('VALIDATION_FAILED', 'CATEGORY_NOT_FOUND', 'CATEGORY_HIDDEN', 'WILAYA_NOT_FOUND', 'WILAYA_CLOSED', 'NOT_A_PROVIDER')
@@ -220,6 +224,55 @@ export class AppProviderController {
     return { data: await this.bookings.respondToReschedule(auth, id, 'provider', rid, 'reject', lang) };
   }
 
+  @Post('bookings/:id/reschedules/:rid/withdraw')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Withdraw my own reschedule proposal',
+    description:
+      'Only the **proposer** can withdraw, and only while the proposal is pending (409 `RESCHEDULE_NOT_PENDING` otherwise). ' +
+      'The client’s proposal is answered with `/accept` or `/reject`, never withdrawn (403 `NOT_OWNER`).',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiParam({ name: 'rid', format: 'uuid' })
+  @ApiDataResponse(AppBookingDetailDto)
+  @ApiErrorResponses('BOOKING_NOT_FOUND', 'NOT_OWNER', 'RESCHEDULE_NOT_FOUND', 'RESCHEDULE_NOT_PENDING')
+  async withdrawReschedule(
+    @CurrentUser() auth: AuthUser,
+    @Param('id', uuidParam('BOOKING_NOT_FOUND')) id: string,
+    @Param('rid', uuidParam('RESCHEDULE_NOT_FOUND')) rid: string,
+    @ReqLang() lang: Lang,
+  ) {
+    return { data: await this.bookings.withdrawReschedule(auth, id, 'provider', rid, lang) };
+  }
+
+  @Get('bookings/:id/invoice')
+  @ApiOperation({
+    summary: 'The invoice of my booking',
+    description:
+      'The provider side of the invoice Eventor issues when a booking is accepted (status-rules §5). Readable only on ' +
+      '**accepted or completed** bookings of yours — anything else answers 404 `INVOICE_NOT_FOUND`.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiDataResponse(InvoiceDto)
+  @ApiErrorResponses('BOOKING_NOT_FOUND', 'NOT_OWNER', 'INVOICE_NOT_FOUND')
+  async invoice(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('BOOKING_NOT_FOUND')) id: string) {
+    return { data: await this.bookings.invoice(auth, id, 'provider') };
+  }
+
+  @Get('bookings/:id/invoice.pdf')
+  @ApiProduces('application/pdf')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({ summary: 'The invoice as a PDF', description: 'The same invoice as a downloadable PDF, for the share sheet. Accepted or completed bookings of yours only.' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'The PDF bytes.', content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } } })
+  @ApiErrorResponses('BOOKING_NOT_FOUND', 'NOT_OWNER', 'INVOICE_NOT_FOUND')
+  async invoicePdf(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('BOOKING_NOT_FOUND')) id: string, @Res() res: Response) {
+    const { buffer, fileName } = await this.bookings.invoicePdf(auth, id, 'provider');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(buffer);
+  }
+
   @Post('bookings/:id/check-in')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -246,6 +299,18 @@ export class AppProviderController {
   @ApiDataResponse(AppProviderServiceRowDto, { isArray: true })
   async listServices(@CurrentUser() auth: AuthUser, @ReqLang() lang: Lang) {
     return { data: await this.provider.listServices(auth, lang) };
+  }
+
+  @Get('services/:id')
+  @ApiOperation({
+    summary: 'One of my services',
+    description: `The editing screen’s source of truth: the same \`ServiceDetailDto\` the PATCH and publish routes answer with, so an edit form never has to work from a list row. ${OWNERSHIP_NOTE}`,
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiDataResponse(ServiceDetailDto)
+  @ApiErrorResponses('SERVICE_NOT_FOUND', 'NOT_OWNER')
+  async getService(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('SERVICE_NOT_FOUND')) id: string) {
+    return { data: await this.provider.getService(auth, id) };
   }
 
   @Post('services')
@@ -357,6 +422,18 @@ export class AppProviderController {
   @ApiDataResponse(PackRowDto, { isArray: true })
   async listPacks(@CurrentUser() auth: AuthUser) {
     return { data: await this.provider.listPacks(auth) };
+  }
+
+  @Get('packs/:id')
+  @ApiOperation({
+    summary: 'One of my packs',
+    description: `The pack editing screen’s source of truth: the same \`PackDetailDto\` the PATCH and publish routes answer with, including \`attentionReasons\` and the \`publishMissing\` checklist. ${OWNERSHIP_NOTE}`,
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiDataResponse(PackDetailDto)
+  @ApiErrorResponses('PACK_NOT_FOUND', 'NOT_OWNER')
+  async getPack(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('PACK_NOT_FOUND')) id: string) {
+    return { data: await this.provider.getPack(auth, id) };
   }
 
   @Post('packs')

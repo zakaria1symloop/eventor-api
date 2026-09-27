@@ -484,6 +484,11 @@ export const ERROR_CODES = {
     en: 'The pack cannot be published yet: {missing}.',
     ar: 'لا يمكن نشر الباقة بعد: {missing}.',
   },
+  PACK_WILAYA_NOT_COVERED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'The pack wilaya is not covered by every service in the pack.',
+    ar: 'ولاية الباقة غير مغطاة من طرف كل خدمة في الباقة.',
+  },
   PACK_INVALID_TRANSITION: {
     status: HttpStatus.CONFLICT,
     en: 'This action is not possible while the pack is {status}.',
@@ -911,6 +916,11 @@ export const ERROR_CODES = {
     status: HttpStatus.UNPROCESSABLE_ENTITY,
     en: 'A budget cannot hold more than {max} lines.',
     ar: 'لا يمكن أن تحتوي الميزانية على أكثر من {max} بند.',
+  },
+  BUDGET_BOOKING_ALREADY_LINKED: {
+    status: HttpStatus.CONFLICT,
+    en: 'This booking is already linked to another budget line.',
+    ar: 'هذا الحجز مرتبط بالفعل ببند آخر في الميزانية.',
   },
   NOTIFICATION_NOT_FOUND: {
     status: HttpStatus.NOT_FOUND,

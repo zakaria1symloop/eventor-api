@@ -199,6 +199,28 @@ export class AppBookingsController {
     return { data: await this.bookings.respondToReschedule(auth, id, 'client', rid, 'reject', lang) };
   }
 
+  @Post(':id/reschedules/:rid/withdraw')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Withdraw my own reschedule proposal',
+    description:
+      'Only the **proposer** can withdraw, and only while the proposal is still pending (409 `RESCHEDULE_NOT_PENDING` ' +
+      'otherwise). Withdrawing somebody else’s proposal is 403 `NOT_OWNER` — answer it with `/accept` or `/reject` instead. ' +
+      'The booking keeps its current date.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiParam({ name: 'rid', format: 'uuid' })
+  @ApiDataResponse(AppBookingDetailDto)
+  @ApiErrorResponses('BOOKING_NOT_FOUND', 'NOT_OWNER', 'RESCHEDULE_NOT_FOUND', 'RESCHEDULE_NOT_PENDING')
+  async withdrawReschedule(
+    @CurrentUser() auth: AuthUser,
+    @Param('id', uuidParam('BOOKING_NOT_FOUND')) id: string,
+    @Param('rid', uuidParam('RESCHEDULE_NOT_FOUND')) rid: string,
+    @ReqLang() lang: Lang,
+  ) {
+    return { data: await this.bookings.withdrawReschedule(auth, id, 'client', rid, lang) };
+  }
+
   @Post(':id/check-in')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

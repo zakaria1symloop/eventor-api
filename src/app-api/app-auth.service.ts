@@ -301,6 +301,8 @@ export class AppAuthService {
       throw AppException.of('ACCOUNT_BLOCKED', {
         reason: user.blockedReason,
         message: user.blockedMessage,
+        blockedUntil: user.blockedUntil ? user.blockedUntil.toISOString() : null,
+        // Kept as an alias of `blockedUntil` for older app builds.
         until: user.blockedUntil ? user.blockedUntil.toISOString() : null,
       });
     }
@@ -362,6 +364,8 @@ export class AppAuthService {
       throw new AppException(401, 'ACCOUNT_BLOCKED', {
         reason: result.user.blockedReason,
         message: result.user.blockedMessage,
+        blockedUntil: result.user.blockedUntil ? result.user.blockedUntil.toISOString() : null,
+        // Kept as an alias of `blockedUntil` for older app builds.
         until: result.user.blockedUntil ? result.user.blockedUntil.toISOString() : null,
       });
     }
@@ -411,6 +415,16 @@ export class AppAuthService {
         if (!(error instanceof AppException) || error.code !== 'CODE_RESEND_TOO_SOON') throw error;
       }
     });
+  }
+
+  /**
+   * Checks a reset code **without consuming it** (screen 10a checks the code
+   * before asking for the new password). A wrong code still burns an attempt,
+   * so the 5-try budget covers this route too; the same code then works once
+   * on `POST /app/auth/reset`.
+   */
+  async verifyResetCode(email: string, code: string): Promise<void> {
+    await this.checkCode(VerificationCodePurpose.PasswordReset, email, code, new Date());
   }
 
   async resetPassword(email: string, code: string, password: string): Promise<void> {

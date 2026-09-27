@@ -9,6 +9,7 @@ import {
   loginAs,
   makeBooking,
   makeCategory,
+  makePack,
   makeService,
   type LoggedIn,
   type TestApp,
@@ -243,6 +244,43 @@ describe('App bookings (e2e)', () => {
       const ids = res.body.data.map((b: { id: string }) => b.id);
       expect(ids).toContain(mine.id);
       expect(res.body.data.every((b: { status: string }) => b.status === 'pending')).toBe(true);
+    });
+
+    it('carries the service category on the card, and null for a pack booking (#21)', async () => {
+      const category = await makeCategory(db(), { nameEn: 'Photography', nameAr: 'التصوير' });
+      const service = await bookableService({ categoryId: category.id });
+      const booked = await request(t.http)
+        .post(BASE)
+        .set(client.headers)
+        .send({ serviceId: service.id, eventDate: '2027-09-09', eventType: EventType.Wedding, wilayaCode: 16 })
+        .expect(201);
+      expect(booked.body.data.category).toMatchObject({ id: category.id, slug: expect.any(String), nameEn: 'Photography', nameAr: 'التصوير' });
+
+      const list = await request(t.http).get(`${BASE}?tab=pending&limit=100`).set(client.headers);
+      const card = list.body.data.find((b: { id: string }) => b.id === booked.body.data.id);
+      expect(card.category).toMatchObject({ id: category.id });
+
+      const pack = await makePack(db(), { providerId: provider.user.id });
+      const packBooking = await makeBooking(db(), { clientId: client.user.id, providerId: provider.user.id, serviceId: null, packId: pack.id, status: BookingStatus.Pending });
+      const detail = await request(t.http).get(`${BASE}/${packBooking.id}`).set(client.headers).expect(200);
+      expect(detail.body.data.category).toBeNull();
+      expect(detail.body.data.eventType).toBeDefined();
+    });
+
+    it('lets the client withdraw their own pending reschedule proposal (#11)', async () => {
+      const service = await bookableService();
+      const booking = await makeBooking(db(), { clientId: client.user.id, providerId: provider.user.id, serviceId: service.id, status: BookingStatus.Accepted, eventDate: '2027-10-10' });
+      const proposed = await request(t.http).post(`${BASE}/${booking.id}/reschedule`).set(client.headers).send({ date: '2027-10-17', reason: 'Venue moved our date' }).expect(200);
+      const rid = proposed.body.data.reschedules[0].id;
+
+      // The provider (not the proposer) cannot withdraw it — they answer instead.
+      expectError(await request(t.http).post(`/api/v1/app/provider/bookings/${booking.id}/reschedules/${rid}/withdraw`).set(provider.headers), 403, 'NOT_OWNER');
+      // A stranger cannot touch the booking at all.
+      expectError(await request(t.http).post(`${BASE}/${booking.id}/reschedules/${rid}/withdraw`).set(otherClient.headers), 403, 'NOT_OWNER');
+
+      const withdrawn = await request(t.http).post(`${BASE}/${booking.id}/reschedules/${rid}/withdraw`).set(client.headers).expect(200);
+      expect(withdrawn.body.data.reschedules[0]).toMatchObject({ id: rid, status: RescheduleStatus.Cancelled });
+      expect(withdrawn.body.data.eventDate).toBe('2027-10-10');
     });
 
     it('splits accepted bookings between upcoming and past by the event date', async () => {

@@ -47,6 +47,7 @@ import {
   CreateBudgetItemDto,
   CreateFavouriteDto,
   DeleteAppMeDto,
+  DeleteFavouriteByTargetDto,
   MarkNotificationsReadDto,
   MarkedReadDto,
   PutBudgetDto,
@@ -308,6 +309,19 @@ export class AppMeController {
     return { data: await this.me.markRead(auth, dto) };
   }
 
+  @Delete('notifications/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Delete a notification',
+    description: 'Screen 16, swipe-to-delete. Removes one of **my** notifications for good (hard delete) — it will not come back on the next sync.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 204, description: 'Deleted.' })
+  @ApiErrorResponses('NOTIFICATION_NOT_FOUND')
+  async deleteNotification(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('NOTIFICATION_NOT_FOUND')) id: string): Promise<void> {
+    await this.me.deleteNotification(auth, id);
+  }
+
   // ── favourites (screen 17) ──────────────────────────────────
 
   @Get('favourites')
@@ -338,9 +352,23 @@ export class AppMeController {
     return { data: await this.favourites.add(auth, dto, lang) };
   }
 
+  @Delete('favourites')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Remove a favourite by its target',
+    description:
+      'Un-save straight from a card: `?serviceId=` or `?packId=` (exactly one), no favourite row id needed. ' +
+      '**Idempotent** — removing something that is not saved still answers 204, so a double tap on ♥ never errors.',
+  })
+  @ApiResponse({ status: 204, description: 'Not a favourite any more (whether or not it was one).' })
+  @ApiErrorResponses('VALIDATION_FAILED', 'FAVOURITE_TARGET_INVALID')
+  async removeFavouriteByTarget(@CurrentUser() auth: AuthUser, @Query() query: DeleteFavouriteByTargetDto): Promise<void> {
+    await this.favourites.removeByTarget(auth, query);
+  }
+
   @Delete('favourites/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Remove a favourite', description: 'Screen 17, the ♥ on a card. `:id` is the **favourite** id, not the service id.' })
+  @ApiOperation({ summary: 'Remove a favourite', description: 'Screen 17, the ♥ on a card. `:id` is the **favourite** id, not the service id (or use `DELETE /app/me/favourites?serviceId=`).' })
   @ApiParam({ name: 'id', format: 'uuid', description: 'The `id` of the favourite row.' })
   @ApiResponse({ status: 204, description: 'Removed.' })
   @ApiErrorResponses('FAVOURITE_NOT_FOUND')
@@ -383,7 +411,7 @@ export class AppMeController {
       'in "3 of 6 services booked" and fills `providerName`.',
   })
   @ApiDataResponse(AppBudgetDto, { status: 201, description: 'The whole budget, recomputed.' })
-  @ApiErrorResponses('VALIDATION_FAILED', 'BUDGET_NOT_FOUND', 'BUDGET_ITEM_LIMIT', 'CATEGORY_NOT_FOUND', 'BOOKING_NOT_FOUND', 'NOT_OWNER')
+  @ApiErrorResponses('VALIDATION_FAILED', 'BUDGET_NOT_FOUND', 'BUDGET_ITEM_LIMIT', 'BUDGET_BOOKING_ALREADY_LINKED', 'CATEGORY_NOT_FOUND', 'BOOKING_NOT_FOUND', 'NOT_OWNER')
   async addBudgetItem(@CurrentUser() auth: AuthUser, @Body() dto: CreateBudgetItemDto, @ReqLang() lang: Lang) {
     return { data: await this.budget.addItem(auth, dto, lang) };
   }
@@ -392,7 +420,7 @@ export class AppMeController {
   @ApiOperation({ summary: 'Edit a budget line', description: 'Screen 18, tapping a line. Send only the fields that changed.' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiDataResponse(AppBudgetDto, { description: 'The whole budget, recomputed.' })
-  @ApiErrorResponses('VALIDATION_FAILED', 'BUDGET_NOT_FOUND', 'BUDGET_ITEM_NOT_FOUND', 'CATEGORY_NOT_FOUND', 'BOOKING_NOT_FOUND', 'NOT_OWNER')
+  @ApiErrorResponses('VALIDATION_FAILED', 'BUDGET_NOT_FOUND', 'BUDGET_ITEM_NOT_FOUND', 'BUDGET_BOOKING_ALREADY_LINKED', 'CATEGORY_NOT_FOUND', 'BOOKING_NOT_FOUND', 'NOT_OWNER')
   async updateBudgetItem(
     @CurrentUser() auth: AuthUser,
     @Param('id', uuidParam('BUDGET_ITEM_NOT_FOUND')) id: string,

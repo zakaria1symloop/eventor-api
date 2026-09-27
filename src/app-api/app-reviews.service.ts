@@ -20,6 +20,7 @@ import { insertReview, recomputeRatings } from '../reviews/reviews.writes.js';
 import { autoReportReason } from '../reviews/flag-detection.js';
 import { DomainEvents } from '../common/events/domain-events.js';
 import { SettingsService } from '../settings/settings.service.js';
+import { AppMessagesService } from './app-messages.service.js';
 import { assertOwner, reviewWindow, withinEditWindow } from './app-bookings.policy.js';
 import { pickTextOrNull } from './app.policy.js';
 import type {
@@ -53,6 +54,7 @@ export class AppReviewsService {
     private readonly files: FilesService,
     private readonly audit: AuditService,
     private readonly events: DomainEvents,
+    private readonly appMessages: AppMessagesService,
   ) {}
 
   // ── reviews ───────────────────────────────────────────────────
@@ -295,10 +297,16 @@ export class AppReviewsService {
     };
   }
 
-  /** A message in the dispute chat, from a party (the chat holds both parties and Eventor). */
+  /**
+   * A **text** message in the dispute chat, from a party (the chat holds both
+   * parties and Eventor). A convenience over the normal
+   * `POST /app/conversations/{id}/messages` route, which also works here —
+   * including multipart images — while the dispute conversation is open.
+   */
   async sendDisputeMessage(auth: AuthUser, id: string, body: string) {
-    await this.ownDispute(this.dataSource.manager, id, auth);
-    return this.disputes.sendMessage(auth, id, body);
+    const row = await this.ownDispute(this.dataSource.manager, id, auth);
+    const sent = await this.disputes.sendMessage(auth, id, body);
+    return this.appMessages.oneMessage(auth, row.conversation_id, sent.id);
   }
 
   /** A party attaches one more evidence file, up to `max_dispute_evidence_files` each. */

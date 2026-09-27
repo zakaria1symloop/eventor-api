@@ -34,6 +34,8 @@ import {
 import type {
   AppAvailabilityDto,
   AppCategoryDto,
+  AppCommuneDto,
+  AppWilayaListDto,
   AppHomeDto,
   AppPackCardDto,
   AppPackDetailDto,
@@ -98,9 +100,43 @@ export class AppCatalogService {
     }));
   }
 
-  async wilayas(lang: Lang): Promise<AppWilayaRefDto[]> {
-    const rows = await this.dataSource.query('SELECT code, name, name_ar FROM wilayas WHERE is_open = 1 ORDER BY code ASC');
-    return rows.map((row: any) => toWilayaRef(lang, row)!);
+  /** Open wilayas with their visible-service counts, busiest first (there is no `position`). */
+  async wilayas(lang: Lang): Promise<AppWilayaListDto[]> {
+    const rows = await this.dataSource.query(
+      `SELECT wl.code, wl.name, wl.name_ar,
+              (SELECT COUNT(DISTINCT sw.service_id) FROM service_wilayas sw
+                 JOIN services s ON s.id = sw.service_id
+                 JOIN users u ON u.id = s.provider_id
+                WHERE sw.wilaya_code = wl.code AND ${SERVICE_VISIBLE_SQL}) AS services_count
+       FROM wilayas wl WHERE wl.is_open = 1
+       ORDER BY services_count DESC, wl.code ASC`,
+    );
+    return rows.map((row: any) => ({ ...toWilayaRef(lang, row)!, servicesCount: Number(row.services_count) }));
+  }
+
+  /** Communes of one open-or-closed wilaya, for the booking address picker (screen map §C). */
+  async communes(code: number, q: string | undefined, lang: Lang): Promise<AppCommuneDto[]> {
+    const [wilaya] = await this.dataSource.query('SELECT code FROM wilayas WHERE code = ?', [code]);
+    if (!wilaya) throw AppException.of('WILAYA_NOT_FOUND', { code });
+    const clauses = ['c.wilaya_code = ?', 'c.deleted_at IS NULL'];
+    const params: unknown[] = [code];
+    if (q) {
+      clauses.push('(c.name LIKE ? OR c.name_ar LIKE ? OR c.postal_code LIKE ?)');
+      const like = likeContains(q);
+      params.push(like, like, like);
+    }
+    const rows = await this.dataSource.query(
+      `SELECT c.id, c.wilaya_code, c.name, c.name_ar, c.postal_code FROM communes c WHERE ${clauses.join(' AND ')} ORDER BY c.name ASC, c.id ASC`,
+      params,
+    );
+    return rows.map((row: any): AppCommuneDto => ({
+      id: row.id,
+      wilayaCode: Number(row.wilaya_code),
+      name: pickText(lang, row.name, row.name_ar),
+      nameEn: row.name,
+      nameAr: row.name_ar,
+      postalCode: row.postal_code ?? null,
+    }));
   }
 
   // ── mapping ─────────────────────────────────────────────────
@@ -138,7 +174,7 @@ export class AppCatalogService {
     return map;
   }
 
-  private serviceCard(lang: Lang, row: any, wilayas: AppWilayaRefDto[], favourite: boolean): AppServiceCardDto {
+  private serviceCard(lang: Lang, row: any, wilayas: AppWilayaRefDto[], favouriteId: string | null): AppServiceCardDto {
     return {
       id: row.id,
       title: pickText(lang, row.title_en, row.title_ar),
@@ -154,7 +190,8 @@ export class AppCatalogService {
       coverUrl: row.cover_file_id ? this.files.signedUrl(row.cover_file_id, { variant: FileVariantKind.Medium }) : null,
       wilayas,
       provider: this.providerSummary(lang, row),
-      isFavourite: favourite,
+      isFavourite: favouriteId !== null,
+      favouriteId,
     };
   }
 
@@ -164,7 +201,7 @@ export class AppCatalogService {
       this.serviceWilayas(em, ids, lang),
       this.favourites.marked(viewerId, ids),
     ]);
-    return rows.map((row) => this.serviceCard(lang, row, wilayas.get(row.id) ?? [], favourites.has(row.id)));
+    return rows.map((row) => this.serviceCard(lang, row, wilayas.get(row.id) ?? [], favourites.get(row.id) ?? null));
   }
 
   // ── search (screen 11a filters, Search tab) ─────────────────
@@ -178,8 +215,8 @@ export class AppCatalogService {
       const like = likeContains(query.q);
       params.push(like, like, like, like);
     }
-    if (query.categoryId) {
-      where.push('s.category_id = ?');
+    if (query.categoryId?.length) {
+      where.push('s.category_id IN (?)');
       params.push(query.categoryId);
     }
     if (query.wilaya?.length) {
@@ -283,7 +320,7 @@ export class AppCatalogService {
       this.packRows(em, 'p.provider_id = ?', [row.provider_id], 4, 0, 'p.bookings_count DESC, p.id DESC', lang, viewer?.id ?? null),
     ]);
 
-    const card = this.serviceCard(lang, row, wilayas.get(id) ?? [], favourites.has(id));
+    const card = this.serviceCard(lang, row, wilayas.get(id) ?? [], favourites.get(id) ?? null);
     const facts = Array.isArray(row.facts) ? row.facts : typeof row.facts === 'string' ? JSON.parse(row.facts) : [];
 
     return {
@@ -517,11 +554,12 @@ export class AppCatalogService {
         itemsCount: own.length,
         categoryNames: own.map((item: any) => pickText(lang, item.cat_name_en, item.cat_name_ar)).filter(Boolean),
         coverUrl: row.cover_file_id ? this.files.signedUrl(row.cover_file_id, { variant: FileVariantKind.Medium }) : null,
-        avgRating: String(row.avg_rating),
+        avgRating: Number(row.avg_rating),
         ratingCount: Number(row.rating_count),
         bookingsCount: Number(row.bookings_count),
         provider: this.providerSummary(lang, row),
         isFavourite: favourites.has(row.id),
+        favouriteId: favourites.get(row.id) ?? null,
       };
     });
   }

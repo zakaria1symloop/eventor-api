@@ -190,8 +190,12 @@ export class AppReviewsController {
 
   @Post('disputes/:id/messages')
   @ApiOperation({
-    summary: 'Write in the dispute chat',
-    description: 'The dispute conversation holds you, the other party and Eventor support. Messages are never masked here — an admin is reading.',
+    summary: 'Write in the dispute chat (text convenience)',
+    description:
+      'The dispute conversation holds you, the other party and Eventor support. This route is a **text-only convenience**: ' +
+      'the normal `POST /app/conversations/{conversationId}/messages` route works in the dispute chat too while it is ' +
+      'open — including multipart images — using the `conversationId` from the dispute detail. Messages are never ' +
+      'masked here — an admin is reading. A closed dispute chat answers **409 `CONVERSATION_CLOSED`**.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiDataResponse(AppMessageDto, { status: 201 })

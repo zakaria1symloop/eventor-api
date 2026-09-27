@@ -27,15 +27,35 @@ export class AppFavouritesService {
     private readonly files: FilesService,
   ) {}
 
-  /** `service_id`s and `pack_id`s this user has favourited, for the `isFavourite` flag on cards. */
-  async marked(userId: string | null | undefined, serviceIds: string[], packIds: string[] = []): Promise<Set<string>> {
-    if (!userId || (serviceIds.length === 0 && packIds.length === 0)) return new Set();
+  /**
+   * The caller's favourite rows over these targets: `service_id`/`pack_id` →
+   * favourite row id, for `isFavourite` and `favouriteId` on cards.
+   */
+  async marked(userId: string | null | undefined, serviceIds: string[], packIds: string[] = []): Promise<Map<string, string>> {
+    if (!userId || (serviceIds.length === 0 && packIds.length === 0)) return new Map();
     const rows = await this.dataSource.query(
-      `SELECT service_id, pack_id FROM favourites
+      `SELECT id, service_id, pack_id FROM favourites
        WHERE user_id = ? AND deleted_at IS NULL AND (service_id IN (?) OR pack_id IN (?))`,
       [userId, serviceIds.length > 0 ? serviceIds : [''], packIds.length > 0 ? packIds : ['']],
     );
-    return new Set(rows.flatMap((row: any) => [row.service_id, row.pack_id].filter(Boolean)));
+    return new Map(rows.map((row: any) => [row.service_id ?? row.pack_id, row.id]));
+  }
+
+  /**
+   * Remove by **target** (`?serviceId=` / `?packId=`), so un-saving from a card
+   * needs no favourite row id. Idempotent: nothing to remove is still a 204.
+   */
+  async removeByTarget(auth: AuthUser, target: { serviceId?: string; packId?: string }): Promise<void> {
+    const isService = Boolean(target.serviceId);
+    const isPack = Boolean(target.packId);
+    if (isService === isPack) throw AppException.of('FAVOURITE_TARGET_INVALID');
+    const repository = this.dataSource.getRepository(Favourite);
+    const row = await repository.findOneBy(
+      isService ? { userId: auth.id, serviceId: target.serviceId! } : { userId: auth.id, packId: target.packId! },
+    );
+    if (!row) return;
+    await repository.softDelete(row.id);
+    await this.recount(row.serviceId);
   }
 
   async list(auth: AuthUser, query: AppFavouritesQueryDto, lang: Lang): Promise<Paginated<AppFavouriteDto>> {

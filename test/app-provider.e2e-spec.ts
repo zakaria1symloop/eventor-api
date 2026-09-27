@@ -160,6 +160,51 @@ describe('App provider (e2e)', () => {
       expect(res.body.data.status).toBe('completed');
     });
 
+    it('serves the invoice of an accepted booking, and refuses it before acceptance', async () => {
+      const pendingBooking = await makeBooking(db(), { providerId: provider.user.id, clientId: client.user.id, status: BookingStatus.Pending, eventDate: '2027-06-06' });
+      expectError(await request(t.http).get(`${BASE}/bookings/${pendingBooking.id}/invoice`).set(provider.headers), 404, 'INVOICE_NOT_FOUND');
+
+      await request(t.http).post(`${BASE}/bookings/${pendingBooking.id}/accept`).set(provider.headers).expect(200);
+
+      const invoice = await request(t.http).get(`${BASE}/bookings/${pendingBooking.id}/invoice`).set(provider.headers).expect(200);
+      expect(invoice.body.data).toMatchObject({ number: expect.stringContaining('INV-'), total: expect.any(String) });
+
+      const pdf = await request(t.http).get(`${BASE}/bookings/${pendingBooking.id}/invoice.pdf`).set(provider.headers).expect(200);
+      expect(pdf.headers['content-type']).toContain('application/pdf');
+
+      expectError(await request(t.http).get(`${BASE}/bookings/${pendingBooking.id}/invoice`).set(otherProvider.headers), 403, 'NOT_OWNER');
+      const ar = await request(t.http).get(`${BASE}/bookings/11111111-1111-4111-8111-111111111111/invoice`).set(provider.headers).set('Accept-Language', 'ar');
+      expectError(ar, 404, 'BOOKING_NOT_FOUND');
+      expect(ar.body.message).toMatch(/[؀-ۿ]/);
+    });
+
+    it('lets the proposer withdraw their own pending reschedule, and nobody else', async () => {
+      const booking = await makeBooking(db(), { providerId: provider.user.id, clientId: client.user.id, status: BookingStatus.Accepted, eventDate: '2027-07-07' });
+      const proposed = await request(t.http)
+        .post(`${BASE}/bookings/${booking.id}/reschedule`)
+        .set(provider.headers)
+        .send({ date: '2027-07-14', reason: 'Double booked that day' })
+        .expect(200);
+      const rid = proposed.body.data.reschedules[0].id;
+
+      // The client (not the proposer) cannot withdraw it.
+      expectError(await request(t.http).post(`/api/v1/app/bookings/${booking.id}/reschedules/${rid}/withdraw`).set(client.headers), 403, 'NOT_OWNER');
+
+      const withdrawn = await request(t.http).post(`${BASE}/bookings/${booking.id}/reschedules/${rid}/withdraw`).set(provider.headers).expect(200);
+      expect(withdrawn.body.data.reschedules[0]).toMatchObject({ id: rid, status: 'cancelled' });
+      expect(withdrawn.body.data.eventDate).toBe('2027-07-07');
+
+      // Not pending any more.
+      const again = await request(t.http).post(`${BASE}/bookings/${booking.id}/reschedules/${rid}/withdraw`).set(provider.headers).set('Accept-Language', 'ar');
+      expectError(again, 409, 'RESCHEDULE_NOT_PENDING');
+      expect(again.body.message).toMatch(/[؀-ۿ]/);
+      expectError(
+        await request(t.http).post(`${BASE}/bookings/${booking.id}/reschedules/11111111-1111-4111-8111-111111111111/withdraw`).set(provider.headers),
+        404,
+        'RESCHEDULE_NOT_FOUND',
+      );
+    });
+
     it('refuses another provider’s booking and an unknown id', async () => {
       const theirs = await makeBooking(db(), { providerId: otherProvider.user.id, clientId: client.user.id, status: BookingStatus.Pending });
       expectError(await request(t.http).get(`${BASE}/bookings/${theirs.id}`).set(provider.headers), 403, 'NOT_OWNER');
@@ -185,6 +230,22 @@ describe('App provider (e2e)', () => {
 
       const list = await request(t.http).get(`${BASE}/services`).set(provider.headers);
       expect(list.body.data.map((s: { id: string }) => s.id)).toContain(created.body.data.id);
+    });
+
+    it('returns one of my services in the detail shape, with priceType on list rows', async () => {
+      const service = await ownService({ status: ServiceStatus.Published, priceType: PriceType.PerDay });
+
+      const detail = await request(t.http).get(`${BASE}/services/${service.id}`).set(provider.headers).expect(200);
+      expect(detail.body.data).toMatchObject({ id: service.id, basePrice: service.basePrice, priceType: 'per_day' });
+
+      const list = await request(t.http).get(`${BASE}/services`).set(provider.headers).expect(200);
+      const row = list.body.data.find((s: { id: string }) => s.id === service.id);
+      expect(row).toMatchObject({ priceType: 'per_day', basePrice: service.basePrice });
+
+      expectError(await request(t.http).get(`${BASE}/services/${service.id}`).set(otherProvider.headers), 403, 'NOT_OWNER');
+      expectError(await request(t.http).get(`${BASE}/services/11111111-1111-4111-8111-111111111111`).set(provider.headers), 404, 'SERVICE_NOT_FOUND');
+      const ar = await request(t.http).get(`${BASE}/services/${service.id}`).set(otherProvider.headers).set('Accept-Language', 'ar');
+      expect(ar.body.message).toMatch(/[؀-ۿ]/);
     });
 
     it('cannot set the owner or the status through the form', async () => {
@@ -283,6 +344,53 @@ describe('App provider (e2e)', () => {
 
       const list = await request(t.http).get(`${BASE}/packs`).set(provider.headers);
       expect(list.body.data.map((p: { id: string }) => p.id)).toContain(created.body.data.id);
+    });
+
+    it('returns one of my packs with attentionReasons on the detail and the rows', async () => {
+      const a = await ownService({ status: ServiceStatus.Published, basePrice: '40000.00' });
+      const b = await ownService({ status: ServiceStatus.Published, basePrice: '30000.00' });
+      const created = await request(t.http)
+        .post(`${BASE}/packs`)
+        .set(provider.headers)
+        .send({ nameEn: 'Attention pack', nameAr: 'باقة', eventType: EventType.Wedding, wilayaCode: 16, price: '50000.00', serviceIds: [a.id, b.id] });
+      const packId = created.body.data.id;
+
+      const detail = await request(t.http).get(`${BASE}/packs/${packId}`).set(provider.headers).expect(200);
+      expect(detail.body.data).toMatchObject({ id: packId, attentionReasons: [], publishMissing: [] });
+
+      // Unpublish one item: the row now says exactly which item to fix (#23).
+      await db().query('UPDATE services SET status = ? WHERE id = ?', [ServiceStatus.Draft, b.id]);
+      const list = await request(t.http).get(`${BASE}/packs`).set(provider.headers).expect(200);
+      const row = list.body.data.find((p: { id: string }) => p.id === packId);
+      expect(row.attentionReasons).toEqual([{ code: 'item_not_published', serviceId: b.id }]);
+      await db().query('UPDATE services SET status = ? WHERE id = ?', [ServiceStatus.Published, b.id]);
+
+      expectError(await request(t.http).get(`${BASE}/packs/${packId}`).set(otherProvider.headers), 403, 'NOT_OWNER');
+      expectError(await request(t.http).get(`${BASE}/packs/11111111-1111-4111-8111-111111111111`).set(provider.headers), 404, 'PACK_NOT_FOUND');
+    });
+
+    it('refuses to publish a pack whose wilaya the items do not all cover (#43)', async () => {
+      const a = await ownService({ status: ServiceStatus.Published, basePrice: '40000.00' });
+      const b = await ownService({ status: ServiceStatus.Published, basePrice: '30000.00' });
+      // Item wilayas are {16}; the pack claims Blida (9).
+      const created = await request(t.http)
+        .post(`${BASE}/packs`)
+        .set(provider.headers)
+        .send({ nameEn: 'Wrong wilaya', nameAr: 'ولاية خاطئة', eventType: EventType.Wedding, wilayaCode: 9, price: '50000.00', serviceIds: [a.id, b.id] });
+      const packId = created.body.data.id;
+      expect(created.body.data.publishMissing).toEqual(['wilayaNotCovered']);
+
+      const refused = await request(t.http).post(`${BASE}/packs/${packId}/publish`).set(provider.headers);
+      expectError(refused, 422, 'PACK_WILAYA_NOT_COVERED');
+      expect(refused.body.details).toMatchObject({ wilayaCode: 9, missing: ['wilayaNotCovered'] });
+
+      const ar = await request(t.http).post(`${BASE}/packs/${packId}/publish`).set(provider.headers).set('Accept-Language', 'ar');
+      expectError(ar, 422, 'PACK_WILAYA_NOT_COVERED');
+      expect(ar.body.message).toMatch(/[؀-ۿ]/);
+
+      // Fix the wilaya: publish passes.
+      await request(t.http).patch(`${BASE}/packs/${packId}`).set(provider.headers).send({ wilayaCode: 16 }).expect(200);
+      expect((await request(t.http).post(`${BASE}/packs/${packId}/publish`).set(provider.headers)).status).toBe(200);
     });
 
     it('refuses another provider’s services in my pack', async () => {

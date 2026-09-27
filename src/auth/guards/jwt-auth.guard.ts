@@ -99,6 +99,8 @@ export class JwtAuthGuard implements CanActivate {
       throw new AppException(401, 'ACCOUNT_BLOCKED', {
         reason: user.blockedReason,
         message: user.blockedMessage,
+        blockedUntil: user.blockedUntil ? user.blockedUntil.toISOString() : null,
+        // Kept as an alias of `blockedUntil` for older app builds.
         until: user.blockedUntil ? user.blockedUntil.toISOString() : null,
       });
     }

@@ -3,7 +3,7 @@ import { Transform, Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 import { toBoolean, trim, trimToNull } from '../../common/dto/transforms.js';
 import { BookingStatus } from '../../common/enums/booking.enums.js';
-import { ConversationClosedScope, ConversationKind, ConversationStatus, MessageKind, MessageStatus, ParticipantRole } from '../../common/enums/messaging.enums.js';
+import { ConversationClosedScope, ConversationKind, ConversationStatus, MESSAGE_MAX_LENGTH, MessageKind, MessageStatus, ParticipantRole } from '../../common/enums/messaging.enums.js';
 import { DisputeStatus, DisputeType, ReportReason } from '../../common/enums/moderation.enums.js';
 import { UserRole } from '../../common/enums/user.enums.js';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto.js';
@@ -227,11 +227,11 @@ export class CreateConversationDto {
   @ArrayUnique()
   userIds: string[];
 
-  @ApiProperty({ example: 'Bonjour Amina, nous avons bien reçu votre signalement.', maxLength: 5000 })
+  @ApiProperty({ example: 'Bonjour Amina, nous avons bien reçu votre signalement.', maxLength: MESSAGE_MAX_LENGTH })
   @Transform(trim)
   @IsString()
   @MinLength(1)
-  @MaxLength(5000)
+  @MaxLength(MESSAGE_MAX_LENGTH)
   body: string;
 
   @ApiPropertyOptional({ format: 'uuid' })
@@ -246,11 +246,11 @@ export class CreateConversationDto {
 }
 
 export class SendMessageDto {
-  @ApiProperty({ example: 'Merci, nous vérifions avec le prestataire.', maxLength: 5000 })
+  @ApiProperty({ example: 'Merci, nous vérifions avec le prestataire.', maxLength: MESSAGE_MAX_LENGTH })
   @Transform(trim)
   @IsString()
   @MinLength(1)
-  @MaxLength(5000)
+  @MaxLength(MESSAGE_MAX_LENGTH)
   body: string;
 }
 

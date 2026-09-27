@@ -6,12 +6,15 @@ import { ReviewStatus } from '../src/common/enums/moderation.enums.js';
 import { UserRole, UserStatus, VerificationStatus } from '../src/common/enums/user.enums.js';
 import { PackItem } from '../src/packs/entities/pack-item.entity.js';
 import { ReviewReply } from '../src/reviews/entities/review-reply.entity.js';
+import { FormStatus } from '../src/common/enums/academic.enums.js';
 import {
   createApp,
   expectError,
   loginAs,
   makeBooking,
   makeCategory,
+  makeCommune,
+  makeForm,
   makePack,
   makeProvider,
   makeReview,
@@ -89,6 +92,34 @@ describe('App catalog (e2e)', () => {
       expect(res.body.data.booking.minNoticeDays).toEqual(expect.any(Number));
       expect(res.headers['cache-control']).toContain('max-age=60');
     });
+
+    it('carries the business limits, the document types both ways and the form slug', async () => {
+      const res = await request(t.http).get(`${BASE}/config`).expect(200);
+
+      expect(res.body.data.limits).toMatchObject({
+        budgetItemsMax: 60,
+        photosPerService: expect.any(Number),
+        photosPerPack: expect.any(Number),
+        documentMaxMb: expect.any(Number),
+        photoMaxMb: expect.any(Number),
+        disputeEvidenceMax: expect.any(Number),
+        messageMaxLength: 4000,
+      });
+      expect(res.body.data.limits.documentAcceptedMimeTypes).toContain('application/pdf');
+      expect(res.body.data.limits.documentAcceptedExtensions).toEqual(expect.arrayContaining(['pdf', 'jpg', 'jpeg', 'png']));
+      // No published default form in this suite → null, not undefined.
+      expect(res.body.data.limits).toHaveProperty('eventRequestFormSlug');
+    });
+
+    it('exposes the default published form slug once one exists', async () => {
+      const { form } = await makeForm(db(), { isDefault: true, status: FormStatus.Published });
+      try {
+        const res = await request(t.http).get(`${BASE}/config`).expect(200);
+        expect(res.body.data.limits.eventRequestFormSlug).toBe(form.slug);
+      } finally {
+        await db().query('UPDATE forms SET is_default = 0 WHERE id = ?', [form.id]);
+      }
+    });
   });
 
   describe('GET /app/categories and /app/wilayas', () => {
@@ -117,13 +148,46 @@ describe('App catalog (e2e)', () => {
       expect(res.body.data.map((c: { id: string }) => c.id)).not.toContain(hidden.id);
     });
 
-    it('lists open wilayas only', async () => {
+    it('lists open wilayas only, with servicesCount, busiest first', async () => {
+      await visibleService();
       const res = await request(t.http).get(`${BASE}/wilayas`).set('Accept-Language', 'ar');
 
       expect(res.status).toBe(200);
       expect(res.body.data.length).toBeGreaterThan(0);
-      expect(res.body.data[0]).toMatchObject({ code: expect.any(Number), nameEn: expect.any(String), nameAr: expect.any(String) });
+      expect(res.body.data[0]).toMatchObject({ code: expect.any(Number), nameEn: expect.any(String), nameAr: expect.any(String), servicesCount: expect.any(Number) });
       expect(res.body.data[0].name).toBe(res.body.data[0].nameAr);
+      // Ordered by count (no `position` field): every next row has at most as many services.
+      const counts = res.body.data.map((w: { servicesCount: number }) => w.servicesCount);
+      expect([...counts].sort((a, b) => b - a)).toEqual(counts);
+      const algiers = res.body.data.find((w: { code: number }) => w.code === ALGIERS);
+      expect(algiers.servicesCount).toBeGreaterThan(0);
+    });
+  });
+
+  describe('GET /app/wilayas/:code/communes', () => {
+    it('lists the communes of a wilaya sorted by name, publicly, and filters with q', async () => {
+      const tag = uid();
+      const zeta = await makeCommune(db(), { wilayaCode: ALGIERS, name: `Zeta ${tag}`, nameAr: `زيتا ${tag}` });
+      const alpha = await makeCommune(db(), { wilayaCode: ALGIERS, name: `Alpha ${tag}`, nameAr: `ألفا ${tag}`, postalCode: '16099' });
+      await makeCommune(db(), { wilayaCode: 9, name: `Elsewhere ${tag}`, nameAr: `أخرى ${tag}` });
+
+      const res = await request(t.http).get(`${BASE}/wilayas/${ALGIERS}/communes`).expect(200);
+      const mine = res.body.data.filter((c: { name: string }) => c.name.includes(tag));
+      expect(mine.map((c: { id: string }) => c.id)).toEqual([alpha.id, zeta.id]);
+      expect(mine[0]).toMatchObject({ id: alpha.id, wilayaCode: ALGIERS, nameEn: `Alpha ${tag}`, nameAr: `ألفا ${tag}`, postalCode: '16099' });
+
+      const filtered = await request(t.http).get(`${BASE}/wilayas/${ALGIERS}/communes?q=Zeta ${tag}`).expect(200);
+      expect(filtered.body.data.map((c: { id: string }) => c.id)).toEqual([zeta.id]);
+
+      const ar = await request(t.http).get(`${BASE}/wilayas/${ALGIERS}/communes?q=${encodeURIComponent(`ألفا ${tag}`)}`).set('Accept-Language', 'ar').expect(200);
+      expect(ar.body.data[0]).toMatchObject({ id: alpha.id, name: `ألفا ${tag}` });
+    });
+
+    it('404s on an unknown wilaya, with an Arabic message on demand', async () => {
+      expectError(await request(t.http).get(`${BASE}/wilayas/99/communes`), 404, 'WILAYA_NOT_FOUND');
+      const ar = await request(t.http).get(`${BASE}/wilayas/0/communes`).set('Accept-Language', 'ar');
+      expectError(ar, 404, 'WILAYA_NOT_FOUND');
+      expect(ar.body.message).toMatch(/[؀-ۿ]/);
     });
   });
 
@@ -210,6 +274,22 @@ describe('App catalog (e2e)', () => {
       expect(byRating.body.data.map((s: { id: string }) => s.id)).toEqual([pricey.id]);
     });
 
+    it('accepts a repeated categoryId, like wilaya', async () => {
+      const one = await makeCategory(db());
+      const two = await makeCategory(db());
+      const other = await makeCategory(db());
+      const inOne = await visibleService({ categoryId: one.id });
+      const inTwo = await visibleService({ categoryId: two.id });
+      const elsewhere = await visibleService({ categoryId: other.id });
+
+      const res = await request(t.http).get(`${BASE}/services?categoryId=${one.id}&categoryId=${two.id}&limit=100`).expect(200);
+      const ids = res.body.data.map((s: { id: string }) => s.id);
+      expect(ids).toEqual(expect.arrayContaining([inOne.id, inTwo.id]));
+      expect(ids).not.toContain(elsewhere.id);
+
+      expectError(await request(t.http).get(`${BASE}/services?categoryId=${one.id}&categoryId=nope`), 400, 'VALIDATION_FAILED');
+    });
+
     it('filters by a date the provider is free on', async () => {
       const category = await makeCategory(db());
       const date = new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10);
@@ -262,11 +342,18 @@ describe('App catalog (e2e)', () => {
       const service = await visibleService();
       await request(t.http).post(`${BASE}/me/favourites`).set(client.headers).send({ serviceId: service.id });
 
+      const saved = await request(t.http).post(`${BASE}/me/favourites`).set(client.headers).send({ serviceId: service.id });
+
       const signedIn = await request(t.http).get(`${BASE}/services?q=${service.titleEn}`).set(client.headers);
-      expect(signedIn.body.data.find((s: { id: string }) => s.id === service.id).isFavourite).toBe(true);
+      const card = signedIn.body.data.find((s: { id: string }) => s.id === service.id);
+      expect(card.isFavourite).toBe(true);
+      // #25: the card carries the favourite row id, so un-saving is one DELETE.
+      expect(card.favouriteId).toBe(saved.body.data.id);
 
       const anonymous = await request(t.http).get(`${BASE}/services?q=${service.titleEn}`);
-      expect(anonymous.body.data.find((s: { id: string }) => s.id === service.id).isFavourite).toBe(false);
+      const anonymousCard = anonymous.body.data.find((s: { id: string }) => s.id === service.id);
+      expect(anonymousCard.isFavourite).toBe(false);
+      expect(anonymousCard.favouriteId).toBeNull();
     });
 
     it('401 when favourite=true without a token', async () => {
@@ -570,6 +657,17 @@ describe('App catalog (e2e)', () => {
       expect(card.savingsPercent).toBeCloseTo(12.3, 1);
       expect(card.provider.businessName).toEqual(expect.any(String));
       expect(card.wilaya.code).toBe(ALGIERS);
+      // #37: pack ratings are numbers in every DTO.
+      expect(typeof card.avgRating).toBe('number');
+      expect(card.favouriteId).toBeNull();
+    });
+
+    it('fills favouriteId on a pack card for a signed-in caller', async () => {
+      const { pack } = await visiblePack();
+      const saved = await request(t.http).post(`${BASE}/me/favourites`).set(client.headers).send({ packId: pack.id });
+      const res = await request(t.http).get(`${BASE}/packs?limit=100`).set(client.headers);
+      const card = res.body.data.find((p: { id: string }) => p.id === pack.id);
+      expect(card).toMatchObject({ isFavourite: true, favouriteId: saved.body.data.id });
     });
 
     it.each([

@@ -15,7 +15,7 @@ import {
   Min,
 } from 'class-validator';
 import { trim, trimToNull } from '../../common/dto/transforms.js';
-import { ServiceStatus } from '../../common/enums/catalog.enums.js';
+import { PriceType, ServiceStatus } from '../../common/enums/catalog.enums.js';
 import { VerificationStatus } from '../../common/enums/user.enums.js';
 import { CreatePackDto, UpdatePackDto } from '../../packs/dto/packs.dto.js';
 import { CreateServiceDto, UpdateServiceDto } from '../../services/dto/services.dto.js';
@@ -166,6 +166,7 @@ export class AppProviderServiceRowDto {
   @ApiProperty({ enum: ServiceStatus }) status: ServiceStatus;
   @ApiProperty({ example: true, description: 'Visible in the app right now (published, provider verified, an open wilaya).' }) visibleInApp: boolean;
   @ApiProperty({ example: '45000.00' }) basePrice: string;
+  @ApiProperty({ enum: PriceType, example: PriceType.PerDay, description: 'So the row can print "45 000 DA · per day".' }) priceType: PriceType;
   @ApiProperty({ example: '4.80' }) avgRating: string;
   @ApiProperty({ example: 32 }) ratingCount: number;
   @ApiProperty({ example: 12 }) bookingsCount: number;
@@ -184,7 +185,13 @@ export class AppProviderCountsDto {
 
 /** Screens 21 Home · Provider and 21a Home · Provider · Pending, in one call. */
 export class AppProviderHomeDto {
-  @ApiProperty({ enum: ['verified', 'pending', 'rejected', 'blocked'], description: '`verified` draws screen 21; anything else draws 21a.' })
+  @ApiProperty({
+    enum: ['verified', 'pending', 'rejected', 'blocked'],
+    description:
+      '`verified` draws screen 21 (the full home); `pending` and `rejected` draw 21a with `verificationSteps` and `documents`. ' +
+      '`blocked` means an admin blocked the account: show a blocked state (use the `ACCOUNT_BLOCKED` details from sign-in for the message) — ' +
+      'services and packs are hidden, chats are read-only and no request can be accepted until an admin unblocks the account.',
+  })
   state: ProviderHomeState;
 
   @ApiProperty({ example: 'Studio Lumière' }) businessName: string;

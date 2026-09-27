@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Req } 
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import type { AuthUser } from '../auth/auth.types.js';
+import { AppException } from '../common/errors/app.exception.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { Public } from '../auth/decorators/public.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
@@ -17,6 +18,9 @@ import {
   AppAvailabilityDto,
   AppAvailabilityQueryDto,
   AppCategoryDto,
+  AppCommuneDto,
+  AppCommunesQueryDto,
+  AppWilayaListDto,
   AppHomeDto,
   AppPackCardDto,
   AppPackDetailDto,
@@ -29,7 +33,6 @@ import {
   AppServicesQueryDto,
   TrackEventDto,
 } from './dto/app-catalog.dto.js';
-import { AppWilayaRefDto } from './dto/app-me.dto.js';
 
 const LANGUAGE_NOTE =
   'Text comes back in the caller’s language: `Accept-Language: ar|en`, then the signed-in account’s `language`, then `en`. ' +
@@ -87,12 +90,33 @@ export class AppCatalogController {
   @Public()
   @ApiOperation({
     summary: 'Open wilayas',
-    description: `Public. The city selector on screen 11 and the wilaya filter on 11a. Only wilayas open for bookings. ${LANGUAGE_NOTE}`,
+    description:
+      `Public. The city selector on screen 11 and the wilaya filter on 11a. Only wilayas open for bookings, each with ` +
+      `\`servicesCount\` (services visible in the app that cover it). The list is ordered by that count, highest first — ` +
+      `use the top rows as "top wilayas"; there is no separate \`position\`. ${LANGUAGE_NOTE}`,
   })
-  @ApiDataResponse(AppWilayaRefDto, { isArray: true })
+  @ApiDataResponse(AppWilayaListDto, { isArray: true })
   @ApiErrorResponses('RATE_LIMITED')
   async wilayas(@ReqLang() lang: Lang) {
     return { data: await this.catalog.wilayas(lang) };
+  }
+
+  @Get('wilayas/:code/communes')
+  @Public()
+  @ApiOperation({
+    summary: 'Communes of a wilaya',
+    description:
+      `Public. The commune picker of the booking sheet: \`POST /app/bookings\` takes one of these ids as \`communeId\` ` +
+      `(it must belong to the booking's \`wilayaCode\`, 422 \`COMMUNE_WILAYA_MISMATCH\` otherwise). Sorted by name; ` +
+      `\`q\` filters on the name (EN or AR) or postal code. ${LANGUAGE_NOTE}`,
+  })
+  @ApiParam({ name: 'code', example: 16, description: 'Wilaya code (1–58).' })
+  @ApiDataResponse(AppCommuneDto, { isArray: true })
+  @ApiErrorResponses('VALIDATION_FAILED', 'WILAYA_NOT_FOUND', 'RATE_LIMITED')
+  async communes(@Param('code') code: string, @Query() query: AppCommunesQueryDto, @ReqLang() lang: Lang) {
+    const parsed = Number(code);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 58) throw AppException.of('WILAYA_NOT_FOUND', { code });
+    return { data: await this.catalog.communes(parsed, query.q, lang) };
   }
 
   @Get('services')

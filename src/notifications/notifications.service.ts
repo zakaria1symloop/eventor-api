@@ -7,6 +7,31 @@ import { PushService, type PushTarget } from '../push/push.service.js';
 
 export type NotificationData = Record<string, string | number | boolean | null>;
 
+/**
+ * Every `type` the API writes for a **client or provider** notification row
+ * (`GET /app/me/notifications`, socket `notification:new`). Add here when a
+ * listener starts emitting a new one — the mobile spec documents this list.
+ */
+export const APP_NOTIFICATION_TYPES = [
+  'dispute.opened',
+  'dispute.message',
+  'dispute.evidence_requested',
+  'dispute.resolved',
+  'dispute.closed',
+  'review.new',
+  'review.shown',
+  'review.hidden',
+  'review.redacted',
+  'review_reply.hidden',
+  'review_reply.shown',
+  'report.resolved',
+  'report.dismissed',
+  'academic_request.cancelled',
+  'verification.approved',
+  'verification.rejected',
+] as const;
+export type AppNotificationType = (typeof APP_NOTIFICATION_TYPES)[number];
+
 export interface InAppNotification {
   type: string;
   title: string;

@@ -22,6 +22,7 @@ import {
   AppSessionDto,
   AppSetPasswordDto,
   AppVerifyEmailDto,
+  AppVerifyResetCodeDto,
 } from './dto/app-auth.dto.js';
 
 const TOKEN_NOTE =
@@ -102,7 +103,9 @@ export class AppAuthController {
       `Public route. Screen 07 Login. Client and provider accounts only. ${TOKEN_NOTE} ` +
       '5 failed attempts for an email within 15 min lock it for 15 min (429 `ACCOUNT_LOCKED`, `details.retryAfterSeconds`). ' +
       'An unverified account gets 403 `EMAIL_NOT_VERIFIED` with `details.email` — send the user to screen 10 and call ' +
-      '`/app/auth/verify-email/resend`. A blocked account gets 403 `ACCOUNT_BLOCKED` with the admin’s `details.message`.',
+      '`/app/auth/verify-email/resend`. A blocked account gets 403 `ACCOUNT_BLOCKED` with ' +
+      '`details: { reason, message, blockedUntil }` — show `message` (the admin’s own words) and `blockedUntil` (ISO ' +
+      'date-time, null for an indefinite block).',
   })
   @ApiDataResponse(AppSessionDto)
   @ApiErrorResponses(
@@ -160,6 +163,21 @@ export class AppAuthController {
   @ApiErrorResponses('VALIDATION_FAILED', 'RATE_LIMITED')
   async forgot(@Body() dto: AppForgotPasswordDto, @ReqLang() lang: Lang): Promise<void> {
     await this.auth.forgotPassword(dto.email, lang);
+  }
+
+  @Post('reset/verify')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Check a reset code before asking for the new password',
+    description:
+      'Public route. Screen 10a: validate the emailed code **before** the user types a new password twice. 204 when the ' +
+      'code is valid — it is **not consumed**, so the same code then works on `POST /app/auth/reset`. A wrong code still ' +
+      'burns one of the 5 attempts (422 `CODE_INVALID`); a spent or stale one answers 422 `CODE_EXPIRED`.',
+  })
+  @ApiResponse({ status: 204, description: 'The code is valid and still usable.' })
+  @ApiErrorResponses('VALIDATION_FAILED', 'CODE_INVALID', 'CODE_EXPIRED', 'RATE_LIMITED')
+  async verifyReset(@Body() dto: AppVerifyResetCodeDto): Promise<void> {
+    await this.auth.verifyResetCode(dto.email, dto.code);
   }
 
   @Post('reset')

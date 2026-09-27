@@ -151,6 +151,20 @@ export class AppBudgetService {
     if (!row) throw AppException.of('BOOKING_NOT_FOUND');
   }
 
+  /**
+   * One budget line per booking, so an amount is never counted twice
+   * (409 `BUDGET_BOOKING_ALREADY_LINKED` with the line already holding it).
+   * A cancelled booking keeps its line and its link — the client decides.
+   */
+  private async assertBookingNotLinked(em: EntityManager, budgetId: string, bookingId: string | null | undefined, exceptItemId?: string): Promise<void> {
+    if (!bookingId) return;
+    const [row] = await em.query(
+      `SELECT id FROM budget_items WHERE budget_id = ? AND booking_id = ? AND deleted_at IS NULL${exceptItemId ? ' AND id <> ?' : ''} LIMIT 1`,
+      exceptItemId ? [budgetId, bookingId, exceptItemId] : [budgetId, bookingId],
+    );
+    if (row) throw AppException.of('BUDGET_BOOKING_ALREADY_LINKED', { bookingId, itemId: row.id });
+  }
+
   private async assertCategory(em: EntityManager, categoryId: string | null | undefined): Promise<void> {
     if (!categoryId) return;
     const [row] = await em.query('SELECT id FROM categories WHERE id = ? AND deleted_at IS NULL', [categoryId]);
@@ -165,6 +179,7 @@ export class AppBudgetService {
       if (count >= BUDGET_MAX_ITEMS) throw AppException.of('BUDGET_ITEM_LIMIT', { max: BUDGET_MAX_ITEMS });
       await this.assertCategory(em, dto.categoryId);
       await this.assertBooking(em, auth, dto.bookingId);
+      await this.assertBookingNotLinked(em, budget.id, dto.bookingId);
 
       await repository.save(
         repository.create({
@@ -188,7 +203,10 @@ export class AppBudgetService {
       const item = await repository.findOneBy({ id: itemId, budgetId: budget.id });
       if (!item) throw AppException.of('BUDGET_ITEM_NOT_FOUND');
       if (dto.categoryId !== undefined) await this.assertCategory(em, dto.categoryId);
-      if (dto.bookingId !== undefined) await this.assertBooking(em, auth, dto.bookingId);
+      if (dto.bookingId !== undefined) {
+        await this.assertBooking(em, auth, dto.bookingId);
+        await this.assertBookingNotLinked(em, budget.id, dto.bookingId, item.id);
+      }
 
       await repository.update(item.id, {
         ...(dto.label !== undefined ? { label: dto.label } : {}),

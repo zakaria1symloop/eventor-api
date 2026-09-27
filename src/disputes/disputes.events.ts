@@ -16,6 +16,8 @@ export const DISPUTE_EVENTS = {
 export interface DisputeEvent {
   disputeId: string;
   reference: string;
+  /** The dispute conversation — carried into notification `data` so a tap can open the chat. */
+  conversationId: string | null;
   bookingId: string;
   bookingReference: string;
   clientId: string;

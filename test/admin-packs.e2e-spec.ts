@@ -57,7 +57,10 @@ describe('Admin Ready Packs (e2e)', () => {
     const services: Service[] = [];
     for (const [i, price] of prices.entries()) {
       const categoryId = (await makeCategory(db(), options.categoryNames?.[i] ? { nameEn: options.categoryNames[i] } : {})).id;
-      services.push(await makeService(db(), { providerId: user.id, basePrice: price, categoryId }));
+      const service = await makeService(db(), { providerId: user.id, basePrice: price, categoryId });
+      // The publish guard needs the pack wilaya covered by every item (9 and 16 are the suites' wilayas).
+      await db().query('INSERT IGNORE INTO service_wilayas (service_id, wilaya_code, created_at) VALUES (?, 9, NOW(6)), (?, 16, NOW(6))', [service.id, service.id]);
+      services.push(service);
     }
     return { provider: user, services };
   }
@@ -118,6 +121,7 @@ describe('Admin Ready Packs (e2e)', () => {
         bookingsCount: 0,
         status: 'published',
         needsAttention: false,
+        attentionReasons: [],
         visibleInApp: true,
         createdAt: '2026-04-01T00:00:00.000Z',
         updatedAt: expect.any(String),

@@ -220,6 +220,11 @@ export class PacksService {
     return raw.map((r) => {
       const packItems = byPack.get(r.id) ?? [];
       const pricing = packPricing(String(r.price), packItems.map((i) => ({ basePrice: String(i.base_price), deleted: i.deleted_at !== null })));
+      const attentionReasons = packAttentionReasons(this.itemStates(packItems), {
+        status: r.provider_status ?? UserStatus.Blocked,
+        verificationStatus: r.provider_verification ?? VerificationStatus.Pending,
+        deleted: r.provider_status === null || r.provider_status === undefined,
+      });
       return {
         id: r.id,
         nameEn: r.name_en,
@@ -243,11 +248,24 @@ export class PacksService {
         bookingsCount: Number(r.bookings_count),
         status: r.status,
         needsAttention: Number(r.needs_attention) === 1,
+        attentionReasons,
         visibleInApp: Number(r.visible) === 1,
         createdAt: iso(r.created_at)!,
         updatedAt: iso(r.updated_at)!,
       };
     });
+  }
+
+  /** Wilaya codes each service covers, in one query (publish coverage rule). */
+  private async itemWilayas(em: EntityManager, serviceIds: string[]): Promise<Map<string, number[]>> {
+    const map = new Map<string, number[]>();
+    if (serviceIds.length === 0) return map;
+    const rows: { service_id: string; wilaya_code: number }[] = await em.query(
+      'SELECT service_id, wilaya_code FROM service_wilayas WHERE service_id IN (?)',
+      [serviceIds],
+    );
+    for (const row of rows) map.set(row.service_id, [...(map.get(row.service_id) ?? []), Number(row.wilaya_code)]);
+    return map;
   }
 
   // ── detail ──────────────────────────────────────────────────
@@ -274,7 +292,7 @@ export class PacksService {
       em,
       items.map((i) => i.service_id),
     );
-    const states = this.itemStates(items);
+    const states = this.itemStates(items, await this.itemWilayas(em, items.map((i) => i.service_id)));
     const providerState = this.providerState(provider);
     const byStatus = new Map<string, { n: number; amount: string }>(bookingRows.map((b: any) => [b.status, { n: Number(b.n), amount: String(b.amount) }]));
     const count = (status: BookingStatus) => byStatus.get(status)?.n ?? 0;
@@ -303,7 +321,7 @@ export class PacksService {
       ),
       photos,
       attentionReasons: packAttentionReasons(states, providerState),
-      publishMissing: packPublishMissing({ nameEn: pack.nameEn, nameAr: pack.nameAr, price: pack.price, items: states, provider: providerState }),
+      publishMissing: packPublishMissing({ nameEn: pack.nameEn, nameAr: pack.nameAr, price: pack.price, items: states, provider: providerState, wilayaCode: pack.wilayaCode }),
       stats: {
         bookings: {
           pending: count(BookingStatus.Pending),
@@ -319,8 +337,14 @@ export class PacksService {
     };
   }
 
-  private itemStates(items: RawItemRow[]): PackItemState[] {
-    return items.map((i) => ({ serviceId: i.service_id, status: i.status, deleted: i.deleted_at !== null, basePrice: String(i.base_price) }));
+  private itemStates(items: RawItemRow[], wilayas?: Map<string, number[]>): PackItemState[] {
+    return items.map((i) => ({
+      serviceId: i.service_id,
+      status: i.status,
+      deleted: i.deleted_at !== null,
+      basePrice: String(i.base_price),
+      ...(wilayas ? { wilayaCodes: wilayas.get(i.service_id) ?? [] } : {}),
+    }));
   }
 
   private providerState(user: User | null) {
@@ -362,8 +386,14 @@ export class PacksService {
 
   private async assertPublishable(em: EntityManager, pack: Pack): Promise<void> {
     const [items, provider] = await Promise.all([this.itemRows(em, [pack.id]), em.getRepository(User).findOne({ where: { id: pack.providerId }, withDeleted: true })]);
-    const missing = packPublishMissing({ nameEn: pack.nameEn, nameAr: pack.nameAr, price: pack.price, items: this.itemStates(items), provider: this.providerState(provider) });
-    if (missing.length > 0) throw AppException.of('PACK_PUBLISH_INVALID', { missing });
+    const states = this.itemStates(items, await this.itemWilayas(em, items.map((i) => i.service_id)));
+    const missing = packPublishMissing({ nameEn: pack.nameEn, nameAr: pack.nameAr, price: pack.price, items: states, provider: this.providerState(provider), wilayaCode: pack.wilayaCode });
+    if (missing.length === 0) return;
+    // The coverage rule has its own code so the app can point at the wilaya picker.
+    if (missing.includes('wilayaNotCovered')) {
+      throw AppException.of('PACK_WILAYA_NOT_COVERED', { missing, wilayaCode: pack.wilayaCode });
+    }
+    throw AppException.of('PACK_PUBLISH_INVALID', { missing });
   }
 
   async create(auth: AuthUser, dto: CreatePackDto): Promise<PackDetailDto> {

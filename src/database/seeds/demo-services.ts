@@ -379,6 +379,12 @@ export async function seedServicesAndPacks(ctx: ServiceSeedContext): Promise<Ser
     const owned = servicesByProvider.get(provider.id) ?? new Map<string, Service>();
     const items = seed.items.map((title) => owned.get(title)).filter((s): s is Service => !!s);
     if (items.length < 2) continue;
+    // Publish rule: the pack wilaya must be covered by every item's wilaya set,
+    // so make sure each seeded item covers `seed.wilaya` (no demo pack may
+    // violate 422 PACK_WILAYA_NOT_COVERED).
+    for (const item of items) {
+      await em.query('INSERT IGNORE INTO service_wilayas (service_id, wilaya_code, created_at) VALUES (?, ?, NOW(6))', [item.id, seed.wilaya]);
+    }
     // Below the sum of the items' base prices (status-rules §4), rounded to 1,000 DZD.
     const itemSum = items.reduce((total, s) => total + Number(s.basePrice), 0);
     const price = Math.max(1000, Math.floor((itemSum * (1 - seed.discount)) / 1000) * 1000);
@@ -411,6 +417,13 @@ export async function seedServicesAndPacks(ctx: ServiceSeedContext): Promise<Ser
     summary.photos += 1;
     summary.packs += 1;
   }
+
+  // Repair databases seeded before the coverage rule: every pack item must
+  // cover its pack's wilaya (status-rules §4, 422 PACK_WILAYA_NOT_COVERED).
+  await em.query(
+    `INSERT IGNORE INTO service_wilayas (service_id, wilaya_code, created_at)
+     SELECT pi.service_id, p.wilaya_code, NOW(6) FROM pack_items pi JOIN packs p ON p.id = pi.pack_id WHERE p.deleted_at IS NULL`,
+  );
 
   // Availability blocks for verified providers (next 6 weeks)
   const today = new Date();

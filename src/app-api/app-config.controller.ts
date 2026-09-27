@@ -1,5 +1,6 @@
-import { Controller, Get, Header } from '@nestjs/common';
+import { Controller, Get, Header, Inject } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
+import { envConfig, type Env } from '../config/env.js';
 import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { DataSource } from 'typeorm';
 import { Public } from '../auth/decorators/public.decorator.js';
@@ -38,6 +39,7 @@ export class AppConfigController {
   constructor(
     private readonly settings: SettingsService,
     @InjectDataSource() private readonly dataSource: DataSource,
+    @Inject(envConfig.KEY) private readonly env: Env,
   ) {}
 
   @Get('config')
@@ -92,6 +94,7 @@ export class AppConfigController {
       languages: settings.languages_required?.length ? [...settings.languages_required] : [...SUPPORTED_LANGUAGES],
       defaultLanguage: DEFAULT_LANGUAGE,
       currency: settings.currency,
+      emailVerificationRequired: !this.env.AUTH_SKIP_EMAIL_VERIFICATION,
       supportEmail: orNull(settings.support_email),
       supportPhone: orNull(settings.support_phone),
       termsUrl: orNull(settings.terms_url),

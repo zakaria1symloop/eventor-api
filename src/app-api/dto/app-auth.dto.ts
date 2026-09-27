@@ -93,17 +93,32 @@ export class AppRegisterResultDto {
   @ApiProperty({ format: 'uuid', example: '5b0d6c9e-4a51-4c3f-9d0e-2f6b8a7c1e24' })
   userId: string;
 
-  @ApiProperty({ format: 'email', example: 'amina.benali@email.com', description: 'Shown on screen 10 ("We sent a 6-digit code to …").' })
-  emailSentTo: string;
+  @ApiProperty({
+    example: true,
+    description:
+      'False while the server runs without email (`/app/config` → `emailVerificationRequired: false`): ' +
+      'the account is already verified, no code is sent, and `session` holds the tokens so the app skips screen 10.',
+  })
+  emailVerificationRequired: boolean;
 
-  @ApiProperty({ format: 'date-time', example: '2026-09-20T10:15:00.000Z', description: 'When the code stops working.' })
-  expiresAt: string;
+  @ApiProperty({ type: String, nullable: true, format: 'email', example: 'amina.benali@email.com', description: 'Shown on screen 10 ("We sent a 6-digit code to …"). Null when no code was sent.' })
+  emailSentTo: string | null;
 
-  @ApiProperty({ example: 60, description: 'Seconds before "Resend" may be used.' })
-  resendAfterSeconds: number;
+  @ApiProperty({ type: String, nullable: true, format: 'date-time', example: '2026-09-20T10:15:00.000Z', description: 'When the code stops working. Null when no code was sent.' })
+  expiresAt: string | null;
+
+  @ApiProperty({ type: Number, nullable: true, example: 60, description: 'Seconds before "Resend" may be used. Null when no code was sent.' })
+  resendAfterSeconds: number | null;
 
   @ApiProperty({ enum: VerificationStatus, example: VerificationStatus.Pending, description: 'Providers start `pending`; clients are `not_required`.' })
   verificationStatus: VerificationStatus;
+
+  @ApiProperty({
+    type: () => AppSessionDto,
+    nullable: true,
+    description: 'Tokens and user when `emailVerificationRequired` is false (the user is signed in straight away); null otherwise.',
+  })
+  session: AppSessionDto | null;
 }
 
 export class AppVerifyEmailDto {

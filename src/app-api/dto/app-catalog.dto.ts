@@ -444,6 +444,13 @@ export class AppConfigDto {
   @ApiProperty({ type: [String], example: ['en', 'ar'] }) languages: string[];
   @ApiProperty({ example: 'en' }) defaultLanguage: string;
   @ApiProperty({ example: 'DZD' }) currency: string;
+  @ApiProperty({
+    example: true,
+    description:
+      'When false the server has no email yet: sign-up returns tokens directly (skip screen 10), ' +
+      'and login/booking do not ask for a verified email.',
+  })
+  emailVerificationRequired: boolean;
   @ApiProperty({ type: String, nullable: true, format: 'email', example: 'support@eventor.dz' }) supportEmail: string | null;
   @ApiProperty({ type: String, nullable: true, example: '+213555000000' }) supportPhone: string | null;
   @ApiProperty({ type: String, nullable: true, example: 'https://eventor.dz/terms' }) termsUrl: string | null;

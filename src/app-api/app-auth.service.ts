@@ -210,7 +210,7 @@ export class AppAuthService {
           verificationStatus: initialVerificationStatus(dto.role as unknown as UserRole, false),
           fullName: dto.fullName,
           email: dto.email,
-          emailVerifiedAt: null,
+          emailVerifiedAt: this.env.AUTH_SKIP_EMAIL_VERIFICATION ? new Date() : null,
           phone: dto.phone,
           passwordHash: await this.passwords.hash(dto.password),
           language: dto.language,
@@ -232,7 +232,10 @@ export class AppAuthService {
         }
       }
 
-      const sent = await this.issueCode(em, afterCommit, { user, purpose: VerificationCodePurpose.EmailVerify, lang: dto.language }, new Date());
+      const skip = this.env.AUTH_SKIP_EMAIL_VERIFICATION;
+      const sent = skip
+        ? null
+        : await this.issueCode(em, afterCommit, { user, purpose: VerificationCodePurpose.EmailVerify, lang: dto.language }, new Date());
       await this.audit.log(
         {
           actorId: user.id,
@@ -249,10 +252,12 @@ export class AppAuthService {
       );
       return {
         userId: user.id,
-        emailSentTo: sent.email,
-        expiresAt: sent.expiresAt,
-        resendAfterSeconds: sent.resendAfterSeconds,
+        emailVerificationRequired: !skip,
+        emailSentTo: sent?.email ?? null,
+        expiresAt: sent?.expiresAt ?? null,
+        resendAfterSeconds: sent?.resendAfterSeconds ?? null,
         verificationStatus: user.verificationStatus,
+        session: skip ? await this.signIn(em, user, resolveLanguage(undefined, dto.language), 'app.registered_signed_in') : null,
       };
     });
   }
@@ -329,7 +334,7 @@ export class AppAuthService {
       throw AppException.of('INVALID_CREDENTIALS');
     }
     this.assertAppAccount(user);
-    if (!user.emailVerifiedAt) {
+    if (!user.emailVerifiedAt && !this.env.AUTH_SKIP_EMAIL_VERIFICATION) {
       throw AppException.of('EMAIL_NOT_VERIFIED', { email: user.email });
     }
 

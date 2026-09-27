@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
+import { envConfig, type Env } from '../config/env.js';
 import type { DataSource, EntityManager } from 'typeorm';
 import type { AuthUser } from '../auth/auth.types.js';
 import { BookingsService } from '../bookings/bookings.service.js';
@@ -72,6 +73,7 @@ export class AppBookingsService {
     private readonly invoices: InvoicesService,
     private readonly settings: SettingsService,
     private readonly files: FilesService,
+    @Inject(envConfig.KEY) private readonly env: Env,
   ) {}
 
   // ── quote ─────────────────────────────────────────────────────
@@ -233,7 +235,9 @@ export class AppBookingsService {
   private async assertEmailVerified(auth: AuthUser): Promise<void> {
     const [user] = await this.dataSource.query('SELECT email, email_verified_at FROM users WHERE id = ? AND deleted_at IS NULL', [auth.id]);
     if (!user) throw AppException.of('USER_NOT_FOUND');
-    if (!user.email_verified_at) throw AppException.of('EMAIL_NOT_VERIFIED', { email: user.email });
+    if (!user.email_verified_at && !this.env.AUTH_SKIP_EMAIL_VERIFICATION) {
+      throw AppException.of('EMAIL_NOT_VERIFIED', { email: user.email });
+    }
   }
 
   // ── read ──────────────────────────────────────────────────────

@@ -74184,134 +74184,6 @@
           "groups"
         ]
       },
-      "AppRegisterResultDto": {
-        "type": "object",
-        "properties": {
-          "userId": {
-            "type": "string",
-            "format": "uuid",
-            "example": "5b0d6c9e-4a51-4c3f-9d0e-2f6b8a7c1e24"
-          },
-          "emailSentTo": {
-            "type": "string",
-            "format": "email",
-            "example": "amina.benali@email.com",
-            "description": "Shown on screen 10 (\"We sent a 6-digit code to …\")."
-          },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-09-20T10:15:00.000Z",
-            "description": "When the code stops working."
-          },
-          "resendAfterSeconds": {
-            "type": "number",
-            "example": 60,
-            "description": "Seconds before \"Resend\" may be used."
-          },
-          "verificationStatus": {
-            "type": "string",
-            "enum": [
-              "not_required",
-              "pending",
-              "verified",
-              "rejected"
-            ],
-            "example": "pending",
-            "description": "Providers start `pending`; clients are `not_required`."
-          }
-        },
-        "required": [
-          "userId",
-          "emailSentTo",
-          "expiresAt",
-          "resendAfterSeconds",
-          "verificationStatus"
-        ]
-      },
-      "AppRegisterDto": {
-        "type": "object",
-        "properties": {
-          "role": {
-            "type": "string",
-            "enum": [
-              "client",
-              "provider"
-            ],
-            "example": "client",
-            "description": "Chosen on screen 06 Role selection. Immutable afterwards."
-          },
-          "fullName": {
-            "type": "string",
-            "example": "Amina Benali",
-            "maxLength": 120
-          },
-          "email": {
-            "type": "string",
-            "format": "email",
-            "example": "amina.benali@email.com",
-            "maxLength": 190
-          },
-          "phone": {
-            "type": "string",
-            "example": "0555123456",
-            "description": "`0XXXXXXXXX` or `+213XXXXXXXXX`; stored as `+213XXXXXXXXX`."
-          },
-          "password": {
-            "type": "string",
-            "example": "Sunflower42x",
-            "minLength": 10,
-            "maxLength": 128,
-            "description": "At least 10 characters with a letter and a digit (422 PASSWORD_WEAK otherwise)."
-          },
-          "language": {
-            "type": "string",
-            "enum": [
-              "ar",
-              "en"
-            ],
-            "example": "en",
-            "description": "Language toggle on screens 08/08a."
-          },
-          "wilayaCode": {
-            "type": "number",
-            "example": 16,
-            "minimum": 1,
-            "maximum": 58,
-            "description": "The wilaya the account lives in."
-          },
-          "businessName": {
-            "type": "string",
-            "example": "Studio Lumière",
-            "maxLength": 150,
-            "description": "Providers only (required). 422 PROVIDER_FIELDS_REQUIRED when missing."
-          },
-          "categoryId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Providers only (required): the category they work in."
-          },
-          "wilayaCodes": {
-            "example": [
-              16,
-              9
-            ],
-            "description": "Providers only: the wilayas they cover. Defaults to `wilayaCode`.",
-            "type": "array",
-            "items": {
-              "type": "number"
-            }
-          }
-        },
-        "required": [
-          "role",
-          "fullName",
-          "email",
-          "phone",
-          "password",
-          "language"
-        ]
-      },
       "AppWilayaRefDto": {
         "type": "object",
         "properties": {
@@ -74616,6 +74488,154 @@
           "expiresIn",
           "refreshToken",
           "user"
+        ]
+      },
+      "AppRegisterResultDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "5b0d6c9e-4a51-4c3f-9d0e-2f6b8a7c1e24"
+          },
+          "emailVerificationRequired": {
+            "type": "boolean",
+            "example": true,
+            "description": "False while the server runs without email (`/app/config` → `emailVerificationRequired: false`): the account is already verified, no code is sent, and `session` holds the tokens so the app skips screen 10."
+          },
+          "emailSentTo": {
+            "type": "string",
+            "nullable": true,
+            "format": "email",
+            "example": "amina.benali@email.com",
+            "description": "Shown on screen 10 (\"We sent a 6-digit code to …\"). Null when no code was sent."
+          },
+          "expiresAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "example": "2026-09-20T10:15:00.000Z",
+            "description": "When the code stops working. Null when no code was sent."
+          },
+          "resendAfterSeconds": {
+            "type": "number",
+            "nullable": true,
+            "example": 60,
+            "description": "Seconds before \"Resend\" may be used. Null when no code was sent."
+          },
+          "verificationStatus": {
+            "type": "string",
+            "enum": [
+              "not_required",
+              "pending",
+              "verified",
+              "rejected"
+            ],
+            "example": "pending",
+            "description": "Providers start `pending`; clients are `not_required`."
+          },
+          "session": {
+            "nullable": true,
+            "description": "Tokens and user when `emailVerificationRequired` is false (the user is signed in straight away); null otherwise.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AppSessionDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "userId",
+          "emailVerificationRequired",
+          "emailSentTo",
+          "expiresAt",
+          "resendAfterSeconds",
+          "verificationStatus",
+          "session"
+        ]
+      },
+      "AppRegisterDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "client",
+              "provider"
+            ],
+            "example": "client",
+            "description": "Chosen on screen 06 Role selection. Immutable afterwards."
+          },
+          "fullName": {
+            "type": "string",
+            "example": "Amina Benali",
+            "maxLength": 120
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "amina.benali@email.com",
+            "maxLength": 190
+          },
+          "phone": {
+            "type": "string",
+            "example": "0555123456",
+            "description": "`0XXXXXXXXX` or `+213XXXXXXXXX`; stored as `+213XXXXXXXXX`."
+          },
+          "password": {
+            "type": "string",
+            "example": "Sunflower42x",
+            "minLength": 10,
+            "maxLength": 128,
+            "description": "At least 10 characters with a letter and a digit (422 PASSWORD_WEAK otherwise)."
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "ar",
+              "en"
+            ],
+            "example": "en",
+            "description": "Language toggle on screens 08/08a."
+          },
+          "wilayaCode": {
+            "type": "number",
+            "example": 16,
+            "minimum": 1,
+            "maximum": 58,
+            "description": "The wilaya the account lives in."
+          },
+          "businessName": {
+            "type": "string",
+            "example": "Studio Lumière",
+            "maxLength": 150,
+            "description": "Providers only (required). 422 PROVIDER_FIELDS_REQUIRED when missing."
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Providers only (required): the category they work in."
+          },
+          "wilayaCodes": {
+            "example": [
+              16,
+              9
+            ],
+            "description": "Providers only: the wilayas they cover. Defaults to `wilayaCode`.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "role",
+          "fullName",
+          "email",
+          "phone",
+          "password",
+          "language"
         ]
       },
       "AppVerifyEmailDto": {
@@ -77439,6 +77459,11 @@
             "type": "string",
             "example": "DZD"
           },
+          "emailVerificationRequired": {
+            "type": "boolean",
+            "example": true,
+            "description": "When false the server has no email yet: sign-up returns tokens directly (skip screen 10), and login/booking do not ask for a verified email."
+          },
           "supportEmail": {
             "type": "string",
             "nullable": true,
@@ -77507,6 +77532,7 @@
           "languages",
           "defaultLanguage",
           "currency",
+          "emailVerificationRequired",
           "supportEmail",
           "supportPhone",
           "termsUrl",

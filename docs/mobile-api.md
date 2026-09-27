@@ -629,6 +629,17 @@ loop when it fails.
 
 ## 16. Changelog
 
+### 2026-09-27 — email verification can be switched off
+
+The server has no email account yet, so no code could ever arrive. Until SMTP is set up, the live server runs with `AUTH_SKIP_EMAIL_VERIFICATION=true`:
+
+- `GET /app/config` → `emailVerificationRequired: false`. Read this on start-up.
+- `POST /app/auth/register` → the account is already verified, no code is sent, and the response carries `session` (`accessToken`, `refreshToken`, `user`). Skip screen 10 and sign the user straight in.
+- `emailSentTo`, `expiresAt` and `resendAfterSeconds` are `null` in that case (they are now nullable).
+- Login and booking no longer answer `EMAIL_NOT_VERIFIED`.
+
+When email goes live, `emailVerificationRequired` becomes `true` and the normal flow (screen 10, `verify-email`) comes back with no app change, as long as the app follows that flag. Password reset still needs email: until then an admin can set a temporary password from the dashboard (user profile → Actions → Reset password).
+
 ### 2026-09-27 — integration fixes
 
 One entry per item of the mobile developer's issue report (2026-09-27):

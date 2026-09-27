@@ -162,6 +162,15 @@ export class Env {
   @IsBoolean()
   SMTP_SECURE = false;
 
+  /**
+   * Temporary switch while no SMTP account exists: sign-up marks the email as
+   * verified and signs the user in, and login/booking skip the check. Turn it
+   * off as soon as SMTP_HOST is configured.
+   */
+  @Transform(toBool)
+  @IsBoolean()
+  AUTH_SKIP_EMAIL_VERIFICATION = false;
+
   @IsString()
   SMTP_USER = '';
 

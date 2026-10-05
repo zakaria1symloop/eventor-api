@@ -49,6 +49,7 @@ import {
 import {
   addDays,
   allowedTransitions,
+  assertEventTimes,
   canTransition,
   computeFee,
   computeLines,
@@ -62,6 +63,7 @@ import {
   checkInRefusal,
   serviceQuantity,
   targetStatus,
+  timeSpan,
   toCents,
   type LineInput,
   type StatusAction,
@@ -750,10 +752,13 @@ export class BookingsService {
       'SELECT kind, service_id, start_time, end_time, booking_id FROM availability_blocks WHERE provider_id = ? AND date = ? AND deleted_at IS NULL FOR UPDATE',
       [input.providerId, input.date],
     );
+    // Minutes from midnight, so an overnight booking (18:00 → 02:00) still meets a 20:00–22:00 block.
+    const booked = timeSpan(input.startTime, input.endTime);
     const overlaps = (start: string | null, end: string | null) => {
-      if (!start || !end) return true;
-      if (!input.startTime || !input.endTime) return false;
-      return input.startTime < hhmm(end)! && hhmm(start)! < input.endTime;
+      const block = timeSpan(hhmm(start), hhmm(end));
+      if (!block) return true;
+      if (!booked) return false;
+      return booked.start < block.end && block.start < booked.end;
     };
     const blocked = rows.some(
       (b) =>
@@ -768,6 +773,30 @@ export class BookingsService {
         b.booking_id !== input.excludeBookingId,
     ).length;
     return taken < Number(capacityRow.n);
+  }
+
+  /**
+   * A client may not request the same service (or pack) twice for overlapping
+   * hours of one date while the first booking is pending or accepted. A booking
+   * without times covers the whole day.
+   */
+  private async assertNotDuplicate(
+    em: EntityManager,
+    dto: Pick<CreateBookingDto, 'clientId' | 'serviceId' | 'packId' | 'eventDate' | 'startTime' | 'endTime'>,
+  ): Promise<void> {
+    const rows: { reference: string; start_time: string | null; end_time: string | null }[] = await em.query(
+      `SELECT reference, start_time, end_time FROM bookings
+        WHERE client_id = ? AND ${dto.serviceId ? 'service_id' : 'pack_id'} = ? AND event_date = ?
+          AND status IN ('pending', 'accepted') AND deleted_at IS NULL`,
+      [dto.clientId, dto.serviceId ?? dto.packId, dto.eventDate],
+    );
+    const wanted = timeSpan(dto.startTime, dto.endTime);
+    const clash = rows.find((r) => {
+      const existing = timeSpan(hhmm(r.start_time), hhmm(r.end_time));
+      if (!wanted || !existing) return true;
+      return wanted.start < existing.end && existing.start < wanted.end;
+    });
+    if (clash) throw AppException.of('BOOKING_DUPLICATE', { reference: clash.reference, date: dto.eventDate });
   }
 
   private async assertAvailable(
@@ -822,6 +851,7 @@ export class BookingsService {
     );
     if (!client) throw AppException.of('USER_NOT_FOUND');
     if (client.role !== UserRole.Client) throw AppException.of('NOT_A_CLIENT');
+    assertEventTimes(dto.startTime, dto.endTime);
 
     let providerId: string;
     let lines: LineInput[];
@@ -932,6 +962,10 @@ export class BookingsService {
       startTime: dto.startTime ?? null,
       endTime: dto.endTime ?? null,
     });
+    // After assertAvailable, which locks the provider row: two identical taps can't both pass.
+    if ((options.source ?? BookingSource.Dashboard) !== BookingSource.Dashboard) {
+      await this.assertNotDuplicate(em, dto);
+    }
 
     const computed = computeLines(lines);
     const totals = computeTotals(computed);
@@ -1406,6 +1440,7 @@ export class BookingsService {
         dto.startTime === undefined ? hhmm(booking.startTime) : dto.startTime;
       const newEnd =
         dto.endTime === undefined ? hhmm(booking.endTime) : dto.endTime;
+      assertEventTimes(newStart, newEnd);
       const force = dto.force ?? false;
       const [open] = await em.query(
         "SELECT id FROM booking_reschedules WHERE booking_id = ? AND status = 'pending' AND deleted_at IS NULL LIMIT 1",
@@ -1823,6 +1858,10 @@ export class BookingsService {
         update[key] = value;
       };
       set('eventType', dto.eventType as Booking['eventType']);
+      assertEventTimes(
+        dto.startTime === undefined ? hhmm(booking.startTime) : dto.startTime,
+        dto.endTime === undefined ? hhmm(booking.endTime) : dto.endTime,
+      );
       if (dto.startTime !== undefined)
         set('startTime', toTime(dto.startTime), booking.startTime);
       if (dto.endTime !== undefined)

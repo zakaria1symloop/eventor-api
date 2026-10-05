@@ -5,6 +5,7 @@ import { MessagesFulltext1789561217020 } from './1789561217020-MessagesFulltext.
 import { ParticipantsReadPrecision1789561926399 } from './1789561926399-ParticipantsReadPrecision.js';
 import { ReportsSystemReporter1789600000000 } from './1789600000000-ReportsSystemReporter.js';
 import { AdminListIndexes1789700000000 } from './1789700000000-AdminListIndexes.js';
+import { SessionsRevokedReason1789800000000 } from './1789800000000-SessionsRevokedReason.js';
 
 /**
  * Ordered migration registry, explicit for the same reason as the entity
@@ -18,4 +19,5 @@ export const migrations: NonNullable<DataSourceOptions['migrations']> = [
   ParticipantsReadPrecision1789561926399,
   ReportsSystemReporter1789600000000,
   AdminListIndexes1789700000000,
+  SessionsRevokedReason1789800000000,
 ];

@@ -443,5 +443,15 @@ describe('App messages (e2e)', () => {
 
       await expect(event).resolves.toMatchObject({ bookingId: booking.id, reference: booking.reference });
     });
+
+    it('sends the current status on events that are not status changes, e.g. a cancel (#75)', async () => {
+      const socket = await connect(provider.token);
+      const booking = await makeBooking(db(), { clientId: client.user.id, providerId: provider.user.id, status: BookingStatus.Pending, eventDate: '2027-08-21' });
+
+      const event = new Promise((resolve) => socket.once('booking:updated', resolve));
+      await request(t.http).post(`/api/v1/app/bookings/${booking.id}/cancel`).set(client.headers).send({ reason: 'Changed plans' }).expect(200);
+
+      await expect(event).resolves.toMatchObject({ bookingId: booking.id, status: BookingStatus.Cancelled });
+    });
   });
 });

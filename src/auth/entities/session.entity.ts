@@ -37,4 +37,8 @@ export class Session extends AppendOnlyEntity {
 
   @Column({ type: 'datetime', nullable: true })
   revokedAt: Date | null;
+
+  /** `signed_in_elsewhere` when a newer dashboard sign-in replaced it; null otherwise. */
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  revokedReason: string | null;
 }

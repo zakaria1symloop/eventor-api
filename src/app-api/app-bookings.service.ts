@@ -7,6 +7,7 @@ import { BookingsService } from '../bookings/bookings.service.js';
 import { InvoicesService } from '../bookings/invoices.service.js';
 import {
   addDays,
+  assertEventTimes,
   computeLines,
   computeTotals,
   packLines,
@@ -139,6 +140,7 @@ export class AppBookingsService {
   }
 
   private assertTarget(dto: AppQuoteDto): void {
+    assertEventTimes(dto.startTime, dto.endTime);
     if ((dto.serviceId === undefined) === (dto.packId === undefined)) {
       throw new AppException(400, 'VALIDATION_FAILED', [{ field: 'serviceId', code: 'EXACTLY_ONE', message: 'Send exactly one of serviceId or packId' }]);
     }

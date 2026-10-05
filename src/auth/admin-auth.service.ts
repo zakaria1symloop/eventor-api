@@ -122,6 +122,8 @@ export class AdminAuthService {
     return runInTransaction(this.dataSource, async (em) => {
       await em.getRepository(LoginAttempt).save(em.getRepository(LoginAttempt).create({ email, ip, success: true, createdAt: new Date() }));
       const issued = await this.sessions.create(em, { userId: user.id, audience: SessionAudience.Dashboard, remember });
+      // One dashboard session per admin: signing in here ends the session on any other computer.
+      const replaced = await this.sessions.replaceOthers(em, user.id, SessionAudience.Dashboard, issued.session.id);
       await this.audit.log(
         {
           actorId: user.id,
@@ -131,6 +133,7 @@ export class AdminAuthService {
           objectId: issued.session.id,
           objectLabel: user.email,
           level: AuditLevel.Security,
+          ...(replaced ? { changes: { sessionsReplaced: replaced } } : {}),
         },
         em,
       );
@@ -151,6 +154,9 @@ export class AdminAuthService {
         note: 'A rotated refresh token was replayed; the session was revoked.',
       });
       throw AppException.of('AUTH_REFRESH_INVALID');
+    }
+    if (result.outcome === 'replaced') {
+      throw AppException.of('AUTH_SESSION_REPLACED');
     }
     if (result.outcome !== 'rotated') {
       throw AppException.of('AUTH_REFRESH_INVALID');

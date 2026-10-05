@@ -315,7 +315,7 @@
     },
     "/api/v1/admin/auth/login": {
       "post": {
-        "description": "Public route. Admin accounts only. Sets the httpOnly, SameSite=Strict refresh cookie `eventor_admin_rt` (path `/api/v1/admin/auth`, Secure in production; 30 days with `remember`, otherwise a browser-session cookie). 5 failed attempts for an email within 15 min lock it for 15 min (429 ACCOUNT_LOCKED with `details.retryAfterSeconds` and `Retry-After`). Used by AUTH-01.",
+        "description": "Public route. Admin accounts only. Sets the httpOnly, SameSite=Strict refresh cookie `eventor_admin_rt` (path `/api/v1/admin/auth`, Secure in production; 30 days with `remember`, otherwise a browser-session cookie). 5 failed attempts for an email within 15 min lock it for 15 min (429 ACCOUNT_LOCKED with `details.retryAfterSeconds` and `Retry-After`). One dashboard session per admin: signing in ends the session on any other computer, which then gets 401 `AUTH_SESSION_REPLACED`. Used by AUTH-01.",
         "operationId": "AdminAuthController_login",
         "parameters": [
           {
@@ -529,7 +529,7 @@
             }
           },
           "401": {
-            "description": "`ACCOUNT_BLOCKED`: This account is blocked (sessions revoked).\n\n`AUTH_REFRESH_INVALID`: Your session is no longer valid. Please sign in again.",
+            "description": "`ACCOUNT_BLOCKED`: This account is blocked (sessions revoked).\n\n`AUTH_REFRESH_INVALID`: Your session is no longer valid. Please sign in again.<br>`AUTH_SESSION_REPLACED`: You were signed out because this account signed in on another computer.",
             "content": {
               "application/json": {
                 "schema": {
@@ -542,6 +542,18 @@
                       "error": "Unauthorized",
                       "code": "AUTH_REFRESH_INVALID",
                       "message": "Your session is no longer valid. Please sign in again.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_SESSION_REPLACED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_SESSION_REPLACED",
+                      "message": "You were signed out because this account signed in on another computer.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -41159,6 +41171,135 @@
         "tags": [
           "app-me"
         ]
+      },
+      "delete": {
+        "description": "Screen 18f. Deletes the budget and all its lines for good; linked bookings are not touched. Afterwards `GET` answers 404 `BUDGET_NOT_FOUND` and Home shows \"Plan your budget\" again. 404 `BUDGET_NOT_FOUND` when there is none (treat as already deleted).",
+        "operationId": "AppMeController_deleteBudget",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "description": "`AUTH_SESSION_REVOKED`: Your session has ended. Please sign in again.\n\n`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`NOT_OWNER`: You do not own this item.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "NOT_OWNER": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "NOT_OWNER",
+                      "message": "You do not own this item.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`BUDGET_NOT_FOUND`: You have not created a budget yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "BUDGET_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "BUDGET_NOT_FOUND",
+                      "message": "You have not created a budget yet.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete my budget",
+        "tags": [
+          "app-me"
+        ]
       }
     },
     "/api/v1/app/me/budget/items": {
@@ -44845,7 +44986,7 @@
             }
           },
           "409": {
-            "description": "`DATE_UNAVAILABLE`: The provider is not available on {date}.",
+            "description": "`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`BOOKING_DUPLICATE`: You already have booking {reference} for this on {date} at the same time.",
             "content": {
               "application/json": {
                 "schema": {
@@ -44858,6 +44999,18 @@
                       "error": "Conflict",
                       "code": "DATE_UNAVAILABLE",
                       "message": "The provider is not available on {date}.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "BOOKING_DUPLICATE": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "BOOKING_DUPLICATE",
+                      "message": "You already have booking {reference} for this on {date} at the same time.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -47615,7 +47768,8 @@
               "enum": [
                 "requests",
                 "upcoming",
-                "past"
+                "past",
+                "cancelled"
               ]
             }
           },
@@ -60677,6 +60831,7 @@
               "NOT_OWNER",
               "ACCOUNT_BLOCKED",
               "AUTH_SESSION_REVOKED",
+              "AUTH_SESSION_REPLACED",
               "AUTH_REFRESH_INVALID",
               "INVALID_CREDENTIALS",
               "ACCOUNT_LOCKED",
@@ -60754,6 +60909,7 @@
               "BOOKING_INVALID_TRANSITION",
               "BOOKING_NOT_EDITABLE",
               "DATE_UNAVAILABLE",
+              "BOOKING_DUPLICATE",
               "SERVICE_UNAVAILABLE_FOR_BOOKING",
               "PACK_UNAVAILABLE",
               "PROVIDER_NOT_ACCEPTING",
@@ -69564,12 +69720,19 @@
           "status": {
             "type": "string",
             "example": "accepted"
+          },
+          "clientName": {
+            "type": "string",
+            "nullable": true,
+            "example": "Nadia Kaci",
+            "description": "The booking’s client (calendar day items, P15c)."
           }
         },
         "required": [
           "id",
           "reference",
-          "status"
+          "status",
+          "clientName"
         ]
       },
       "AvailabilityBlockDto": {
@@ -77692,7 +77855,8 @@
           },
           "endTime": {
             "type": "string",
-            "example": "23:00"
+            "example": "23:00",
+            "description": "`HH:mm`. Needs `startTime` and must differ from it (400 `VALIDATION_FAILED`, codes `REQUIRED_WITH_END` / `SAME_AS_START`). An end earlier than the start ends the next day: 18:00 → 02:00 is 8 h, and a `per_hour` service counts started hours across midnight."
           },
           "guests": {
             "type": "number",
@@ -78316,7 +78480,8 @@
           },
           "endTime": {
             "type": "string",
-            "example": "23:00"
+            "example": "23:00",
+            "description": "`HH:mm`. Needs `startTime` and must differ from it (400 `VALIDATION_FAILED`, codes `REQUIRED_WITH_END` / `SAME_AS_START`). An end earlier than the start ends the next day: 18:00 → 02:00 is 8 h, and a `per_hour` service counts started hours across midnight."
           },
           "guests": {
             "type": "number",
@@ -78577,7 +78742,8 @@
           },
           "endTime": {
             "type": "string",
-            "example": "23:00"
+            "example": "23:00",
+            "description": "Same rules as `AppQuoteDto.endTime` (applied to the resulting start / end)."
           },
           "reason": {
             "type": "string",

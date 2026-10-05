@@ -75,7 +75,11 @@ export class AppQuoteDto {
   @Matches(TIME, { message: 'startTime must be HH:mm' })
   startTime?: string;
 
-  @ApiPropertyOptional({ example: '23:00' })
+  @ApiPropertyOptional({
+    example: '23:00',
+    description:
+      '`HH:mm`. Needs `startTime` and must differ from it (400 `VALIDATION_FAILED`, codes `REQUIRED_WITH_END` / `SAME_AS_START`). An end earlier than the start ends the next day: 18:00 → 02:00 is 8 h, and a `per_hour` service counts started hours across midnight.',
+  })
   @IsOptional()
   @Matches(TIME, { message: 'endTime must be HH:mm' })
   endTime?: string;
@@ -150,7 +154,7 @@ export class AppRescheduleDto {
   @Matches(TIME, { message: 'startTime must be HH:mm' })
   startTime?: string;
 
-  @ApiPropertyOptional({ example: '23:00' })
+  @ApiPropertyOptional({ example: '23:00', description: 'Same rules as `AppQuoteDto.endTime` (applied to the resulting start / end).' })
   @IsOptional()
   @Matches(TIME, { message: 'endTime must be HH:mm' })
   endTime?: string;

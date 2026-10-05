@@ -402,6 +402,20 @@ export class AppMeController {
     return { data: await this.budget.put(auth, dto, lang) };
   }
 
+  @Delete('budget')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Delete my budget',
+    description:
+      'Screen 18f. Deletes the budget and all its lines for good; linked bookings are not touched. Afterwards `GET` answers ' +
+      '404 `BUDGET_NOT_FOUND` and Home shows "Plan your budget" again. 404 `BUDGET_NOT_FOUND` when there is none (treat as already deleted).',
+  })
+  @ApiResponse({ status: 204, description: 'Deleted.' })
+  @ApiErrorResponses('BUDGET_NOT_FOUND', 'NOT_OWNER')
+  async deleteBudget(@CurrentUser() auth: AuthUser): Promise<void> {
+    await this.budget.remove(auth);
+  }
+
   @Post('budget/items')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({

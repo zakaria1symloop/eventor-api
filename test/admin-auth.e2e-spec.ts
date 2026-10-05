@@ -8,6 +8,7 @@ import { AuditLog } from '../src/admin/entities/audit-log.entity.js';
 import { UserRole, UserStatus } from '../src/common/enums/user.enums.js';
 import { MailService } from '../src/mail/mail.service.js';
 import { User } from '../src/users/entities/user.entity.js';
+import { IsNull } from 'typeorm';
 import { createApp, expectError, makeUser, uid, type TestApp } from './utils/index.js';
 
 const PASSWORD = 'Sunflower42x';
@@ -70,6 +71,30 @@ describe('Admin auth (e2e)', () => {
 
       await request(t.http).get('/api/v1/admin/me').set('Authorization', `Bearer ${res.body.data.accessToken}`).expect(200);
       expect(await t.dataSource.getRepository(AuditLog).existsBy({ action: 'auth.login', actorId: admin.id })).toBe(true);
+    });
+
+    it('keeps one dashboard session per admin: a new sign-in ends the other computer’s (issues 3 #4)', async () => {
+      const admin = await makeAdmin();
+      const pc1 = await login(admin.email).expect(200);
+      const pc1Cookie = cookiePair(refreshCookie(pc1));
+      const pc1Auth = { Authorization: `Bearer ${pc1.body.data.accessToken}` };
+      await request(t.http).get('/api/v1/admin/me').set(pc1Auth).expect(200);
+
+      const pc2 = await login(admin.email).expect(200);
+
+      // PC 1: its access token and its refresh cookie both say why it was signed out, in Arabic too.
+      expectError(await request(t.http).get('/api/v1/admin/me').set(pc1Auth), 401, 'AUTH_SESSION_REPLACED');
+      expectError(await request(t.http).post(`${BASE}/refresh`).set('Cookie', pc1Cookie), 401, 'AUTH_SESSION_REPLACED');
+      const ar = await request(t.http).get('/api/v1/admin/me').set(pc1Auth).set('Accept-Language', 'ar');
+      expect(ar.body.message).toMatch(/[؀-ۿ]/);
+      // PC 2 keeps working, and refreshing it is unaffected.
+      await request(t.http).get('/api/v1/admin/me').set('Authorization', `Bearer ${pc2.body.data.accessToken}`).expect(200);
+      await request(t.http).post(`${BASE}/refresh`).set('Cookie', cookiePair(refreshCookie(pc2))).expect(200);
+
+      const live = await t.dataSource.getRepository(Session).findBy({ userId: admin.id, revokedAt: IsNull() });
+      expect(live).toHaveLength(1);
+      const audit = await t.dataSource.getRepository(AuditLog).findOneByOrFail({ action: 'auth.login', objectId: live[0]!.id });
+      expect(audit.changes).toEqual({ sessionsReplaced: 1 });
     });
 
     it('uses a browser-session cookie without remember', async () => {

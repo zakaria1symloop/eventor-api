@@ -11,7 +11,7 @@ import type { AuthUser } from '../auth.types.js';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator.js';
 import { audienceForPath } from './roles.guard.js';
 import { Session } from '../entities/session.entity.js';
-import { SessionsService } from '../sessions.service.js';
+import { SESSION_REPLACED_REASON, SessionsService } from '../sessions.service.js';
 import { TokenService } from '../token.service.js';
 
 /** `last_active_at` / `last_used_at` are written at most once per this interval. */
@@ -86,6 +86,9 @@ export class JwtAuthGuard implements CanActivate {
       throw AppException.of('AUTH_TOKEN_INVALID');
     }
     const now = new Date();
+    if (session.revokedReason === SESSION_REPLACED_REASON) {
+      throw AppException.of('AUTH_SESSION_REPLACED');
+    }
     if (session.revokedAt || session.expiresAt.getTime() <= now.getTime()) {
       throw AppException.of('AUTH_SESSION_REVOKED');
     }

@@ -21,9 +21,12 @@ export interface IssuedSession {
   remember: boolean;
 }
 
+/** `sessions.revoked_reason` of a dashboard session ended by a newer sign-in of the same admin. */
+export const SESSION_REPLACED_REASON = 'signed_in_elsewhere';
+
 export type RefreshOutcome =
   | ({ outcome: 'rotated'; user: User } & IssuedSession)
-  | { outcome: Exclude<RotationDecision, 'rotate'>; userId: string | null };
+  | { outcome: Exclude<RotationDecision, 'rotate'> | 'replaced'; userId: string | null };
 
 /** Sessions (one row per sign-in) and refresh token rotation. */
 @Injectable()
@@ -66,6 +69,9 @@ export class SessionsService {
         lock: { mode: 'pessimistic_write' },
       });
       const decision = decideRotation(session, parsed.token);
+      if (session?.revokedReason === SESSION_REPLACED_REASON) {
+        return { outcome: 'replaced' as const, userId: session.userId };
+      }
       if (!session || decision === 'invalid') {
         return { outcome: 'invalid' as const, userId: session?.userId ?? null };
       }
@@ -120,6 +126,19 @@ export class SessionsService {
         ...(options.exceptSessionId ? { id: Not(options.exceptSessionId) } : {}),
       },
       { revokedAt: new Date() },
+    );
+    return result.affected ?? 0;
+  }
+
+  /**
+   * One dashboard session per admin: a new sign-in ends every other live
+   * dashboard session of that user. The old browser then gets
+   * `AUTH_SESSION_REPLACED` instead of a silent sign-out. App sessions are untouched.
+   */
+  async replaceOthers(em: EntityManager, userId: string, audience: SessionAudience, keepSessionId: string): Promise<number> {
+    const result = await em.getRepository(Session).update(
+      { userId, audience, revokedAt: IsNull(), id: Not(keepSessionId) },
+      { revokedAt: new Date(), revokedReason: SESSION_REPLACED_REASON },
     );
     return result.affected ?? 0;
   }

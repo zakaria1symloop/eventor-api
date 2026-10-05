@@ -17,8 +17,8 @@ import { AppException } from '../common/errors/app.exception.js';
 export const CLIENT_BOOKING_TABS = ['upcoming', 'pending', 'past', 'cancelled'] as const;
 export type ClientBookingTab = (typeof CLIENT_BOOKING_TABS)[number];
 
-/** Tabs of the provider Requests tab (screen 21 and screen map §E). */
-export const PROVIDER_BOOKING_TABS = ['requests', 'upcoming', 'past'] as const;
+/** Tabs of the provider Requests tab (screen 21 and screen map §E); `cancelled` holds cancelled and declined, as for clients. */
+export const PROVIDER_BOOKING_TABS = ['requests', 'upcoming', 'past', 'cancelled'] as const;
 export type ProviderBookingTab = (typeof PROVIDER_BOOKING_TABS)[number];
 
 export type AppBookingTab = ClientBookingTab | ProviderBookingTab;

@@ -219,6 +219,19 @@ export class AppBudgetService {
     });
   }
 
+  /**
+   * Deletes the budget and its lines for good (they are private and `client_id`
+   * is unique, so a soft-deleted row would block the next `PUT`). Linked
+   * bookings are untouched. Home shows "Plan your budget" again.
+   */
+  async remove(auth: AuthUser): Promise<void> {
+    await runInTransaction(this.dataSource, async (em) => {
+      const budget = await this.load(em, auth, true);
+      await em.query('DELETE FROM budget_items WHERE budget_id = ?', [budget.id]);
+      await em.query('DELETE FROM budgets WHERE id = ?', [budget.id]);
+    });
+  }
+
   async removeItem(auth: AuthUser, itemId: string, lang: Lang): Promise<AppBudgetDto> {
     return runInTransaction(this.dataSource, async (em) => {
       const budget = await this.load(em, auth, true);

@@ -3,6 +3,7 @@ import { PriceType } from '../common/enums/catalog.enums.js';
 import {
   addDays,
   allowedTransitions,
+  assertEventTimes,
   canTransition,
   computeFee,
   computeLines,
@@ -15,6 +16,7 @@ import {
   serviceQuantity,
   STATUS_ACTIONS,
   targetStatus,
+  timeSpan,
 } from './bookings.policy.js';
 
 describe('booking transitions', () => {
@@ -75,6 +77,31 @@ describe('totals and fees', () => {
     expect(serviceQuantity(PriceType.PerPerson, {})).toBe(1);
     expect(serviceQuantity(PriceType.PerHour, { startTime: '18:00', endTime: '22:30' })).toBe(5);
     expect(serviceQuantity(PriceType.PerHour, { startTime: '22:00', endTime: '02:00' })).toBe(4);
+    expect(serviceQuantity(PriceType.PerHour, { startTime: '20:00', endTime: '02:30' })).toBe(7);
+    expect(serviceQuantity(PriceType.PerHour, { startTime: '18:00' })).toBe(1);
+  });
+
+  it('reads an end earlier than the start as the next day (#49)', () => {
+    expect(timeSpan('18:00', '23:00')).toEqual({ start: 1080, end: 1380 });
+    expect(timeSpan('18:00', '02:00')).toEqual({ start: 1080, end: 1560 });
+    expect(timeSpan('18:00', null)).toBeNull();
+    expect(timeSpan(null, '02:00')).toBeNull();
+  });
+
+  it('refuses an end without a start and an end equal to the start (#49)', () => {
+    const code = (start: string | undefined, end: string | undefined) => {
+      try {
+        assertEventTimes(start, end);
+        return null;
+      } catch (error) {
+        return (error as { details: { code: string }[] }).details[0]?.code;
+      }
+    };
+    expect(code(undefined, '02:00')).toBe('REQUIRED_WITH_END');
+    expect(code('18:00', '18:00')).toBe('SAME_AS_START');
+    expect(code('18:00', '02:00')).toBeNull();
+    expect(code('18:00', undefined)).toBeNull();
+    expect(code(undefined, undefined)).toBeNull();
   });
 
   it('builds pack lines down to the pack price', () => {

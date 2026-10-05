@@ -92,6 +92,7 @@ export class AppBookingsController {
     'PROVIDER_NOT_ACCEPTING',
     'MIN_NOTICE',
     'DATE_UNAVAILABLE',
+    'BOOKING_DUPLICATE',
     'BOOKING_EXTRA_INVALID',
     'WILAYA_NOT_FOUND',
     'COMMUNE_NOT_FOUND',

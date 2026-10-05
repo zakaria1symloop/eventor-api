@@ -727,6 +727,24 @@ describe('App me (e2e)', () => {
       expect(after.body.data.items.find((i: { id: string }) => i.id === firstItem.id).bookingId).toBe(booking.id);
     });
 
+    it('DELETE removes the budget with its lines, and a new one can be created (#15)', async () => {
+      const me = await loginAs(t, UserRole.Client);
+      expectError(await request(t.http).delete(`${BASE}/budget`).set(me.headers), 404, 'BUDGET_NOT_FOUND');
+
+      await request(t.http).put(`${BASE}/budget`).set(me.headers).send({ title: 'Wedding', totalAmount: '400000.00' }).expect(200);
+      await request(t.http).post(`${BASE}/budget/items`).set(me.headers).send({ label: 'Venue', plannedAmount: '150000.00' }).expect(201);
+      const [{ id: budgetId }] = await db().query('SELECT id FROM budgets WHERE client_id = ?', [me.user.id]);
+
+      await request(t.http).delete(`${BASE}/budget`).set(me.headers).expect(204);
+
+      expectError(await request(t.http).get(`${BASE}/budget`).set(me.headers), 404, 'BUDGET_NOT_FOUND');
+      expect(await db().query('SELECT id FROM budget_items WHERE budget_id = ?', [budgetId])).toHaveLength(0);
+      const home = await request(t.http).get('/api/v1/app/home').set(me.headers);
+      expect(home.body.data.budget.exists).toBe(false);
+      // client_id is unique: the next PUT must still be able to create one.
+      expect((await request(t.http).put(`${BASE}/budget`).set(me.headers).send({ title: 'Again', totalAmount: '1000.00' })).status).toBe(200);
+    });
+
     it('404 BOOKING_NOT_FOUND when linking a booking that is not mine', async () => {
       const me = await loginAs(t, UserRole.Client);
       await request(t.http).put(`${BASE}/budget`).set(me.headers).send({ title: 'Wedding', totalAmount: '100000.00' });

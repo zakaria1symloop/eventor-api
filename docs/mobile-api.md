@@ -275,6 +275,7 @@ means the endpoint is not built yet.
 - **Budget**: `GET` answers 404 `BUDGET_NOT_FOUND` until the client creates one
   with `PUT`; treat that as the empty state, not an error. Every write returns
   the **whole recomputed budget**, so the header updates in one round trip.
+  `DELETE /app/me/budget` (204) removes it with all its lines.
   - `totalAmount` is the client's **plan ceiling** (set in the header) and
     `plannedTotal` the sum of the lines. They may diverge on purpose: the gap is
     the "unallocated / over plan" signal, never an error. `remaining` is
@@ -489,7 +490,7 @@ Beyond the part-1 list: `NOT_OWNER`, `NOT_A_PARTICIPANT`,
 `CONVERSATION_READ_ONLY`, `CONVERSATION_CLOSED`, `CONVERSATION_NOT_FOUND`,
 `MESSAGE_NOT_FOUND`, `RECIPIENT_INVALID`, `BOOKING_NOT_FOUND`,
 `BOOKING_INVALID_TRANSITION`, `BOOKING_NOT_EDITABLE`, `BOOKING_DATE_PAST`,
-`DATE_UNAVAILABLE`, `MIN_NOTICE`, `PROVIDER_NOT_ACCEPTING`,
+`DATE_UNAVAILABLE`, `BOOKING_DUPLICATE`, `MIN_NOTICE`, `PROVIDER_NOT_ACCEPTING`,
 `SERVICE_UNAVAILABLE_FOR_BOOKING`, `PACK_UNAVAILABLE`, `BOOKING_EXTRA_INVALID`,
 `COMMUNE_NOT_FOUND`, `COMMUNE_WILAYA_MISMATCH`, `RESCHEDULE_NOT_FOUND`,
 `RESCHEDULE_NOT_PENDING`, `RESCHEDULE_PENDING_EXISTS`, `CHECK_IN_NOT_ALLOWED`,
@@ -628,6 +629,20 @@ on uploads. 429 carries `Retry-After`. Back off — do not hammer `refresh` in a
 loop when it fails.
 
 ## 16. Changelog
+
+### 2026-10-05 — email live, booking time rules, open items from the issue report
+
+- **#1** Email is live: the server sends through SMTP (`/health/ready` → `mail: "smtp"`) and runs with `AUTH_SKIP_EMAIL_VERIFICATION=false`, so `GET /app/config` → `emailVerificationRequired: true`. Sign-up goes through screen 10 again; resend and the forgot-password code arrive too.
+- **#15** `DELETE /app/me/budget` added: 204, deletes the budget and all its lines for good (linked bookings untouched). 404 `BUDGET_NOT_FOUND` when there is none. Afterwards Home's budget card has `exists: false` and `PUT` creates a new one.
+- **#49** Event times on `POST /app/bookings/quote`, `POST /app/bookings` and both reschedule routes:
+  - `endTime` without `startTime` → 400 `VALIDATION_FAILED`, `details[0]: { field: "startTime", code: "REQUIRED_WITH_END" }`.
+  - `endTime` equal to `startTime` → 400 `VALIDATION_FAILED`, `details[0]: { field: "endTime", code: "SAME_AS_START" }`.
+  - An end earlier than the start is an **overnight** event ending the next day, exactly as the app already reads it: 18:00 → 02:00 is 8 h, and a `per_hour` service counts started hours across midnight (20:00 → 02:30 = 7). Previously an equal end was priced as 24 h.
+  - Availability now compares overnight hours correctly: an 18:00 → 02:00 request meets a 20:00–22:00 block (it used to slip through).
+- **#50** `GET /app/provider/bookings?tab=cancelled` added: cancelled and declined bookings, newest event first, like the client tab.
+- **#68** `AvailabilityBookingRefDto.clientName` added on calendar day items (`GET /app/provider/availability`).
+- **#75** `booking:updated.status` is now always the booking's current status, including on create, cancel, reschedule and price change.
+- **#80** `POST /app/bookings` answers 409 `BOOKING_DUPLICATE` (`details: { reference, date }`) when the same client already has a pending or accepted booking of the same service or pack on that date with overlapping hours. A booking without times covers the whole day. Other clients are still governed by `maxEventsPerDay` (see #79, still open).
 
 ### 2026-09-27 — email verification can be switched off
 

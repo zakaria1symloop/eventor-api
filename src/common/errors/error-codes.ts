@@ -118,6 +118,11 @@ export const ERROR_CODES = {
     en: 'Your session has ended. Please sign in again.',
     ar: 'انتهت جلستك. يرجى تسجيل الدخول مجددًا.',
   },
+  AUTH_SESSION_REPLACED: {
+    status: HttpStatus.UNAUTHORIZED,
+    en: 'You were signed out because this account signed in on another computer.',
+    ar: 'تم تسجيل خروجك لأن هذا الحساب سجّل الدخول من جهاز آخر.',
+  },
   AUTH_REFRESH_INVALID: {
     status: HttpStatus.UNAUTHORIZED,
     en: 'Your session is no longer valid. Please sign in again.',
@@ -520,6 +525,11 @@ export const ERROR_CODES = {
     status: HttpStatus.CONFLICT,
     en: 'The provider is not available on {date}.',
     ar: 'مقدم الخدمة غير متاح بتاريخ {date}.',
+  },
+  BOOKING_DUPLICATE: {
+    status: HttpStatus.CONFLICT,
+    en: 'You already have booking {reference} for this on {date} at the same time.',
+    ar: 'لديك بالفعل الحجز {reference} لهذا في {date} في نفس الوقت.',
   },
   SERVICE_UNAVAILABLE_FOR_BOOKING: {
     status: HttpStatus.UNPROCESSABLE_ENTITY,

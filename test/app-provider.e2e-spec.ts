@@ -127,6 +127,19 @@ describe('App provider (e2e)', () => {
       expect(ids).not.toContain(theirs.id);
     });
 
+    it('lists declined and cancelled bookings in a cancelled tab (#50)', async () => {
+      const declined = await makeBooking(db(), { providerId: provider.user.id, clientId: client.user.id, status: BookingStatus.Declined });
+      const cancelled = await makeBooking(db(), { providerId: provider.user.id, clientId: client.user.id, status: BookingStatus.Cancelled });
+      const pending = await makeBooking(db(), { providerId: provider.user.id, clientId: client.user.id, status: BookingStatus.Pending });
+
+      const res = await request(t.http).get(`${BASE}/bookings?tab=cancelled&limit=100`).set(provider.headers);
+
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((b: { id: string }) => b.id);
+      expect(ids).toEqual(expect.arrayContaining([declined.id, cancelled.id]));
+      expect(ids).not.toContain(pending.id);
+    });
+
     it('accepts a request, issues the invoice and unmasks the client phone', async () => {
       await db().query('UPDATE users SET phone = ? WHERE id = ?', ['+213559990002', client.user.id]);
       const booking = await makeBooking(db(), { providerId: provider.user.id, clientId: client.user.id, status: BookingStatus.Pending, eventDate: '2027-03-20' });
@@ -426,6 +439,17 @@ describe('App provider (e2e)', () => {
       await request(t.http).delete(`${BASE}/availability/blocks/${blocked.body.data.id}`).set(provider.headers).expect(204);
       const after = await request(t.http).get(`${BASE}/availability?month=2027-02`).set(provider.headers);
       expect(after.body.data.days.find((d: { date: string }) => d.date === '2027-02-14').status).toBe('free');
+    });
+
+    it('names the client on booking items of a day (#68)', async () => {
+      const booking = await makeBooking(db(), { providerId: provider.user.id, clientId: client.user.id, status: BookingStatus.Accepted, eventDate: '2027-04-17' });
+      const [{ full_name: clientName }] = await db().query('SELECT full_name FROM users WHERE id = ?', [client.user.id]);
+
+      const month = await request(t.http).get(`${BASE}/availability?month=2027-04`).set(provider.headers);
+
+      const items = month.body.data.days.find((d: { date: string }) => d.date === '2027-04-17').items;
+      const item = items.find((i: { booking: { id: string } | null }) => i.booking?.id === booking.id);
+      expect(item.booking).toMatchObject({ reference: booking.reference, clientName });
     });
 
     it('refuses a past date, a bad month and another provider’s block', async () => {

@@ -41,7 +41,7 @@ interface SocketData {
  * Server events:
  * - `message:new` — an app message, already masked for **you** (screen 15).
  * - `conversation:updated` — `{ conversationId, reason }`, refresh screen 14.
- * - `booking:updated` — `{ bookingId, reference, status }` for both parties.
+ * - `booking:updated` — `{ bookingId, reference, status }` for both parties; `status` is always the current one.
  * - `notification:new` — the same row `GET /app/me/notifications` returns.
  *
  * A refused handshake fails with `connect_error` whose `data.code` is the API
@@ -151,9 +151,16 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection {
 
   /** Both parties see a booking move without polling the Bookings tab. */
   @OnEvent('booking.*')
-  onBooking(event: BookingEvent & Partial<BookingStatusChangedEvent>): void {
+  async onBooking(event: BookingEvent & Partial<BookingStatusChangedEvent>): Promise<void> {
     if (!this.server || !event?.bookingId) return;
-    const payload = { bookingId: event.bookingId, reference: event.reference, status: event.to ?? null };
+    // Only status changes carry `to`; created / cancelled / rescheduled events don't, and they
+    // are emitted after commit, so the row already holds the status to send.
+    let status: string | null = event.to ?? null;
+    if (!status) {
+      const [row]: { status: string }[] = await this.dataSource.query('SELECT status FROM bookings WHERE id = ?', [event.bookingId]);
+      status = row?.status ?? null;
+    }
+    const payload = { bookingId: event.bookingId, reference: event.reference, status };
     for (const userId of [event.clientId, event.providerId]) {
       if (userId) this.server.to(appUserRoom(userId)).emit('booking:updated', payload);
     }

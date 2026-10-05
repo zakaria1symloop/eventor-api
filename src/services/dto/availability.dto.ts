@@ -53,6 +53,7 @@ export class AvailabilityBookingRefDto {
   @ApiProperty({ format: 'uuid' }) id: string;
   @ApiProperty({ example: 'EVT-000123' }) reference: string;
   @ApiProperty({ example: 'accepted' }) status: string;
+  @ApiProperty({ type: String, nullable: true, example: 'Nadia Kaci', description: 'The booking’s client (calendar day items, P15c).' }) clientName: string | null;
 }
 
 export class AvailabilityBlockDto {

@@ -43,7 +43,8 @@ export class AdminAuthController {
     summary: 'Sign in to the dashboard',
     description:
       `Public route. Admin accounts only. ${COOKIE_NOTE} 5 failed attempts for an email within 15 min ` +
-      'lock it for 15 min (429 ACCOUNT_LOCKED with `details.retryAfterSeconds` and `Retry-After`). Used by AUTH-01.',
+      'lock it for 15 min (429 ACCOUNT_LOCKED with `details.retryAfterSeconds` and `Retry-After`). One dashboard session per ' +
+      'admin: signing in ends the session on any other computer, which then gets 401 `AUTH_SESSION_REPLACED`. Used by AUTH-01.',
   })
   @ApiDataResponse(AuthSessionDto)
   @ApiErrorResponses('VALIDATION_FAILED', 'INVALID_CREDENTIALS', 'FORBIDDEN_ROLE', 'ACCOUNT_BLOCKED', 'ACCOUNT_LOCKED', 'RATE_LIMITED')
@@ -61,7 +62,7 @@ export class AdminAuthController {
       'Replaying an already-rotated token revokes the whole session. Used by every dashboard screen.',
   })
   @ApiDataResponse(AuthSessionDto)
-  @ApiErrorResponses('AUTH_REFRESH_INVALID', 'RATE_LIMITED')
+  @ApiErrorResponses('AUTH_REFRESH_INVALID', 'AUTH_SESSION_REPLACED', 'RATE_LIMITED')
   @ApiResponse({ status: 401, description: '`ACCOUNT_BLOCKED`: This account is blocked (sessions revoked).' })
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     try {

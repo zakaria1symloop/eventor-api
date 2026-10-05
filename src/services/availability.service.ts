@@ -50,18 +50,19 @@ export class AvailabilityService {
     const [blocks, bookings, [capacity]] = await Promise.all([
       em.query(
         `SELECT ab.id, ab.kind, ab.date, ab.start_time, ab.end_time, ab.note, s.id AS service_id, s.title_en, s.title_ar,
-                b.id AS booking_id, b.reference, b.status AS booking_status
+                b.id AS booking_id, b.reference, b.status AS booking_status, cu.full_name AS client_name
          FROM availability_blocks ab
          LEFT JOIN services s ON s.id = ab.service_id
          LEFT JOIN bookings b ON b.id = ab.booking_id
+         LEFT JOIN users cu ON cu.id = b.client_id
          WHERE ab.provider_id = ? AND ab.date BETWEEN ? AND ? AND ab.deleted_at IS NULL
          ORDER BY ab.date, ab.start_time, ab.created_at`,
         [providerId, first, last],
       ),
       // Bookings without an availability row (created before the booking module writes them).
       em.query(
-        `SELECT b.id, b.reference, b.status, b.event_date, b.start_time, b.end_time, s.id AS service_id, s.title_en, s.title_ar
-         FROM bookings b LEFT JOIN services s ON s.id = b.service_id
+        `SELECT b.id, b.reference, b.status, b.event_date, b.start_time, b.end_time, s.id AS service_id, s.title_en, s.title_ar, cu.full_name AS client_name
+         FROM bookings b LEFT JOIN services s ON s.id = b.service_id JOIN users cu ON cu.id = b.client_id
          WHERE b.provider_id = ? AND b.event_date BETWEEN ? AND ? AND b.status IN ('pending', 'accepted') AND b.deleted_at IS NULL
            AND NOT EXISTS (SELECT 1 FROM availability_blocks ab WHERE ab.booking_id = b.id AND ab.deleted_at IS NULL)
          ORDER BY b.event_date, b.start_time`,
@@ -81,7 +82,7 @@ export class AvailabilityService {
         startTime: hhmm(b.start_time),
         endTime: hhmm(b.end_time),
         service: b.service_id ? { id: b.service_id, titleEn: b.title_en, titleAr: b.title_ar } : null,
-        booking: b.booking_id ? { id: b.booking_id, reference: b.reference, status: b.booking_status } : null,
+        booking: b.booking_id ? { id: b.booking_id, reference: b.reference, status: b.booking_status, clientName: b.client_name ?? null } : null,
         note: b.note,
         removable: b.kind === AvailabilityKind.Blocked,
       });
@@ -95,7 +96,7 @@ export class AvailabilityService {
         startTime: hhmm(b.start_time),
         endTime: hhmm(b.end_time),
         service: b.service_id ? { id: b.service_id, titleEn: b.title_en, titleAr: b.title_ar } : null,
-        booking: { id: b.id, reference: b.reference, status: b.status },
+        booking: { id: b.id, reference: b.reference, status: b.status, clientName: b.client_name ?? null },
         note: null,
         removable: false,
       });

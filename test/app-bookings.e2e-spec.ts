@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { BookingStatus, RescheduleStatus } from '../src/common/enums/booking.enums.js';
-import { EventType, ServiceStatus } from '../src/common/enums/catalog.enums.js';
+import { EventType, PriceType, ServiceStatus } from '../src/common/enums/catalog.enums.js';
 import { UserRole } from '../src/common/enums/user.enums.js';
 import {
   createApp,
@@ -103,6 +103,34 @@ describe('App bookings (e2e)', () => {
       await db().query('UPDATE provider_profiles SET accepting_bookings = 1 WHERE user_id = ?', [paused.user.id]);
     });
 
+    it('prices an overnight per-hour booking across midnight and refuses ambiguous times (#49)', async () => {
+      const service = await bookableService({ basePrice: '10000.00', priceType: PriceType.PerHour });
+      const quote = (times: Record<string, string>) =>
+        request(t.http).post(`${BASE}/quote`).set(client.headers).send({ serviceId: service.id, eventDate: FUTURE, ...times });
+
+      const overnight = await quote({ startTime: '18:00', endTime: '02:00' });
+      expect(overnight.status).toBe(200);
+      expect(overnight.body.data.lines[0].quantity).toBe(8);
+      expect(overnight.body.data.total).toBe('80000.00');
+
+      expectError(await quote({ startTime: '18:00', endTime: '18:00' }), 400, 'VALIDATION_FAILED');
+      expectError(await quote({ endTime: '02:00' }), 400, 'VALIDATION_FAILED');
+    });
+
+    it('sees a block inside the hours of an overnight booking (#49)', async () => {
+      const service = await bookableService();
+      await db().query(
+        "INSERT INTO availability_blocks (id, created_at, updated_at, provider_id, service_id, date, start_time, end_time, kind, booking_id, note) VALUES (UUID(), NOW(6), NOW(6), ?, NULL, '2027-07-20', '20:00:00', '22:00:00', 'blocked', NULL, NULL)",
+        [provider.user.id],
+      );
+      const quote = (startTime: string, endTime: string) =>
+        request(t.http).post(`${BASE}/quote`).set(client.headers).send({ serviceId: service.id, eventDate: '2027-07-20', startTime, endTime });
+
+      expect((await quote('18:00', '02:00')).body.data).toMatchObject({ available: false, unavailableReason: 'DATE_UNAVAILABLE' });
+      expect((await quote('22:00', '03:00')).body.data).toMatchObject({ available: true });
+      expect((await quote('09:00', '12:00')).body.data).toMatchObject({ available: true });
+    });
+
     it('refuses both a service and a pack at once', async () => {
       const service = await bookableService();
       const res = await request(t.http).post(`${BASE}/quote`).set(client.headers).send({ serviceId: service.id, packId: service.id, eventDate: FUTURE });
@@ -173,6 +201,37 @@ describe('App bookings (e2e)', () => {
       expect((await request(t.http).post(BASE).set(client.headers).send(body)).status).toBe(201);
 
       expectError(await request(t.http).post(BASE).set(otherClient.headers).send(body), 409, 'DATE_UNAVAILABLE');
+    });
+
+    it('refuses the same client booking the same service twice for overlapping hours (#80)', async () => {
+      const service = await bookableService({ maxEventsPerDay: 5 });
+      const body = { serviceId: service.id, eventDate: '2027-07-11', startTime: '18:00', endTime: '23:00', wilayaCode: 16, eventType: EventType.Wedding };
+      const first = await request(t.http).post(BASE).set(client.headers).send(body);
+      expect(first.status).toBe(201);
+
+      const again = await request(t.http).post(BASE).set(client.headers).send({ ...body, startTime: '20:00', endTime: '01:00' });
+      expectError(again, 409, 'BOOKING_DUPLICATE');
+      expect(again.body.details).toMatchObject({ reference: first.body.data.reference, date: '2027-07-11' });
+      // A whole-day request covers every hour of the day.
+      expectError(await request(t.http).post(BASE).set(client.headers).send({ ...body, startTime: undefined, endTime: undefined }), 409, 'BOOKING_DUPLICATE');
+
+      // Hours that don't overlap, another client, or a cancelled first booking are fine.
+      expect((await request(t.http).post(BASE).set(client.headers).send({ ...body, startTime: '09:00', endTime: '12:00' })).status).toBe(201);
+      expect((await request(t.http).post(BASE).set(otherClient.headers).send(body)).status).toBe(201);
+      await request(t.http).post(`${BASE}/${first.body.data.id}/cancel`).set(client.headers).send({ reason: 'Changed plans' }).expect(200);
+      expect((await request(t.http).post(BASE).set(client.headers).send(body)).status).toBe(201);
+    });
+
+    it('refuses an end without a start and an end equal to the start (#49)', async () => {
+      const service = await bookableService();
+      const body = { serviceId: service.id, eventDate: '2027-07-12', wilayaCode: 16, eventType: EventType.Wedding };
+
+      const noStart = await request(t.http).post(BASE).set(client.headers).send({ ...body, endTime: '02:00' });
+      expectError(noStart, 400, 'VALIDATION_FAILED');
+      expect(noStart.body.details[0]).toMatchObject({ field: 'startTime', code: 'REQUIRED_WITH_END' });
+      const equal = await request(t.http).post(BASE).set(client.headers).send({ ...body, startTime: '18:00', endTime: '18:00' });
+      expectError(equal, 400, 'VALIDATION_FAILED');
+      expect(equal.body.details[0]).toMatchObject({ field: 'endTime', code: 'SAME_AS_START' });
     });
 
     it('refuses a date inside the minimum notice', async () => {

@@ -124,7 +124,7 @@ const MOBILE_SOCKET_CONTRACT =
   'Server → client events:\n' +
   '- `message:new` — an `AppMessageDto`, already masked **for you**.\n' +
   '- `conversation:updated` — `{ conversationId, reason }` (`message`, `read`, `created`, `closed`, …): refresh screen 14.\n' +
-  '- `booking:updated` — `{ bookingId, reference, status }` whenever a booking of yours moves.\n' +
+  '- `booking:updated` — `{ bookingId, reference, status }` whenever a booking of yours moves (created, accepted, declined, cancelled, completed, rescheduled, price changed); `status` is always the booking’s current status.\n' +
   '- `notification:new` — the same row `GET /app/me/notifications` returns (`AppNotificationDto`).\n\n' +
   'Client → server (acknowledged): `conversation:join` / `conversation:leave` `{ conversationId }` answering ' +
   '`{ ok: true, room }` or `{ ok: false, code: "NOT_A_PARTICIPANT" }`. Joining scopes nothing security-wise — it only lets ' +

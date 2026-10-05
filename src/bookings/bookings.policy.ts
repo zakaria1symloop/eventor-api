@@ -124,15 +124,42 @@ export function computeFee(total: string, feePercent: string | number): { feeAmo
   return { feeAmount: fromCents(fee), providerAmount: fromCents(totalCents - fee) };
 }
 
-/** Quantity of the main service line from its price type. */
+// ── event times ──────────────────────────────────────────────────
+
+const minutesOf = (t: string): number => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+
+/**
+ * The booked hours as minutes from midnight of the event date. An end earlier
+ * than the start ends the next day (18:00 → 02:00 is 8 h, `end` = 1560).
+ * Null when the booking has no start or no end (a whole-day booking).
+ */
+export function timeSpan(startTime: string | null | undefined, endTime: string | null | undefined): { start: number; end: number } | null {
+  if (!startTime || !endTime) return null;
+  const start = minutesOf(startTime);
+  let end = minutesOf(endTime);
+  if (end <= start) end += 24 * 60;
+  return { start, end };
+}
+
+/**
+ * Event time rules for quotes, bookings and reschedules: an end needs a start,
+ * and an end equal to the start is refused. An end earlier than the start is
+ * an overnight event (see `timeSpan`).
+ */
+export function assertEventTimes(startTime: string | null | undefined, endTime: string | null | undefined): void {
+  if (endTime && !startTime) {
+    throw new AppException(400, 'VALIDATION_FAILED', [{ field: 'startTime', code: 'REQUIRED_WITH_END', message: 'startTime is required when endTime is sent' }]);
+  }
+  if (startTime && endTime && startTime === endTime) {
+    throw new AppException(400, 'VALIDATION_FAILED', [{ field: 'endTime', code: 'SAME_AS_START', message: 'endTime must differ from startTime' }]);
+  }
+}
+
+/** Quantity of the main service line from its price type. `per_hour`: started hours, across midnight. */
 export function serviceQuantity(priceType: PriceType, input: { guests?: number | null; startTime?: string | null; endTime?: string | null }): number {
   if (priceType === PriceType.PerPerson) return Math.max(1, input.guests ?? 1);
-  if (priceType === PriceType.PerHour && input.startTime && input.endTime) {
-    const minutes = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
-    let span = minutes(input.endTime) - minutes(input.startTime);
-    if (span <= 0) span += 24 * 60;
-    return Math.max(1, Math.ceil(span / 60));
-  }
+  const span = priceType === PriceType.PerHour ? timeSpan(input.startTime, input.endTime) : null;
+  if (span) return Math.max(1, Math.ceil((span.end - span.start) / 60));
   return 1;
 }
 

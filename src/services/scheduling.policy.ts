@@ -24,9 +24,6 @@ export interface Span {
   end: number;
 }
 
-/** Most days a client can book in one request (per-day services). */
-export const MAX_BOOKING_DAYS = 30;
-
 const hhmm = (minutes: number): string => {
   const m = ((minutes % 1440) + 1440) % 1440;
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;

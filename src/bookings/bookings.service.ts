@@ -51,7 +51,10 @@ import {
   addDays,
   allowedTransitions,
   assertEventTimes,
+  bookingDays,
+  bookingRange,
   canTransition,
+  lastDay,
   computeFee,
   computeLines,
   computeTotals,
@@ -273,7 +276,7 @@ export class BookingsService {
     const rows: any[] = await this.dataSource.query(
       `SELECT b.id, b.reference, b.service_id, s.title_en, s.title_ar, b.pack_id, pk.name_en AS pack_name_en, pk.name_ar AS pack_name_ar,
               b.client_id, cu.full_name AS client_name, cu.avatar_file_id AS client_avatar, b.provider_id, pu.full_name AS provider_name, pp.business_name,
-              b.event_date, b.start_time, b.end_time, b.event_type, b.wilaya_code, w.name AS wilaya_name, w.name_ar AS wilaya_name_ar, b.guests, b.total,
+              b.event_date, b.end_date, b.start_time, b.end_time, b.event_type, b.wilaya_code, w.name AS wilaya_name, w.name_ar AS wilaya_name_ar, b.guests, b.total,
               b.status, b.dispute_status, (b.status = 'pending' AND b.created_at <= ?) AS no_reply, b.responded_at, b.created_at, b.source
        ${FROM} WHERE ${where.sql} ORDER BY ${SORT_COLUMNS[field]} ${direction}, b.id ${direction} LIMIT ? OFFSET ?`,
       [cutoff, ...where.params, page.limit, page.offset],
@@ -302,6 +305,7 @@ export class BookingsService {
         businessName: r.business_name ?? null,
       },
       eventDate: dateOnly(r.event_date),
+      endDate: r.end_date ? dateOnly(r.end_date) : null,
       startTime: hhmm(r.start_time),
       endTime: hhmm(r.end_time),
       eventType: r.event_type,
@@ -664,7 +668,7 @@ export class BookingsService {
       allowedTransitions: allowedTransitions(
         {
           status,
-          eventDate: dateOnly(r.event_date),
+          eventDate: lastDay({ eventDate: dateOnly(r.event_date), endDate: r.end_date ? dateOnly(r.end_date) : null }),
           disputeStatus: r.dispute_status,
         },
         today,
@@ -783,13 +787,15 @@ export class BookingsService {
    */
   private async assertNotDuplicate(
     em: EntityManager,
-    dto: Pick<CreateBookingDto, 'clientId' | 'serviceId' | 'packId' | 'eventDate' | 'startTime' | 'endTime'>,
+    dto: Pick<CreateBookingDto, 'clientId' | 'serviceId' | 'packId' | 'eventDate' | 'startTime' | 'endTime'> & { endDate: string | null },
   ): Promise<void> {
+    // Date ranges overlap (a one-day booking is a range of one day), then the hours.
     const rows: { reference: string; start_time: string | null; end_time: string | null }[] = await em.query(
       `SELECT reference, start_time, end_time FROM bookings
-        WHERE client_id = ? AND ${dto.serviceId ? 'service_id' : 'pack_id'} = ? AND event_date = ?
+        WHERE client_id = ? AND ${dto.serviceId ? 'service_id' : 'pack_id'} = ?
+          AND event_date <= ? AND COALESCE(end_date, event_date) >= ?
           AND status IN ('pending', 'accepted') AND deleted_at IS NULL`,
-      [dto.clientId, dto.serviceId ?? dto.packId, dto.eventDate],
+      [dto.clientId, dto.serviceId ?? dto.packId, dto.endDate ?? dto.eventDate, dto.eventDate],
     );
     const wanted = timeSpan(dto.startTime, dto.endTime);
     const clash = rows.find((r) => {
@@ -841,7 +847,8 @@ export class BookingsService {
       if (booked) {
         const others: { start_time: string | null; end_time: string | null }[] = await em.query(
           `SELECT b.start_time, b.end_time FROM bookings b
-            WHERE b.event_date = ? AND b.status IN ('pending', 'accepted') AND b.deleted_at IS NULL AND b.id <> ?
+            WHERE ? BETWEEN b.event_date AND COALESCE(b.end_date, b.event_date)
+              AND b.status IN ('pending', 'accepted') AND b.deleted_at IS NULL AND b.id <> ?
               AND (b.service_id = ? OR b.pack_id IN (SELECT pack_id FROM pack_items WHERE service_id = ?))`,
           [input.date, input.excludeBookingId ?? '', service.id, service.id],
         );
@@ -941,6 +948,7 @@ export class BookingsService {
             guests: dto.guests,
             startTime: dto.startTime,
             endTime: dto.endTime,
+            days: bookingRange({ eventDate: dto.eventDate, endDate: dto.endDate, isPack: false, priceType: service.price_type as PriceType }).days.length,
           }),
           unitAmount: String(service.base_price),
           serviceId: service.id,
@@ -968,6 +976,7 @@ export class BookingsService {
         }
       }
     } else {
+      bookingRange({ eventDate: dto.eventDate, endDate: dto.endDate, isPack: true, priceType: null });
       const [pack] = await em.query(
         `SELECT p.id, p.provider_id, p.name_en, p.price, p.deleted_at, ${PACK_VISIBLE_SQL} AS visible FROM packs p JOIN users u ON u.id = p.provider_id WHERE p.id = ?`,
         [dto.packId],
@@ -1017,25 +1026,32 @@ export class BookingsService {
       throw AppException.of('ACADEMIC_REQUEST_NOT_FOUND');
     }
 
-    await this.assertAvailable(em, {
-      providerId,
-      serviceId: dto.serviceId ?? null,
-      packId: dto.packId ?? null,
-      date: dto.eventDate,
-      startTime: dto.startTime ?? null,
-      endTime: dto.endTime ?? null,
-    });
+    // Every day of a multi-day booking is checked and held (issues 3 #11).
+    const endDate = dto.endDate && dto.endDate !== dto.eventDate ? dto.endDate : null;
+    const days = bookingDays(dto.eventDate, endDate);
+    for (const date of days) {
+      await this.assertAvailable(em, {
+        providerId,
+        serviceId: dto.serviceId ?? null,
+        packId: dto.packId ?? null,
+        date,
+        startTime: dto.startTime ?? null,
+        endTime: dto.endTime ?? null,
+      });
+    }
     // After assertAvailable, which locks the provider row: two identical taps can't both pass.
     if ((options.source ?? BookingSource.Dashboard) !== BookingSource.Dashboard) {
-      await this.assertNotDuplicate(em, dto);
+      await this.assertNotDuplicate(em, { ...dto, endDate });
     }
-    await this.assertSchedule(em, {
-      serviceId: dto.serviceId ?? null,
-      packId: dto.packId ?? null,
-      date: dto.eventDate,
-      startTime: dto.startTime ?? null,
-      endTime: dto.endTime ?? null,
-    });
+    for (const date of days) {
+      await this.assertSchedule(em, {
+        serviceId: dto.serviceId ?? null,
+        packId: dto.packId ?? null,
+        date,
+        startTime: dto.startTime ?? null,
+        endTime: dto.endTime ?? null,
+      });
+    }
 
     const computed = computeLines(lines);
     const totals = computeTotals(computed);
@@ -1055,6 +1071,7 @@ export class BookingsService {
         disputeStatus: BookingDisputeStatus.None,
         eventType: dto.eventType,
         eventDate: dto.eventDate,
+        endDate,
         startTime: toTime(dto.startTime),
         endTime: toTime(dto.endTime),
         locationText: dto.locationText ?? null,
@@ -1079,18 +1096,20 @@ export class BookingsService {
       null,
       true,
     );
-    await em.query(
-      'INSERT INTO availability_blocks (id, created_at, updated_at, provider_id, service_id, date, start_time, end_time, kind, booking_id, note) VALUES (UUID(), NOW(6), NOW(6), ?, ?, ?, ?, ?, ?, ?, NULL)',
-      [
-        providerId,
-        dto.serviceId ?? null,
-        dto.eventDate,
-        booking.startTime,
-        booking.endTime,
-        AvailabilityKind.Held,
-        booking.id,
-      ],
-    );
+    for (const date of days) {
+      await em.query(
+        'INSERT INTO availability_blocks (id, created_at, updated_at, provider_id, service_id, date, start_time, end_time, kind, booking_id, note) VALUES (UUID(), NOW(6), NOW(6), ?, ?, ?, ?, ?, ?, ?, NULL)',
+        [
+          providerId,
+          dto.serviceId ?? null,
+          date,
+          booking.startTime,
+          booking.endTime,
+          AvailabilityKind.Held,
+          booking.id,
+        ],
+      );
+    }
     const conversationId = await this.messaging.ensureDirectConversation(
       em,
       afterCommit,
@@ -1264,34 +1283,30 @@ export class BookingsService {
 
     switch (action) {
       case 'accepted': {
-        await this.assertAvailable(em, {
-          providerId: booking.providerId,
-          serviceId: booking.serviceId,
-          packId: booking.packId,
-          date: dateOnly(booking.eventDate),
-          startTime: hhmm(booking.startTime),
-          endTime: hhmm(booking.endTime),
-          excludeBookingId: booking.id,
-        });
+        const days = bookingDays(dateOnly(booking.eventDate), booking.endDate ? dateOnly(booking.endDate) : null);
+        for (const date of days) {
+          await this.assertAvailable(em, {
+            providerId: booking.providerId,
+            serviceId: booking.serviceId,
+            packId: booking.packId,
+            date,
+            startTime: hhmm(booking.startTime),
+            endTime: hhmm(booking.endTime),
+            excludeBookingId: booking.id,
+          });
+        }
         update.respondedAt = booking.respondedAt ?? now;
         const moved = await em.query(
           "UPDATE availability_blocks SET kind = 'booked', updated_at = ? WHERE booking_id = ? AND deleted_at IS NULL",
           [now, booking.id],
         );
         if (Number(moved?.affectedRows ?? 0) === 0) {
-          await em.query(
-            "INSERT INTO availability_blocks (id, created_at, updated_at, provider_id, service_id, date, start_time, end_time, kind, booking_id, note) VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, 'booked', ?, NULL)",
-            [
-              now,
-              now,
-              booking.providerId,
-              booking.serviceId,
-              dateOnly(booking.eventDate),
-              booking.startTime,
-              booking.endTime,
-              booking.id,
-            ],
-          );
+          for (const date of days) {
+            await em.query(
+              "INSERT INTO availability_blocks (id, created_at, updated_at, provider_id, service_id, date, start_time, end_time, kind, booking_id, note) VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, 'booked', ?, NULL)",
+              [now, now, booking.providerId, booking.serviceId, date, booking.startTime, booking.endTime, booking.id],
+            );
+          }
         }
         break;
       }
@@ -1517,25 +1532,7 @@ export class BookingsService {
         [id],
       );
       if (open) throw AppException.of('RESCHEDULE_PENDING_EXISTS');
-      if (!force) {
-        await this.assertAvailable(em, {
-          providerId: booking.providerId,
-          serviceId: booking.serviceId,
-          packId: booking.packId,
-          date: dto.date,
-          startTime: newStart,
-          endTime: newEnd,
-          excludeBookingId: booking.id,
-        });
-        await this.assertSchedule(em, {
-          serviceId: booking.serviceId,
-          packId: booking.packId,
-          date: dto.date,
-          startTime: newStart,
-          endTime: newEnd,
-          excludeBookingId: booking.id,
-        });
-      }
+      if (!force) await this.assertCanMove(em, booking, dto.date, newStart, newEnd);
       const apply = booking.status === BookingStatus.Pending || force;
       const now = new Date();
       const repository = em.getRepository(BookingReschedule);
@@ -1590,6 +1587,21 @@ export class BookingsService {
     return this.get(id);
   }
 
+  /** The dates a booking covers once moved to `date`: a multi-day booking keeps its length. */
+  private movedDays(booking: Booking, date: string): string[] {
+    const length = bookingDays(dateOnly(booking.eventDate), booking.endDate ? dateOnly(booking.endDate) : null).length;
+    return bookingDays(date, length > 1 ? addDays(date, length - 1) : null);
+  }
+
+  /** Reschedule checks on every day of the moved range: provider free and the service's own schedule. */
+  private async assertCanMove(em: EntityManager, booking: Booking, date: string, start: string | null, end: string | null): Promise<void> {
+    for (const day of this.movedDays(booking, date)) {
+      const input = { serviceId: booking.serviceId, packId: booking.packId, date: day, startTime: start, endTime: end, excludeBookingId: booking.id };
+      await this.assertAvailable(em, { ...input, providerId: booking.providerId });
+      await this.assertSchedule(em, input);
+    }
+  }
+
   private async moveBooking(
     em: EntityManager,
     booking: Booking,
@@ -1598,17 +1610,31 @@ export class BookingsService {
     end: string | null,
     now: Date,
   ): Promise<void> {
+    const days = this.movedDays(booking, date);
     await em
       .getRepository(Booking)
       .update(booking.id, {
         eventDate: date,
+        endDate: days.length > 1 ? days[days.length - 1]! : null,
         startTime: toTime(start),
         endTime: toTime(end),
       });
-    await em.query(
-      'UPDATE availability_blocks SET date = ?, start_time = ?, end_time = ?, updated_at = ? WHERE booking_id = ? AND deleted_at IS NULL',
-      [date, toTime(start), toTime(end), now, booking.id],
-    );
+    if (days.length === 1) {
+      await em.query(
+        'UPDATE availability_blocks SET date = ?, start_time = ?, end_time = ?, updated_at = ? WHERE booking_id = ? AND deleted_at IS NULL',
+        [date, toTime(start), toTime(end), now, booking.id],
+      );
+      return;
+    }
+    // A range: one hold per day, same kind (held or booked) as before.
+    const [hold] = await em.query('SELECT kind FROM availability_blocks WHERE booking_id = ? AND deleted_at IS NULL LIMIT 1', [booking.id]);
+    await em.query('UPDATE availability_blocks SET deleted_at = ? WHERE booking_id = ? AND deleted_at IS NULL', [now, booking.id]);
+    for (const day of days) {
+      await em.query(
+        'INSERT INTO availability_blocks (id, created_at, updated_at, provider_id, service_id, date, start_time, end_time, kind, booking_id, note) VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)',
+        [now, now, booking.providerId, booking.serviceId, day, toTime(start), toTime(end), hold?.kind ?? AvailabilityKind.Held, booking.id],
+      );
+    }
   }
 
   async cancelReschedule(
@@ -1680,23 +1706,7 @@ export class BookingsService {
       const newStart = hhmm(row.newStart);
       const newEnd = hhmm(row.newEnd);
       if (action === 'accept') {
-        await this.assertAvailable(em, {
-          providerId: booking.providerId,
-          serviceId: booking.serviceId,
-          packId: booking.packId,
-          date: newDate,
-          startTime: newStart,
-          endTime: newEnd,
-          excludeBookingId: booking.id,
-        });
-        await this.assertSchedule(em, {
-          serviceId: booking.serviceId,
-          packId: booking.packId,
-          date: newDate,
-          startTime: newStart,
-          endTime: newEnd,
-          excludeBookingId: booking.id,
-        });
+        await this.assertCanMove(em, booking, newDate, newStart, newEnd);
         await this.moveBooking(em, booking, newDate, newStart, newEnd, now);
       }
       await em.getRepository(BookingReschedule).update(row.id, {
@@ -1758,7 +1768,7 @@ export class BookingsService {
       const outcome = checkInOutcome({
         status: booking.status,
         disputeStatus: booking.disputeStatus,
-        eventDate: dateOnly(booking.eventDate),
+        eventDate: lastDay({ eventDate: dateOnly(booking.eventDate), endDate: booking.endDate ? dateOnly(booking.endDate) : null }),
         today: algiersToday(),
         otherCheckedIn: booking[theirs] !== null,
       });
@@ -1948,14 +1958,16 @@ export class BookingsService {
       const nextEnd = dto.endTime === undefined ? hhmm(booking.endTime) : dto.endTime;
       assertEventTimes(nextStart, nextEnd);
       if (dto.startTime !== undefined || dto.endTime !== undefined) {
-        await this.assertSchedule(em, {
-          serviceId: booking.serviceId,
-          packId: booking.packId,
-          date: dateOnly(booking.eventDate),
-          startTime: nextStart ?? null,
-          endTime: nextEnd ?? null,
-          excludeBookingId: booking.id,
-        });
+        for (const date of bookingDays(dateOnly(booking.eventDate), booking.endDate ? dateOnly(booking.endDate) : null)) {
+          await this.assertSchedule(em, {
+            serviceId: booking.serviceId,
+            packId: booking.packId,
+            date,
+            startTime: nextStart ?? null,
+            endTime: nextEnd ?? null,
+            excludeBookingId: booking.id,
+          });
+        }
       }
       if (dto.startTime !== undefined)
         set('startTime', toTime(dto.startTime), booking.startTime);

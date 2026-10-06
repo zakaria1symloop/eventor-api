@@ -4,7 +4,10 @@ import {
   addDays,
   allowedTransitions,
   assertEventTimes,
+  bookingDays,
+  bookingRange,
   canTransition,
+  lastDay,
   computeFee,
   computeLines,
   computeTotals,
@@ -145,5 +148,42 @@ describe('timing', () => {
 
   it('adds days to a date', () => {
     expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
+  });
+});
+
+describe('multi-day bookings (issues 3 #11)', () => {
+  const code = (fn: () => unknown) => {
+    try {
+      fn();
+      return null;
+    } catch (error) {
+      const e = error as { getResponse(): { code: string; details: unknown } };
+      return e.getResponse().code;
+    }
+  };
+
+  it('lists every day of a range, across a month end', () => {
+    expect(bookingDays('2027-01-30', '2027-02-02')).toEqual(['2027-01-30', '2027-01-31', '2027-02-01', '2027-02-02']);
+    expect(bookingDays('2027-01-30', null)).toEqual(['2027-01-30']);
+    expect(lastDay({ eventDate: '2027-01-30', endDate: '2027-02-02' })).toBe('2027-02-02');
+    expect(lastDay({ eventDate: '2027-01-30' })).toBe('2027-01-30');
+  });
+
+  it('allows a range for per-day services only, up to 30 days, never backwards', () => {
+    const perDay = { isPack: false, priceType: PriceType.PerDay };
+    expect(bookingRange({ eventDate: '2027-03-01', endDate: '2027-03-03', ...perDay })).toEqual({ endDate: '2027-03-03', days: ['2027-03-01', '2027-03-02', '2027-03-03'] });
+    // The same day twice is one day.
+    expect(bookingRange({ eventDate: '2027-03-01', endDate: '2027-03-01', ...perDay })).toEqual({ endDate: null, days: ['2027-03-01'] });
+    expect(bookingRange({ eventDate: '2027-03-01', endDate: '2027-03-30', ...perDay }).days).toHaveLength(30);
+    expect(code(() => bookingRange({ eventDate: '2027-03-01', endDate: '2027-03-31', ...perDay }))).toBe('BOOKING_TOO_LONG');
+    expect(code(() => bookingRange({ eventDate: '2027-03-05', endDate: '2027-03-01', ...perDay }))).toBe('VALIDATION_FAILED');
+    expect(code(() => bookingRange({ eventDate: '2027-03-01', endDate: '2027-03-02', isPack: false, priceType: PriceType.PerEvent }))).toBe('MULTI_DAY_NOT_ALLOWED');
+    expect(code(() => bookingRange({ eventDate: '2027-03-01', endDate: '2027-03-02', isPack: true, priceType: null }))).toBe('MULTI_DAY_NOT_ALLOWED');
+  });
+
+  it('prices a per-day service per day', () => {
+    expect(serviceQuantity(PriceType.PerDay, { days: 3 })).toBe(3);
+    expect(serviceQuantity(PriceType.PerDay, {})).toBe(1);
+    expect(serviceQuantity(PriceType.PerEvent, { days: 3 })).toBe(1);
   });
 });

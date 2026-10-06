@@ -155,9 +155,10 @@ export function assertEventTimes(startTime: string | null | undefined, endTime: 
   }
 }
 
-/** Quantity of the main service line from its price type. `per_hour`: started hours, across midnight. */
-export function serviceQuantity(priceType: PriceType, input: { guests?: number | null; startTime?: string | null; endTime?: string | null }): number {
+/** Quantity of the main service line from its price type. `per_hour`: started hours, across midnight; `per_day`: days booked. */
+export function serviceQuantity(priceType: PriceType, input: { guests?: number | null; startTime?: string | null; endTime?: string | null; days?: number }): number {
   if (priceType === PriceType.PerPerson) return Math.max(1, input.guests ?? 1);
+  if (priceType === PriceType.PerDay) return Math.max(1, input.days ?? 1);
   const span = priceType === PriceType.PerHour ? timeSpan(input.startTime, input.endTime) : null;
   if (span) return Math.max(1, Math.ceil((span.end - span.start) / 60));
   return 1;
@@ -182,6 +183,39 @@ export function addDays(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+/** Every date of a booking, first to last (one date when `endDate` is null). */
+export function bookingDays(eventDate: string, endDate: string | null | undefined): string[] {
+  const days = [eventDate];
+  if (!endDate) return days;
+  while (days[days.length - 1]! < endDate) days.push(addDays(days[days.length - 1]!, 1));
+  return days;
+}
+
+/** Most days one booking can cover (per-day services, issues 3 #11). */
+export const MAX_BOOKING_DAYS = 30;
+
+/**
+ * The dates a request covers. `endDate` equal to `eventDate` is one day; an earlier
+ * one is refused (400); only a `per_day` service may span days (422
+ * MULTI_DAY_NOT_ALLOWED), and at most MAX_BOOKING_DAYS (422 BOOKING_TOO_LONG).
+ */
+export function bookingRange(input: { eventDate: string; endDate?: string | null; isPack: boolean; priceType: PriceType | null }): { endDate: string | null; days: string[] } {
+  const endDate = input.endDate && input.endDate !== input.eventDate ? input.endDate : null;
+  if (!endDate) return { endDate: null, days: [input.eventDate] };
+  if (endDate < input.eventDate) {
+    throw new AppException(400, 'VALIDATION_FAILED', [{ field: 'endDate', code: 'BEFORE_EVENT_DATE', message: 'endDate must not be before eventDate' }]);
+  }
+  if (input.isPack || input.priceType !== PriceType.PerDay) throw AppException.of('MULTI_DAY_NOT_ALLOWED');
+  const days = bookingDays(input.eventDate, endDate);
+  if (days.length > MAX_BOOKING_DAYS) throw AppException.of('BOOKING_TOO_LONG', { maxDays: MAX_BOOKING_DAYS });
+  return { endDate, days };
+}
+
+/** The day the event ends: what "has it happened yet" questions compare with today. */
+export function lastDay(booking: { eventDate: string; endDate?: string | null }): string {
+  return booking.endDate ?? booking.eventDate;
 }
 
 /** Pending for longer than the reply deadline. */

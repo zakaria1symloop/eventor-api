@@ -91,7 +91,7 @@ export class BookingJobsService implements OnModuleInit {
     const windowHours = Number(await this.settings.get('dispute_window_hours'));
     // Coarse SQL pre-filter (event day at least window hours ago); the exact rule runs per row.
     const candidates: { id: string }[] = await this.dataSource.query(
-      "SELECT id FROM bookings WHERE status = 'accepted' AND dispute_status <> 'open' AND event_date <= ? AND deleted_at IS NULL ORDER BY event_date LIMIT 500",
+      "SELECT id FROM bookings WHERE status = 'accepted' AND dispute_status <> 'open' AND COALESCE(end_date, event_date) <= ? AND deleted_at IS NULL ORDER BY event_date LIMIT 500",
       [dateOnly(new Date(now.getTime() - windowHours * HOUR + 2 * 86_400_000))],
     );
     let completed = 0;
@@ -99,7 +99,8 @@ export class BookingJobsService implements OnModuleInit {
       await runInTransaction(this.dataSource, async (em, afterCommit) => {
         const booking = await em.getRepository(Booking).findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
         if (!booking) return;
-        const input = { status: booking.status, disputeStatus: booking.disputeStatus, eventDate: dateOnly(booking.eventDate), endTime: booking.endTime };
+        // A multi-day booking ends on its last day.
+        const input = { status: booking.status, disputeStatus: booking.disputeStatus, eventDate: dateOnly(booking.endDate ?? booking.eventDate), endTime: booking.endTime };
         if (!isDueForAutoComplete(input, windowHours, now)) return;
         await this.bookings.applyTransition(em, afterCommit, booking, 'completed', {
           actorId: null,

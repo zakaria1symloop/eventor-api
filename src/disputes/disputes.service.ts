@@ -430,7 +430,7 @@ export class DisputesService implements OnModuleInit {
 
       const windowHours = Number(await this.settings.get('dispute_window_hours'));
       const window = disputeWindow(
-        { status: booking.status, eventDate: dateOnly(booking.eventDate), startTime: booking.startTime, endTime: booking.endTime, cancelledAt: await this.cancelledAt(em, booking) },
+        { status: booking.status, eventDate: dateOnly(booking.eventDate), endDate: booking.endDate ? dateOnly(booking.endDate) : null, startTime: booking.startTime, endTime: booking.endTime, cancelledAt: await this.cancelledAt(em, booking) },
         windowHours,
         now,
       );

@@ -62011,6 +62011,8 @@
               "BOOKING_INVALID_TRANSITION",
               "BOOKING_NOT_EDITABLE",
               "DATE_UNAVAILABLE",
+              "MULTI_DAY_NOT_ALLOWED",
+              "BOOKING_TOO_LONG",
               "SERVICE_TIMES_REQUIRED",
               "OUTSIDE_SERVICE_HOURS",
               "OUTSIDE_SERVICE_PERIOD",
@@ -65810,6 +65812,12 @@
             "type": "string",
             "example": "2026-12-20"
           },
+          "endDate": {
+            "type": "string",
+            "nullable": true,
+            "example": null,
+            "description": "Last day of a multi-day booking; null for one day."
+          },
           "startTime": {
             "type": "string",
             "nullable": true,
@@ -65898,6 +65906,7 @@
           "client",
           "provider",
           "eventDate",
+          "endDate",
           "startTime",
           "endTime",
           "eventType",
@@ -66725,6 +66734,12 @@
             "type": "string",
             "example": "2026-12-20"
           },
+          "endDate": {
+            "type": "string",
+            "nullable": true,
+            "example": null,
+            "description": "Last day of a multi-day booking; null for one day."
+          },
           "startTime": {
             "type": "string",
             "nullable": true,
@@ -66980,6 +66995,7 @@
           "service",
           "pack",
           "eventDate",
+          "endDate",
           "startTime",
           "endTime",
           "eventType",
@@ -67061,6 +67077,11 @@
           "eventDate": {
             "type": "string",
             "example": "2026-12-20"
+          },
+          "endDate": {
+            "type": "string",
+            "example": "2026-12-22",
+            "description": "Last day of a multi-day booking (per-day services only, at most 30 days, inclusive). Omit for one day."
           },
           "startTime": {
             "type": "string",
@@ -79077,6 +79098,25 @@
             "example": "DATE_UNAVAILABLE",
             "description": "Why the date is refused, when `available` is false: `DATE_UNAVAILABLE`, `MIN_NOTICE`, `PROVIDER_NOT_ACCEPTING`, `OUTSIDE_SERVICE_PERIOD`, `SERVICE_TIMES_REQUIRED`, `OUTSIDE_SERVICE_HOURS` or `SLOT_UNAVAILABLE` (the same codes `POST /app/bookings` answers)."
           },
+          "unavailableDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": null,
+            "description": "The first day of the range that is refused (multi-day quotes); null when available."
+          },
+          "days": {
+            "type": "number",
+            "example": 1,
+            "description": "Days covered: 1, or the length of a multi-day range (per-day services)."
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": null,
+            "description": "Last day of a multi-day range; null for one day."
+          },
           "firstBookableDate": {
             "type": "string",
             "example": "2026-09-27",
@@ -79095,6 +79135,9 @@
           "feePercent",
           "available",
           "unavailableReason",
+          "unavailableDate",
+          "days",
+          "endDate",
           "firstBookableDate",
           "minNoticeDays"
         ]
@@ -79135,6 +79178,11 @@
             "type": "string",
             "example": "2026-11-14",
             "description": "`YYYY-MM-DD`, Africa/Algiers."
+          },
+          "endDate": {
+            "type": "string",
+            "example": "2026-11-16",
+            "description": "Last day of a multi-day booking, inclusive (issues 3 #11). **`per_day` services only** (422 `MULTI_DAY_NOT_ALLOWED` otherwise), at most 30 days (422 `BOOKING_TOO_LONG`), not before `eventDate`. Priced per day; every day is checked and held. The times, when sent, apply to every day."
           },
           "startTime": {
             "type": "string",
@@ -79473,6 +79521,13 @@
             "example": "2026-11-14",
             "description": "Africa/Algiers, not a timestamp."
           },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": null,
+            "description": "Last day of a multi-day booking (per-day services); null for one day."
+          },
           "startTime": {
             "type": "string",
             "nullable": true,
@@ -79705,6 +79760,7 @@
           "disputeStatus",
           "eventType",
           "eventDate",
+          "endDate",
           "startTime",
           "endTime",
           "title",
@@ -79760,6 +79816,11 @@
             "type": "string",
             "example": "2026-11-14",
             "description": "`YYYY-MM-DD`, Africa/Algiers."
+          },
+          "endDate": {
+            "type": "string",
+            "example": "2026-11-16",
+            "description": "Last day of a multi-day booking, inclusive (issues 3 #11). **`per_day` services only** (422 `MULTI_DAY_NOT_ALLOWED` otherwise), at most 30 days (422 `BOOKING_TOO_LONG`), not before `eventDate`. Priced per day; every day is checked and held. The times, when sent, apply to every day."
           },
           "startTime": {
             "type": "string",
@@ -79875,6 +79936,13 @@
             "example": "2026-11-14",
             "description": "Africa/Algiers, not a timestamp."
           },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": null,
+            "description": "Last day of a multi-day booking (per-day services); null for one day."
+          },
           "startTime": {
             "type": "string",
             "nullable": true,
@@ -79986,6 +80054,7 @@
           "disputeStatus",
           "eventType",
           "eventDate",
+          "endDate",
           "startTime",
           "endTime",
           "title",

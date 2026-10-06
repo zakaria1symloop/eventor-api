@@ -8,6 +8,7 @@ import { InvoicesService } from '../bookings/invoices.service.js';
 import {
   addDays,
   assertEventTimes,
+  bookingRange,
   computeLines,
   computeTotals,
   packLines,
@@ -95,9 +96,9 @@ export class AppBookingsService {
     const em = this.dataSource.manager;
     const { days, firstBookableDate } = await this.minNotice();
 
-    const { providerId, lines, feeKey } = dto.serviceId
+    const { providerId, lines, feeKey, range } = dto.serviceId
       ? await this.serviceLines(em, dto, lang)
-      : await this.packLines(em, dto.packId!, lang);
+      : { ...(await this.packLines(em, dto.packId!, lang)), range: bookingRange({ eventDate: dto.eventDate, endDate: dto.endDate, isPack: true, priceType: null }) };
 
     const computed = computeLines(lines);
     const totals = computeTotals(computed);
@@ -105,28 +106,17 @@ export class AppBookingsService {
 
     const [profile] = await em.query('SELECT accepting_bookings FROM provider_profiles WHERE user_id = ? AND deleted_at IS NULL', [providerId]);
     let unavailableReason: string | null = null;
+    let unavailableDate: string | null = null;
     if (!profile || Number(profile.accepting_bookings) !== 1) unavailableReason = 'PROVIDER_NOT_ACCEPTING';
     else if (dto.eventDate < firstBookableDate) unavailableReason = 'MIN_NOTICE';
-    else {
-      const obstacle = await this.bookings.scheduleObstacle(em, {
-        serviceId: dto.serviceId ?? null,
-        packId: dto.packId ?? null,
-        date: dto.eventDate,
-        startTime: dto.startTime ?? null,
-        endTime: dto.endTime ?? null,
-      });
+    // Every day of the range; the first one that fails is reported.
+    for (const date of range.days) {
+      if (unavailableReason !== null) break;
+      const input = { serviceId: dto.serviceId ?? null, packId: dto.packId ?? null, date, startTime: dto.startTime ?? null, endTime: dto.endTime ?? null };
+      const obstacle = await this.bookings.scheduleObstacle(em, input);
       if (obstacle) unavailableReason = obstacle.code;
-    }
-    if (unavailableReason === null) {
-      const free = await this.bookings.isAvailable(em, {
-        providerId,
-        serviceId: dto.serviceId ?? null,
-        packId: dto.packId ?? null,
-        date: dto.eventDate,
-        startTime: dto.startTime ?? null,
-        endTime: dto.endTime ?? null,
-      });
-      if (!free) unavailableReason = 'DATE_UNAVAILABLE';
+      else if (!(await this.bookings.isAvailable(em, { ...input, providerId }))) unavailableReason = 'DATE_UNAVAILABLE';
+      if (unavailableReason !== null) unavailableDate = date;
     }
 
     return {
@@ -144,6 +134,9 @@ export class AppBookingsService {
       feePercent,
       available: unavailableReason === null,
       unavailableReason,
+      unavailableDate,
+      days: range.days.length,
+      endDate: range.endDate,
       firstBookableDate,
       minNoticeDays: days,
     };
@@ -167,11 +160,12 @@ export class AppBookingsService {
       [dto.serviceId],
     );
     if (!service || Number(service.visible) !== 1) throw AppException.of('SERVICE_NOT_FOUND');
+    const range = bookingRange({ eventDate: dto.eventDate, endDate: dto.endDate, isPack: false, priceType: service.price_type as PriceType });
     const lines: LineInput[] = [
       {
         kind: BookingLineKind.Service,
         label: pickText(lang, service.title_en, service.title_ar),
-        quantity: serviceQuantity(service.price_type as PriceType, { guests: dto.guests, startTime: dto.startTime, endTime: dto.endTime }),
+        quantity: serviceQuantity(service.price_type as PriceType, { guests: dto.guests, startTime: dto.startTime, endTime: dto.endTime, days: range.days.length }),
         unitAmount: String(service.base_price),
         serviceId: service.id,
       },
@@ -186,7 +180,7 @@ export class AppBookingsService {
         lines.push({ kind: BookingLineKind.Extra, label: pickText(lang, row.name_en, row.name_ar), quantity: extra.quantity, unitAmount: String(row.price), serviceId: service.id });
       }
     }
-    return { providerId: service.provider_id as string, lines, feeKey: 'platform_fee_percent' as const };
+    return { providerId: service.provider_id as string, lines, feeKey: 'platform_fee_percent' as const, range };
   }
 
   /** Quote lines for a Ready Pack: one line per item, then the pack discount. */
@@ -227,6 +221,7 @@ export class AppBookingsService {
           serviceId: dto.serviceId,
           packId: dto.packId,
           eventDate: dto.eventDate,
+          endDate: dto.endDate,
           startTime: dto.startTime,
           endTime: dto.endTime,
           eventType: dto.eventType,
@@ -445,7 +440,7 @@ export class AppBookingsService {
       const [row] = await em.query("SELECT MAX(created_at) AS at FROM booking_status_changes WHERE booking_id = ? AND to_status = 'cancelled'", [r.id]);
       cancelledAt = row?.at ? new Date(row.at) : new Date(r.updated_at);
     }
-    return disputeWindow({ status: r.status, eventDate: dateOnly(r.event_date), startTime: r.start_time, endTime: r.end_time, cancelledAt }, hours).open;
+    return disputeWindow({ status: r.status, eventDate: dateOnly(r.event_date), endDate: r.end_date ? dateOnly(r.end_date) : null, startTime: r.start_time, endTime: r.end_time, cancelledAt }, hours).open;
   }
 
   private toReschedule(row: any, party: Party): AppRescheduleRowDto {
@@ -532,6 +527,7 @@ export class AppBookingsService {
       disputeStatus: r.dispute_status,
       eventType: r.event_type,
       eventDate: dateOnly(r.event_date),
+      endDate: r.end_date ? dateOnly(r.end_date) : null,
       startTime: hhmm(r.start_time),
       endTime: hhmm(r.end_time),
       title: pickText(lang, titleEn, titleAr),
@@ -549,7 +545,8 @@ export class AppBookingsService {
       allowedActions: appBookingActions(party, {
         status: r.status,
         disputeStatus: r.dispute_status as BookingDisputeStatus,
-        eventDate: dateOnly(r.event_date),
+        // The event has passed once its last day has.
+        eventDate: dateOnly(r.end_date ?? r.event_date),
         today,
         pendingRescheduleForMe: pendingForMe,
         checkedIn: (party === 'client' ? r.client_checked_in_at : r.provider_checked_in_at) !== null,

@@ -526,6 +526,16 @@ export const ERROR_CODES = {
     en: 'The provider is not available on {date}.',
     ar: 'مقدم الخدمة غير متاح بتاريخ {date}.',
   },
+  MULTI_DAY_NOT_ALLOWED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'Only services priced per day can be booked over several days.',
+    ar: 'لا يمكن حجز عدة أيام إلا للخدمات المسعّرة باليوم.',
+  },
+  BOOKING_TOO_LONG: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'A booking can cover at most {maxDays} days.',
+    ar: 'لا يمكن أن يتجاوز الحجز {maxDays} يومًا.',
+  },
   SERVICE_TIMES_REQUIRED: {
     status: HttpStatus.UNPROCESSABLE_ENTITY,
     en: 'Choose a start and end time: this service is booked by the hour.',

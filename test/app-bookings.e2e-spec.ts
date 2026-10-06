@@ -223,6 +223,65 @@ describe('App bookings (e2e)', () => {
       expect((await request(t.http).post(BASE).set(client.headers).send(body)).status).toBe(201);
     });
 
+    describe('multi-day bookings (issues 3 #11)', () => {
+      const range = { eventDate: '2027-09-06', endDate: '2027-09-08' };
+      const create = (who: LoggedIn, body: Record<string, unknown>) =>
+        request(t.http).post(BASE).set(who.headers).send({ wilayaCode: 16, eventType: EventType.Wedding, ...body });
+
+      it('prices per day, holds every day and blocks the middle day for others', async () => {
+        const service = await bookableService({ basePrice: '15000.00', priceType: PriceType.PerDay, maxEventsPerDay: 1 });
+
+        const quote = await request(t.http).post(`${BASE}/quote`).set(client.headers).send({ serviceId: service.id, ...range });
+        expect(quote.body.data).toMatchObject({ available: true, days: 3, endDate: '2027-09-08', total: '45000.00' });
+        expect(quote.body.data.lines[0].quantity).toBe(3);
+
+        const res = await create(client, { serviceId: service.id, ...range });
+        expect(res.status).toBe(201);
+        expect(res.body.data).toMatchObject({ eventDate: '2027-09-06', endDate: '2027-09-08', total: '45000.00' });
+        const holds = await db().query("SELECT DATE_FORMAT(date, '%Y-%m-%d') AS d FROM availability_blocks WHERE booking_id = ? AND deleted_at IS NULL ORDER BY date", [res.body.data.id]);
+        expect(holds.map((h: { d: string }) => h.d)).toEqual(['2027-09-06', '2027-09-07', '2027-09-08']);
+
+        // Another client on the middle day: the provider is taken (capacity 1 per day).
+        expectError(await create(otherClient, { serviceId: service.id, eventDate: '2027-09-07' }), 409, 'DATE_UNAVAILABLE');
+        const middle = await request(t.http).post(`${BASE}/quote`).set(otherClient.headers).send({ serviceId: service.id, eventDate: '2027-09-05', endDate: '2027-09-07' });
+        expect(middle.body.data).toMatchObject({ available: false, unavailableReason: 'DATE_UNAVAILABLE', unavailableDate: '2027-09-06' });
+        // The same client again on an overlapping range of a service with room: duplicate.
+        const roomy = await bookableService({ priceType: PriceType.PerDay, maxEventsPerDay: 5 });
+        expect((await create(client, { serviceId: roomy.id, ...range })).status).toBe(201);
+        expectError(await create(client, { serviceId: roomy.id, eventDate: '2027-09-08', endDate: '2027-09-09' }), 409, 'BOOKING_DUPLICATE');
+
+        // A reschedule keeps the length and moves every hold.
+        const moved = await request(t.http).post(`${BASE}/${res.body.data.id}/reschedule`).set(client.headers).send({ date: '2027-09-20', reason: 'Venue moved us' });
+        expect(moved.status).toBe(200);
+        expect(moved.body.data).toMatchObject({ eventDate: '2027-09-20', endDate: '2027-09-22' });
+        const after = await db().query("SELECT DATE_FORMAT(date, '%Y-%m-%d') AS d FROM availability_blocks WHERE booking_id = ? AND deleted_at IS NULL ORDER BY date", [res.body.data.id]);
+        expect(after.map((h: { d: string }) => h.d)).toEqual(['2027-09-20', '2027-09-21', '2027-09-22']);
+      });
+
+      it('refuses ranges for other price types and packs, over 30 days, and backwards', async () => {
+        const perEvent = await bookableService();
+        expectError(await create(client, { serviceId: perEvent.id, ...range }), 422, 'MULTI_DAY_NOT_ALLOWED');
+        const perDay = await bookableService({ priceType: PriceType.PerDay });
+        expectError(await create(client, { serviceId: perDay.id, eventDate: '2027-10-01', endDate: '2027-10-31' }), 422, 'BOOKING_TOO_LONG');
+        const backwards = await create(client, { serviceId: perDay.id, eventDate: '2027-10-05', endDate: '2027-10-01' });
+        expectError(backwards, 400, 'VALIDATION_FAILED');
+        expect(backwards.body.details[0]).toMatchObject({ field: 'endDate', code: 'BEFORE_EVENT_DATE' });
+        expectError(await request(t.http).post(`${BASE}/quote`).set(client.headers).send({ serviceId: perEvent.id, ...range }), 422, 'MULTI_DAY_NOT_ALLOWED');
+      });
+
+      it('stays in Upcoming until its last day has passed', async () => {
+        const yesterday = new Date(Date.now() + 3_600_000 - 86_400_000).toISOString().slice(0, 10);
+        const tomorrow = new Date(Date.now() + 3_600_000 + 86_400_000).toISOString().slice(0, 10);
+        const ongoing = await makeBooking(db(), { clientId: client.user.id, providerId: provider.user.id, status: BookingStatus.Accepted, eventDate: yesterday, endDate: tomorrow } as never);
+        const upcoming = await request(t.http).get(`${BASE}?tab=upcoming&limit=100`).set(client.headers);
+        expect(upcoming.body.data.map((b: { id: string }) => b.id)).toContain(ongoing.id);
+        const card = upcoming.body.data.find((b: { id: string }) => b.id === ongoing.id);
+        expect(card).toMatchObject({ eventDate: yesterday, endDate: tomorrow });
+        // The event has not ended, so no check-in yet.
+        expect(card.allowedActions).not.toContain('check_in');
+      });
+    });
+
     describe('service schedule (issues 3 #6, #7, #8)', () => {
       // 2027-07-16 is a Friday (weekday 5), 2027-07-17 a Saturday.
       const FRIDAY = '2027-07-16';

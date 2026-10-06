@@ -82,6 +82,10 @@ export class Booking extends AbstractEntity {
   @Column({ type: 'date' })
   eventDate: string;
 
+  /** Last day of a multi-day booking (per-day services, issues 3 #11); null = one day. */
+  @Column({ type: 'date', nullable: true })
+  endDate: string | null;
+
   @Column({ type: 'time', nullable: true })
   startTime: string | null;
 

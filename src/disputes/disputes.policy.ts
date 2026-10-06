@@ -52,7 +52,7 @@ export interface DisputeWindow {
  * cancellation.
  */
 export function disputeWindow(
-  booking: { status: BookingStatus; eventDate: string; startTime: string | null; endTime: string | null; cancelledAt: Date | null },
+  booking: { status: BookingStatus; eventDate: string; endDate?: string | null; startTime: string | null; endTime: string | null; cancelledAt: Date | null },
   windowHours: number,
   now = new Date(),
 ): DisputeWindow {
@@ -64,7 +64,8 @@ export function disputeWindow(
   }
   const start = booking.startTime ? booking.startTime.slice(0, 5) : '00:00';
   const opensAt = new Date(`${booking.eventDate}T${start}:00+01:00`);
-  const closesAt = new Date(eventEndUtc(booking.eventDate, booking.endTime).getTime() + windowHours * 3_600_000);
+  // A multi-day booking closes after its last day.
+  const closesAt = new Date(eventEndUtc(booking.endDate ?? booking.eventDate, booking.endTime).getTime() + windowHours * 3_600_000);
   return { open: now.getTime() >= opensAt.getTime() && now.getTime() <= closesAt.getTime(), opensAt, closesAt };
 }
 

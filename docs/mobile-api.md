@@ -630,6 +630,34 @@ loop when it fails.
 
 ## 16. Changelog
 
+### 2026-10-06 — service schedule and multi-day bookings (issues 3 #6–#11, report #79, #81, #82)
+
+**Service fields** (provider `POST/PATCH /app/provider/services`, service detail on both sides):
+
+- `hours: [{ weekday, startTime, endTime }]`: bookable hours, `weekday` 1 = Monday … 7 = Sunday (Dart's `DateTime.weekday`), `HH:mm`. An end at or before the start runs past midnight. Several ranges per day are allowed, but ranges of one weekday must not overlap (400 `OVERLAP`) and start ≠ end (400 `SAME_AS_START`). Sending the field replaces the set; `[]` = bookable at any time.
+- `concurrentClients` (1–50, default 1): different clients who may book **overlapping hours**. Only timed bookings compare; whole-day bookings still count against `maxEventsPerDay` only.
+- `availableFrom` / `availableUntil` (`YYYY-MM-DD` or null): the **event dates** the service can be booked for, inclusive. The service leaves the catalog after `availableUntil` (dashboard visibility reason `period_ended`).
+
+**Booking rules** (`/app/bookings`, `/quote`, both reschedule routes, accepting a proposed date):
+
+| Code | When |
+|---|---|
+| 422 `OUTSIDE_SERVICE_PERIOD` | event date outside `availableFrom`–`availableUntil`; `details: { availableFrom, availableUntil }` |
+| 422 `SERVICE_TIMES_REQUIRED` | the service has `hours` and the request has no times |
+| 422 `OUTSIDE_SERVICE_HOURS` | the times don't fit inside one range of that weekday; `details: { weekday, hours: [{ startTime, endTime }] }` |
+| 409 `SLOT_UNAVAILABLE` | `concurrentClients` timed bookings already overlap those hours; `details: { date, startTime, endTime }` |
+
+`POST /app/bookings/quote` never throws for these: it answers `available: false` with the same code in `unavailableReason`. A provider accepting a request is not re-checked against hours changed afterwards.
+
+**Free hours in the calendar:** `GET /app/services/{id}/availability` days gain `freeRanges: [{ startTime, endTime }]`, the hours still bookable that day: the service hours (all day if none) minus partial blocks and minus moments already taken by `concurrentClients` clients. Empty unless `state` is `available`. `00:00 → 00:00` means the whole day. Days outside the period and weekdays without hours are `blocked`; a day with nothing free left is `busy`. Pack calendars send `freeRanges: null`.
+
+**Multi-day bookings** (`per_day` services only):
+
+- `endDate` on `/quote` and `POST /app/bookings` (inclusive, ≤ 30 days, ≥ `eventDate`; equal = one day). Refusals: 422 `MULTI_DAY_NOT_ALLOWED` (other price types, packs), 422 `BOOKING_TOO_LONG` (`details.maxDays` = 30), 400 `VALIDATION_FAILED` `endDate`/`BEFORE_EVENT_DATE`.
+- Priced per day (the service line's `quantity` = days). Times, when sent, apply to every day. Every day is checked (capacity, blocks, hours, period, slots) and held.
+- The quote adds `days`, `endDate` and `unavailableDate` (the first refused day).
+- Booking cards and details carry `endDate` (null for one day). Upcoming / Past, check-in, completion and the dispute window use the **last** day. A reschedule moves the whole range and keeps its length.
+
 ### 2026-10-05 — email live, booking time rules, open items from the issue report
 
 - **#1** Email is live: the server sends through SMTP (`/health/ready` → `mail: "smtp"`) and runs with `AUTH_SKIP_EMAIL_VERIFICATION=false`, so `GET /app/config` → `emailVerificationRequired: true`. Sign-up goes through screen 10 again; resend and the forgot-password code arrive too.

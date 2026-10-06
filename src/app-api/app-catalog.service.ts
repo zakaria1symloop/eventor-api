@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource, EntityManager } from 'typeorm';
 import type { AuthUser } from '../auth/auth.types.js';
-import { timeSpan } from '../bookings/bookings.policy.js';
+import { bookingDays, timeSpan } from '../bookings/bookings.policy.js';
 import { likeContains } from '../common/dto/transforms.js';
 import { BookingStatus } from '../common/enums/booking.enums.js';
 import { FileVariantKind } from '../common/enums/file.enums.js';
@@ -719,12 +719,12 @@ export class AppCatalogService {
            AND (ab.service_id IS NULL OR ab.service_id IN (?))`,
         [input.providerIds, first, last, input.serviceIds.length > 0 ? input.serviceIds : ['']],
       ),
+      // A multi-day booking takes every day of its range, so ranges that touch the month count too.
       em.query(
-        `SELECT b.event_date AS date, b.provider_id, COUNT(*) AS n FROM bookings b
-         WHERE b.provider_id IN (?) AND b.event_date BETWEEN ? AND ? AND b.deleted_at IS NULL
-           AND b.status IN ('pending', 'accepted')
-         GROUP BY b.event_date, b.provider_id`,
-        [input.providerIds, first, last],
+        `SELECT b.event_date, b.end_date, b.provider_id FROM bookings b
+         WHERE b.provider_id IN (?) AND b.event_date <= ? AND COALESCE(b.end_date, b.event_date) >= ? AND b.deleted_at IS NULL
+           AND b.status IN ('pending', 'accepted')`,
+        [input.providerIds, last, first],
       ),
     ]);
 
@@ -732,7 +732,12 @@ export class AppCatalogService {
     // `dateOnly` rather than a string slice — `String(new Date())` is "Wed Sep 30 …".
     const blocked = new Set(blocks.map((row: any) => `${row.provider_id}|${dateOnly(row.date)}`));
     const taken = new Map<string, number>();
-    for (const row of bookings) taken.set(`${row.provider_id}|${dateOnly(row.date)}`, Number(row.n));
+    for (const row of bookings) {
+      for (const date of bookingDays(dateOnly(row.event_date), row.end_date ? dateOnly(row.end_date) : null)) {
+        const key = `${row.provider_id}|${date}`;
+        taken.set(key, (taken.get(key) ?? 0) + 1);
+      }
+    }
 
     // Partial blocks of the provider and timed bookings of the service, for the free hours.
     const schedule = input.schedule;
@@ -745,16 +750,19 @@ export class AppCatalogService {
             [input.providerIds, first, last, schedule.serviceId],
           ),
           em.query(
-            `SELECT b.event_date AS date, b.start_time, b.end_time FROM bookings b
-             WHERE b.event_date BETWEEN ? AND ? AND b.deleted_at IS NULL AND b.status IN ('pending', 'accepted')
+            `SELECT b.event_date AS date, b.end_date, b.start_time, b.end_time FROM bookings b
+             WHERE b.event_date <= ? AND COALESCE(b.end_date, b.event_date) >= ? AND b.deleted_at IS NULL AND b.status IN ('pending', 'accepted')
                AND b.start_time IS NOT NULL AND b.end_time IS NOT NULL
                AND (b.service_id = ? OR b.pack_id IN (SELECT pack_id FROM pack_items WHERE service_id = ?))`,
-            [first, last, schedule.serviceId, schedule.serviceId],
+            [last, first, schedule.serviceId, schedule.serviceId],
           ),
         ])
       : [[], []];
+    // Rows with an `end_date` cover every day of their range.
     const spansOn = (rows: any[], date: string) =>
-      rows.filter((r) => dateOnly(r.date) === date).map((r) => timeSpan(hhmm(r.start_time), hhmm(r.end_time))!);
+      rows
+        .filter((r) => dateOnly(r.date) <= date && date <= dateOnly(r.end_date ?? r.date))
+        .map((r) => timeSpan(hhmm(r.start_time), hhmm(r.end_time))!);
 
     const result: AppAvailabilityDto['days'] = [];
     for (let day = 1; day <= days; day++) {

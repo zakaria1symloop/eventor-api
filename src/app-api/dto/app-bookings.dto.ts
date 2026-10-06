@@ -70,6 +70,17 @@ export class AppQuoteDto {
   @Matches(DATE, { message: 'eventDate must be YYYY-MM-DD' })
   eventDate: string;
 
+  @ApiPropertyOptional({
+    example: '2026-11-16',
+    description:
+      'Last day of a multi-day booking, inclusive (issues 3 #11). **`per_day` services only** (422 `MULTI_DAY_NOT_ALLOWED` otherwise), ' +
+      'at most 30 days (422 `BOOKING_TOO_LONG`), not before `eventDate`. Priced per day; every day is checked and held. ' +
+      'The times, when sent, apply to every day.',
+  })
+  @IsOptional()
+  @Matches(DATE, { message: 'endDate must be YYYY-MM-DD' })
+  endDate?: string;
+
   @ApiPropertyOptional({ example: '18:00', description: '`HH:mm`, Africa/Algiers. Drives the quantity of a `per_hour` service.' })
   @IsOptional()
   @Matches(TIME, { message: 'startTime must be HH:mm' })
@@ -230,6 +241,14 @@ export class AppQuoteResultDto {
   })
   unavailableReason: string | null;
 
+  @ApiProperty({ type: String, format: 'date', nullable: true, example: null, description: 'The first day of the range that is refused (multi-day quotes); null when available.' })
+  unavailableDate: string | null;
+
+  @ApiProperty({ example: 1, description: 'Days covered: 1, or the length of a multi-day range (per-day services).' }) days: number;
+
+  @ApiProperty({ type: String, format: 'date', nullable: true, example: null, description: 'Last day of a multi-day range; null for one day.' })
+  endDate: string | null;
+
   @ApiProperty({ example: '2026-09-27', description: 'Today + `booking_min_notice_days` (Africa/Algiers).' }) firstBookableDate: string;
   @ApiProperty({ example: 7 }) minNoticeDays: number;
 }
@@ -296,6 +315,7 @@ export class AppBookingCardDto {
   @ApiProperty({ enum: BookingDisputeStatus }) disputeStatus: BookingDisputeStatus;
   @ApiProperty({ enum: EventType }) eventType: EventType;
   @ApiProperty({ example: '2026-11-14', description: 'Africa/Algiers, not a timestamp.' }) eventDate: string;
+  @ApiProperty({ type: String, format: 'date', nullable: true, example: null, description: 'Last day of a multi-day booking (per-day services); null for one day.' }) endDate: string | null;
   @ApiProperty({ type: String, nullable: true, example: '18:00' }) startTime: string | null;
   @ApiProperty({ type: String, nullable: true, example: '23:00' }) endTime: string | null;
   @ApiProperty({ example: 'Wedding photo & video coverage', description: 'The service or pack name, in the caller’s language.' }) title: string;

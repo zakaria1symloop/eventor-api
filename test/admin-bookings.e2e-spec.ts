@@ -334,7 +334,7 @@ describe('Admin bookings (e2e)', () => {
       expect(refs(res)).toEqual([rows[3]!.id, rows[2]!.id, rows[0]!.id, rows[1]!.id, rows[4]!.id, rows[5]!.id]);
       const row = res.body.data.find((r: any) => r.id === rows[0]!.id);
       expect(Object.keys(row).sort()).toEqual(
-        ['client', 'createdAt', 'disputeStatus', 'endTime', 'eventDate', 'eventType', 'guests', 'id', 'noReply', 'pack', 'provider', 'reference', 'respondedAt', 'service', 'source', 'startTime', 'status', 'total', 'wilaya'].sort(),
+        ['client', 'createdAt', 'disputeStatus', 'endDate', 'endTime', 'eventDate', 'eventType', 'guests', 'id', 'noReply', 'pack', 'provider', 'reference', 'respondedAt', 'service', 'source', 'startTime', 'status', 'total', 'wilaya'].sort(),
       );
       expect(row).toMatchObject({ noReply: true, service: { id: serviceId, titleEn: `Coverage ${tag}` }, client: { fullName: `Amina ${tag}`, avatarUrl: null }, provider: { id: providerId, fullName: `Karim ${tag}` } });
     });

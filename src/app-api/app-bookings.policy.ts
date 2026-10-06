@@ -37,9 +37,9 @@ export function bookingTabSql(tab: AppBookingTab): { sql: string; params: (today
     case 'requests':
       return { sql: "b.status = 'pending'", params: () => [] };
     case 'upcoming':
-      return { sql: "b.status = 'accepted' AND b.event_date >= ?", params: (today) => [today] };
+      return { sql: "b.status = 'accepted' AND COALESCE(b.end_date, b.event_date) >= ?", params: (today) => [today] };
     case 'past':
-      return { sql: "(b.status = 'completed' OR (b.status = 'accepted' AND b.event_date < ?))", params: (today) => [today] };
+      return { sql: "(b.status = 'completed' OR (b.status = 'accepted' AND COALESCE(b.end_date, b.event_date) < ?))", params: (today) => [today] };
     case 'cancelled':
       return { sql: "b.status IN ('cancelled', 'declined')", params: () => [] };
   }

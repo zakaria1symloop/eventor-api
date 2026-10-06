@@ -130,6 +130,7 @@ export class BookingRowDto {
   @ApiProperty({ type: BookingClientRefDto }) client: BookingClientRefDto;
   @ApiProperty({ type: BookingProviderRefDto }) provider: BookingProviderRefDto;
   @ApiProperty({ example: '2026-12-20' }) eventDate: string;
+  @ApiProperty({ type: String, nullable: true, example: null, description: 'Last day of a multi-day booking; null for one day.' }) endDate: string | null;
   @ApiProperty({ type: String, nullable: true, example: '18:00' }) startTime: string | null;
   @ApiProperty({ type: String, nullable: true, example: '23:30' }) endTime: string | null;
   @ApiProperty({ enum: EventType }) eventType: EventType;
@@ -338,6 +339,13 @@ export class CreateBookingDto {
   packId?: string;
 
   @ApiProperty({ example: '2026-12-20' }) @Matches(DATE, { message: 'eventDate must be YYYY-MM-DD' }) eventDate: string;
+  @ApiPropertyOptional({
+    example: '2026-12-22',
+    description: 'Last day of a multi-day booking (per-day services only, at most 30 days, inclusive). Omit for one day.',
+  })
+  @IsOptional()
+  @Matches(DATE, { message: 'endDate must be YYYY-MM-DD' })
+  endDate?: string;
   @ApiPropertyOptional({ example: '18:00' }) @IsOptional() @Matches(TIME, { message: 'startTime must be HH:mm' }) startTime?: string;
   @ApiPropertyOptional({ example: '23:30' }) @IsOptional() @Matches(TIME, { message: 'endTime must be HH:mm' }) endTime?: string;
   @ApiProperty({ enum: EventType }) @IsEnum(EventType) eventType: EventType;

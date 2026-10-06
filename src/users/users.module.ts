@@ -1,5 +1,6 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
 import { BookingsModule } from '../bookings/bookings.module.js';
+import { AvatarsService } from './avatars.service.js';
 import { ExportRegistry } from '../exports/export-registry.js';
 import { AdminUsersController } from './admin-users.controller.js';
 import { UserFiltersDto, type UserRowDto } from './dto/users.dto.js';
@@ -11,8 +12,8 @@ import { UsersService } from './users.service.js';
 @Module({
   imports: [BookingsModule],
   controllers: [AdminUsersController],
-  providers: [UsersService, UserAccountsService, UsersMailListener],
-  exports: [UsersService, UserAccountsService],
+  providers: [UsersService, UserAccountsService, UsersMailListener, AvatarsService],
+  exports: [UsersService, UserAccountsService, AvatarsService],
 })
 export class UsersModule implements OnModuleInit {
   constructor(

@@ -1,10 +1,14 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { AuthUser } from '../auth/auth.types.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { uuidParam } from '../common/dto/transforms.js';
 import { UserRole } from '../common/enums/user.enums.js';
+import { UPLOAD_THROTTLE } from '../common/http/throttles.js';
+import { uploadLimits } from '../common/http/upload-limits.js';
 import { ApiPaginatedResponse } from '../common/pagination/paginated.js';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto.js';
 import { ApiDataResponse } from '../common/swagger/api-data-response.decorator.js';
@@ -21,6 +25,7 @@ import {
   NoteDto,
   PasswordResetDto,
   PasswordResetResultDto,
+  RemoveAvatarDto,
   SessionsRevokedDto,
   UpdateUserDto,
   USER_SORT_FIELDS,
@@ -29,6 +34,7 @@ import {
   UsersQueryDto,
   UserTabCountsDto,
 } from './dto/users.dto.js';
+import { AvatarsService, type AvatarUpload } from './avatars.service.js';
 import { UserAccountsService } from './user-accounts.service.js';
 import { UsersService } from './users.service.js';
 
@@ -44,6 +50,7 @@ export class AdminUsersController {
   constructor(
     private readonly users: UsersService,
     private readonly accounts: UserAccountsService,
+    private readonly avatars: AvatarsService,
   ) {}
 
   @Get()
@@ -156,6 +163,41 @@ export class AdminUsersController {
   @ApiErrorResponses('VALIDATION_FAILED', 'USER_NOT_FOUND', 'USER_ALREADY_BLOCKED')
   async block(@CurrentUser() auth: AuthUser, @Param('id', userId()) id: string, @Body() dto: BlockUserDto) {
     return { data: await this.accounts.block(auth, id, dto) };
+  }
+
+  @Post(':id/avatar')
+  @HttpCode(HttpStatus.OK)
+  @Throttle(UPLOAD_THROTTLE)
+  @UseInterceptors(FileInterceptor('file', { limits: uploadLimits(20) }))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ schema: { type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary' } } } })
+  @ApiOperation({
+    summary: 'Replace a user’s photo',
+    description:
+      'Same rules as the app’s own upload: `max_photo_upload_mb`, type sniffed from the bytes, WebP variants built in the ' +
+      'background, previous photo deleted. Audited as `user.avatar_replaced`. Returns the profile (user page).',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiDataResponse(UserDetailDto)
+  @ApiErrorResponses('USER_NOT_FOUND', 'VALIDATION_FAILED', 'FILE_TOO_LARGE', 'FILE_TYPE_NOT_ALLOWED', 'RATE_LIMITED')
+  async replaceAvatar(@CurrentUser() auth: AuthUser, @Param('id', userId()) id: string, @UploadedFile() file: AvatarUpload | undefined) {
+    await this.users.load(id);
+    await this.avatars.replace(id, file, 'user.avatar_replaced');
+    return { data: await this.users.get(id, auth) };
+  }
+
+  @Delete(':id/avatar')
+  @ApiOperation({
+    summary: 'Remove a user’s photo',
+    description: 'E.g. an inappropriate picture. The optional `note` goes to the activity log (`user.avatar_removed`). Returns the profile (user page).',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiDataResponse(UserDetailDto)
+  @ApiErrorResponses('USER_NOT_FOUND', 'VALIDATION_FAILED')
+  async removeAvatar(@CurrentUser() auth: AuthUser, @Param('id', userId()) id: string, @Body() dto: RemoveAvatarDto) {
+    await this.users.load(id);
+    await this.avatars.remove(id, 'user.avatar_removed', dto.note ?? null);
+    return { data: await this.users.get(id, auth) };
   }
 
   @Post(':id/unblock')

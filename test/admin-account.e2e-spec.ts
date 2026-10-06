@@ -1,4 +1,5 @@
 import request from 'supertest';
+import sharp from 'sharp';
 import { AuditLog } from '../src/admin/entities/audit-log.entity.js';
 import { AdminInvitation } from '../src/auth/entities/admin-invitation.entity.js';
 import { Session } from '../src/auth/entities/session.entity.js';
@@ -255,6 +256,23 @@ describe('Admin account & team (e2e)', () => {
       expectError(await request(t.http).post(`/api/v1/admin/admins/invitations/${MISSING}/resend`), 401, 'AUTH_TOKEN_MISSING');
       const client = await loginAs(t, UserRole.Client);
       expectError(await request(t.http).post(`/api/v1/admin/admins/invitations/${MISSING}/revoke`).set(client.headers), 403, 'FORBIDDEN_ROLE');
+    });
+  });
+
+  describe('my avatar (issues 3 #3)', () => {
+    it('uploads my photo, shows it on /admin/me, and removes it', async () => {
+      const me = await admin();
+      const png = await sharp({ create: { width: 64, height: 64, channels: 3, background: '#36c' } }).png().toBuffer();
+
+      const up = await request(t.http).post('/api/v1/admin/me/avatar').set(me.headers).attach('file', png, 'me.png');
+      expect(up.status).toBe(200);
+      expect(up.body.data).toMatchObject({ id: me.user.id, avatarUrl: expect.any(String) });
+      expect((await request(t.http).get('/api/v1/admin/me').set(me.headers)).body.data.avatarUrl).toEqual(expect.any(String));
+      expect(await audited('admin.avatar_updated', me.user.id)).toBe(true);
+
+      const down = await request(t.http).delete('/api/v1/admin/me/avatar').set(me.headers).expect(200);
+      expect(down.body.data.avatarUrl).toBeNull();
+      expectError(await request(t.http).post('/api/v1/admin/me/avatar').set(me.headers), 400, 'VALIDATION_FAILED');
     });
   });
 

@@ -575,6 +575,17 @@ export class BulkRefusalDto {
   code: string;
 }
 
+// ── avatar ───────────────────────────────────────────────────
+
+export class RemoveAvatarDto {
+  @ApiPropertyOptional({ example: 'Photo did not show the person.', maxLength: 300, description: 'Kept in the activity log.' })
+  @IsOptional()
+  @Transform(trimToNull)
+  @IsString()
+  @MaxLength(300)
+  note?: string | null;
+}
+
 // ── notes ────────────────────────────────────────────────────
 
 export class CreateNoteDto {

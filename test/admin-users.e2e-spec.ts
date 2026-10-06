@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import request from 'supertest';
+import sharp from 'sharp';
 import { AuditLog } from '../src/admin/entities/audit-log.entity.js';
 import { VerificationCode } from '../src/auth/entities/verification-code.entity.js';
 import { PasswordService } from '../src/auth/password.service.js';
@@ -486,6 +487,41 @@ describe('Admin users (e2e)', () => {
       expect((await reload(due.id))!.status).toBe(UserStatus.Active);
       expect((await reload(later.id))!.status).toBe(UserStatus.Blocked);
       expect((await audited('user.unblocked', due.id))!).toMatchObject({ actorId: null, source: 'system' });
+    });
+  });
+
+  describe('avatar (issues 3 #3)', () => {
+    const png = () => sharp({ create: { width: 64, height: 48, channels: 3, background: '#c96' } }).png().toBuffer();
+
+    it('replaces a user’s photo, then removes it with a note in the activity log', async () => {
+      const user = await makeUser(db());
+
+      const replaced = await request(t.http).post(`${BASE}/${user.id}/avatar`).set(admin.headers).attach('file', await png(), 'me.png');
+      expect(replaced.status).toBe(200);
+      expect(replaced.body.data.avatarUrl).toEqual(expect.any(String));
+      const first = (await reload(user.id))!.avatarFileId;
+      expect(first).not.toBeNull();
+      expect(await audited('user.avatar_replaced', user.id)).not.toBeNull();
+
+      // A second upload replaces and deletes the previous file.
+      await request(t.http).post(`${BASE}/${user.id}/avatar`).set(admin.headers).attach('file', await png(), 'again.png').expect(200);
+      const [old] = await db().query('SELECT deleted_at FROM files WHERE id = ?', [first]);
+      expect(old.deleted_at).not.toBeNull();
+
+      const removed = await request(t.http).delete(`${BASE}/${user.id}/avatar`).set(admin.headers).send({ note: 'Not a photo of the person' });
+      expect(removed.status).toBe(200);
+      expect(removed.body.data.avatarUrl).toBeNull();
+      expect((await reload(user.id))!.avatarFileId).toBeNull();
+      expect(await audited('user.avatar_removed', user.id)).toMatchObject({ note: 'Not a photo of the person' });
+    });
+
+    it('400 without a file, 415 for a non-image, 404 for an unknown user or an admin', async () => {
+      const user = await makeUser(db());
+      expectError(await request(t.http).post(`${BASE}/${user.id}/avatar`).set(admin.headers), 400, 'VALIDATION_FAILED');
+      const text = await request(t.http).post(`${BASE}/${user.id}/avatar`).set(admin.headers).attach('file', Buffer.from('not an image'), 'x.png');
+      expect(text.status).toBe(415);
+      expectError(await request(t.http).post(`${BASE}/${MISSING}/avatar`).set(admin.headers).attach('file', await png(), 'a.png'), 404, 'USER_NOT_FOUND');
+      expectError(await request(t.http).delete(`${BASE}/${admin.user.id}/avatar`).set(admin.headers).send({}), 404, 'USER_NOT_FOUND');
     });
   });
 

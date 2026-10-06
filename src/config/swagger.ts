@@ -187,6 +187,8 @@ export function setupSwagger(app: INestApplication): void {
     filter: true,
     tagsSorter: undefined,
     docExpansion: 'none' as const,
+    // Links like /docs/mobile#/app-bookings/AppBookingsController_quote open that operation (used by the change notes).
+    deepLinking: true,
   };
   SwaggerModule.setup(DOCS_PATH, app, () => buildOpenApiDocument(app), {
     jsonDocumentUrl: `${DOCS_PATH}/openapi.json`,

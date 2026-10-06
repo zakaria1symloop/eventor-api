@@ -271,6 +271,19 @@ describe('Admin account & team (e2e)', () => {
       expectError(await request(t.http).delete(`/api/v1/admin/admins/${other.user.id}`).set(me.headers), 404, 'ADMIN_NOT_FOUND');
     });
 
+    it('lets a removed admin be invited again with the same email', async () => {
+      const me = await admin();
+      const other = await admin();
+      const email = other.user.email;
+      await request(t.http).delete(`/api/v1/admin/admins/${other.user.id}`).set(me.headers).expect(204);
+
+      const row = await t.dataSource.getRepository(User).findOne({ where: { id: other.user.id }, withDeleted: true });
+      expect(row?.email).toBe(`deleted-${other.user.id}@anonymised.eventor.invalid`);
+      const res = await request(t.http).post('/api/v1/admin/admins/invitations').set(me.headers).send({ fullName: 'Back again', email });
+      expect(res.status).toBe(201);
+      expect(res.body.data).toMatchObject({ email, status: 'invited' });
+    });
+
     it('409 CANNOT_REMOVE_SELF (Arabic too)', async () => {
       const me = await admin();
       const res = await request(t.http).delete(`/api/v1/admin/admins/${me.user.id}`).set(me.headers).set('Accept-Language', 'ar');

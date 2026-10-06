@@ -20,6 +20,7 @@ import { toOrder } from '../common/pagination/sort.js';
 import { runInTransaction, type AfterCommit } from '../database/transaction.js';
 import { FilesService } from '../files/files.service.js';
 import { User } from '../users/entities/user.entity.js';
+import { releasedContactFields } from '../users/users.policy.js';
 import { assertCanRemoveAdmin, emailChangeNeedsPassword } from './admins.policy.js';
 import {
   ADMIN_SORT_FIELDS,
@@ -346,6 +347,8 @@ export class AdminsService {
         targetId: target.id,
         remainingActiveAdmins: admins.filter((a) => a.id !== target.id && a.status === UserStatus.Active).length,
       });
+      // Free the email right away so the same person can be invited again later.
+      await users.update(target.id, releasedContactFields(target.id));
       await users.softDelete(target.id);
       const revoked = await this.sessions.revokeAllForUser(target.id, em);
       await this.audit.log(

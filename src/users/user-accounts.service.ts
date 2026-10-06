@@ -46,6 +46,7 @@ import {
   bookingsToCancel,
   computeBlockImpact,
   generateTemporaryPassword,
+  releasedContactFields,
   typedNameMatches,
   type BookingChoice,
 } from './users.policy.js';
@@ -301,6 +302,7 @@ export class UserAccountsService implements OnModuleInit {
     const cancelledBookings = await this.cancelPendingBookings(em, afterCommit, user, 'cancel', 'account_deleted', auth.id);
     const sessionsRevoked = await this.sessions.revokeAllForUser(user.id, em);
     await em.query('UPDATE conversation_participants SET can_write = 0 WHERE user_id = ?', [user.id]);
+    await em.getRepository(User).update(user.id, releasedContactFields(user.id));
     await em.getRepository(User).softDelete(user.id);
     const anonymiseAfter = new Date(Date.now() + ANONYMISE_AFTER_DAYS * 86_400_000);
     await this.audit.log(

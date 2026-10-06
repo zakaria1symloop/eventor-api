@@ -116,6 +116,16 @@ export function anonymisedFields(id: string): {
   };
 }
 
+/**
+ * Applied the moment an account is deleted: `email` and `phone` are unique across
+ * deleted rows too, so keeping them until the 30-day anonymisation would block a new
+ * sign-up or an admin invitation with the same address. The rest waits for the job.
+ */
+export function releasedContactFields(id: string): { email: string; phone: null } {
+  const { email, phone } = anonymisedFields(id);
+  return { email, phone };
+}
+
 /** A temporary password that satisfies the password policy (letters and digits, 14 characters). */
 export function generateTemporaryPassword(random: (max: number) => number): string {
   const letters = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';

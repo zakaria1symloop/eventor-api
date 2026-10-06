@@ -528,6 +528,24 @@ describe('Admin users (e2e)', () => {
       expect((await reload(client.id))!.anonymisedAt).not.toBeNull();
     });
 
+    it('frees the email and phone at once, so the person can be invited as an admin or sign up again', async () => {
+      const phone = e164(localPhone());
+      const client = await makeUser(db(), { phone });
+      await request(t.http).delete(`${BASE}/${client.id}`).set(admin.headers).send({ typedName: client.fullName }).expect(204);
+
+      // Released now, not after the 30-day anonymisation (which still clears the rest).
+      expect(await reload(client.id)).toMatchObject({ email: `deleted-${client.id}@anonymised.eventor.invalid`, phone: null, fullName: client.fullName });
+
+      const invited = await request(t.http).post('/api/v1/admin/admins/invitations').set(admin.headers).send({ fullName: 'Back as admin', email: client.email });
+      expect(invited.status).toBe(201);
+      await request(t.http).post(`/api/v1/admin/admins/invitations/${invited.body.data.invitationId}/revoke`).set(admin.headers).expect(204);
+
+      const again = await request(t.http)
+        .post('/api/v1/app/auth/register')
+        .send({ role: 'client', fullName: 'Signed up again', email: client.email, phone, password: 'Str0ng-Passw0rd!', language: 'en' });
+      expect(again.status).toBe(201);
+    });
+
     it('400 without typedName, 404', async () => {
       const user = await makeUser(db());
       expectError(await request(t.http).delete(`${BASE}/${user.id}`).set(admin.headers).send({}), 400, 'VALIDATION_FAILED');

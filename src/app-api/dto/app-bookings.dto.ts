@@ -224,7 +224,9 @@ export class AppQuoteResultDto {
     type: String,
     nullable: true,
     example: 'DATE_UNAVAILABLE',
-    description: 'Why the date is refused, when `available` is false: `DATE_UNAVAILABLE`, `MIN_NOTICE` or `PROVIDER_NOT_ACCEPTING`.',
+    description:
+      'Why the date is refused, when `available` is false: `DATE_UNAVAILABLE`, `MIN_NOTICE`, `PROVIDER_NOT_ACCEPTING`, ' +
+      '`OUTSIDE_SERVICE_PERIOD`, `SERVICE_TIMES_REQUIRED`, `OUTSIDE_SERVICE_HOURS` or `SLOT_UNAVAILABLE` (the same codes `POST /app/bookings` answers).',
   })
   unavailableReason: string | null;
 

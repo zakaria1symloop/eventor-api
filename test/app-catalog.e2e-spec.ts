@@ -554,6 +554,42 @@ describe('App catalog (e2e)', () => {
       expect(res.body.data.days.length).toBeGreaterThanOrEqual(28);
     });
 
+    it('gives the free hours of each day: weekly hours, period, partial blocks and full slots (issues 3 #10)', async () => {
+      const service = await visibleService({ maxEventsPerDay: 5, concurrentClients: 1 });
+      // A month two months ahead; its Fridays (weekday 5) are open 18:00–02:00, nothing else is.
+      const month = new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 7);
+      const fridays = Array.from({ length: 28 }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`).filter((d) => new Date(`${d}T00:00:00Z`).getUTCDay() === 5);
+      const [first, second, third] = fridays as [string, string, string];
+      await db().query("INSERT INTO service_hours (id, created_at, service_id, weekday, start_time, end_time) VALUES (UUID(), NOW(6), ?, 5, '18:00', '02:00')", [service.id]);
+      await db().query('UPDATE services SET available_until = ? WHERE id = ?', [second, service.id]);
+      await makeBooking(db(), { serviceId: service.id, providerId: service.providerId, eventDate: first, startTime: '20:00:00', endTime: '22:00:00', status: BookingStatus.Accepted } as never);
+      await db().query(
+        "INSERT INTO availability_blocks (id, created_at, updated_at, provider_id, date, start_time, end_time, kind) VALUES (UUID(), NOW(6), NOW(6), ?, ?, '23:00:00', '23:30:00', ?)",
+        [service.providerId, first, AvailabilityKind.Blocked],
+      );
+
+      const res = await request(t.http).get(`${BASE}/services/${service.id}/availability?month=${month}`);
+
+      const byDate = Object.fromEntries(res.body.data.days.map((d: { date: string }) => [d.date, d]));
+      // 18:00–02:00 minus the booking (20–22, one client at a time) and the block (23:00–23:30).
+      expect(byDate[first]).toMatchObject({
+        state: 'available',
+        freeRanges: [
+          { startTime: '18:00', endTime: '20:00' },
+          { startTime: '22:00', endTime: '23:00' },
+          { startTime: '23:30', endTime: '02:00' },
+        ],
+      });
+      expect(byDate[second]).toMatchObject({ state: 'available', freeRanges: [{ startTime: '18:00', endTime: '02:00' }] });
+      // After availableUntil, and on closed weekdays: blocked with no free hours.
+      if (third) expect(byDate[third]).toMatchObject({ state: 'blocked', freeRanges: [] });
+      const saturday = new Date(new Date(`${second}T00:00:00Z`).getTime() - 6 * 86_400_000).toISOString().slice(0, 10);
+      if (byDate[saturday]) expect(byDate[saturday]).toMatchObject({ state: 'blocked', freeRanges: [] });
+
+      const detail = await request(t.http).get(`${BASE}/services/${service.id}`);
+      expect(detail.body.data).toMatchObject({ hours: [{ weekday: 5, startTime: '18:00', endTime: '02:00' }], availableUntil: second, concurrentClients: 1 });
+    });
+
     it('blocks every day already past', async () => {
       const service = await visibleService();
       const lastMonth = new Date(Date.now() - 40 * 86_400_000).toISOString().slice(0, 7);

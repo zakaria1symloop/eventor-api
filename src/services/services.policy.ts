@@ -8,7 +8,7 @@ export type ServiceTab = (typeof SERVICE_TABS)[number];
 export const MAX_FEATURED_SERVICES = 12;
 
 /** Why a service is not visible in the app (empty = visible). */
-export const VISIBILITY_REASONS = ['deleted', 'not_published', 'provider_blocked', 'provider_not_verified', 'provider_deleted', 'no_open_wilaya'] as const;
+export const VISIBILITY_REASONS = ['deleted', 'not_published', 'provider_blocked', 'provider_not_verified', 'provider_deleted', 'no_open_wilaya', 'period_ended'] as const;
 export type VisibilityReason = (typeof VISIBILITY_REASONS)[number];
 
 export interface ServiceVisibilityInput {
@@ -17,6 +17,9 @@ export interface ServiceVisibilityInput {
   provider: { status: UserStatus; verificationStatus: VerificationStatus; deleted: boolean };
   /** Open wilayas among the service's wilayas. */
   openWilayas: number;
+  /** `availableUntil` and the Algiers today: the service leaves the catalog after its last event date. */
+  availableUntil?: string | null;
+  today?: string;
 }
 
 /**
@@ -32,6 +35,7 @@ export function serviceVisibilityReasons(input: ServiceVisibilityInput): Visibil
   if (input.provider.status === UserStatus.Blocked) reasons.push('provider_blocked');
   if (input.provider.verificationStatus !== VerificationStatus.Verified) reasons.push('provider_not_verified');
   if (input.openWilayas < 1) reasons.push('no_open_wilaya');
+  if (input.availableUntil && input.today && input.availableUntil < input.today) reasons.push('period_ended');
   return reasons;
 }
 
@@ -42,7 +46,9 @@ export function isServiceVisible(input: ServiceVisibilityInput): boolean {
 /** SQL twin of `isServiceVisible` for list rows (aliases `s` service, `u` provider). */
 export const SERVICE_VISIBLE_SQL =
   "(s.status = 'published' AND s.deleted_at IS NULL AND u.deleted_at IS NULL AND u.status = 'active' AND u.verification_status = 'verified' " +
-  'AND EXISTS (SELECT 1 FROM service_wilayas sw JOIN wilayas w ON w.code = sw.wilaya_code WHERE sw.service_id = s.id AND w.is_open = 1))';
+  'AND EXISTS (SELECT 1 FROM service_wilayas sw JOIN wilayas w ON w.code = sw.wilaya_code WHERE sw.service_id = s.id AND w.is_open = 1) ' +
+  // Africa/Algiers is UTC+1 all year (no DST): its today, without depending on the server time zone.
+  'AND (s.available_until IS NULL OR s.available_until >= DATE(UTC_TIMESTAMP() + INTERVAL 1 HOUR)))';
 
 export const PUBLISH_REQUIREMENTS = ['titleEn', 'titleAr', 'descriptionEn', 'descriptionAr', 'price', 'photos', 'category', 'wilayas'] as const;
 export type PublishRequirement = (typeof PUBLISH_REQUIREMENTS)[number];

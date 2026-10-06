@@ -24,7 +24,7 @@ import { PackHealthService } from '../packs/pack-health.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { ProviderProfile } from '../users/entities/provider-profile.entity.js';
 import { User } from '../users/entities/user.entity.js';
-import { iso } from '../users/users.service.js';
+import { algiersToday, iso } from '../users/users.service.js';
 import {
   SERVICE_SORT_FIELDS,
   type CreateServiceDto,
@@ -38,9 +38,11 @@ import {
   type UpdateServiceDto,
 } from './dto/services.dto.js';
 import { ServiceExtra } from './entities/service-extra.entity.js';
+import { ServiceHour } from './entities/service-hour.entity.js';
 import { ServiceWilaya } from './entities/service-wilaya.entity.js';
 import { Service } from './entities/service.entity.js';
 import { SERVICE_EVENTS, type ServiceEvent, type ServiceHiddenEvent } from './services.events.js';
+import { assertValidHours, type HourRange } from './scheduling.policy.js';
 import {
   canTransition,
   featureRefusal,
@@ -98,6 +100,9 @@ const UPDATABLE_FIELDS = [
   'priceType',
   'maxEventsPerDay',
   'maxGuests',
+  'concurrentClients',
+  'availableFrom',
+  'availableUntil',
 ] as const;
 
 /** Full-text on titles (words of 3+ letters, prefix), plus title / provider name / business name contains. */
@@ -329,6 +334,10 @@ export class ServicesService {
       facts: service.facts ?? [],
       maxEventsPerDay: service.maxEventsPerDay,
       maxGuests: service.maxGuests,
+      concurrentClients: service.concurrentClients,
+      availableFrom: service.availableFrom,
+      availableUntil: service.availableUntil,
+      hours: await this.hoursOf(em, id),
       featuredPosition: service.featuredPosition,
       favouritesCount: service.favouritesCount,
       extras: extras.map((e) => ({ id: e.id, nameEn: e.nameEn, nameAr: e.nameAr, price: e.price, position: e.position })),
@@ -353,6 +362,8 @@ export class ServicesService {
           deleted: !providerUser || providerUser.deletedAt !== null,
         },
         openWilayas: wilayaDetails.filter((w: { isOpen: boolean }) => w.isOpen).length,
+        availableUntil: service.availableUntil,
+        today: algiersToday(),
       }),
       publishMissing: servicePublishMissing({
         titleEn: service.titleEn,
@@ -443,6 +454,25 @@ export class ServicesService {
     await em.getRepository(ServiceExtra).save(extras.map((e, position) => em.getRepository(ServiceExtra).create({ serviceId, nameEn: e.nameEn, nameAr: e.nameAr, price: e.price, position })));
   }
 
+  /** The service's weekly hours as `HH:mm` ranges, by weekday then start. */
+  async hoursOf(em: EntityManager, serviceId: string): Promise<HourRange[]> {
+    const rows = await em.getRepository(ServiceHour).find({ where: { serviceId }, order: { weekday: 'ASC', startTime: 'ASC' } });
+    return rows.map((h) => ({ weekday: h.weekday, startTime: h.startTime.slice(0, 5), endTime: h.endTime.slice(0, 5) }));
+  }
+
+  private async replaceHours(em: EntityManager, serviceId: string, hours: HourRange[]): Promise<void> {
+    assertValidHours(hours);
+    await em.getRepository(ServiceHour).delete({ serviceId });
+    if (hours.length === 0) return;
+    await em.getRepository(ServiceHour).insert(hours.map((h) => ({ serviceId, weekday: h.weekday, startTime: h.startTime, endTime: h.endTime })));
+  }
+
+  private assertPeriod(from: string | null | undefined, until: string | null | undefined): void {
+    if (from && until && until < from) {
+      throw new AppException(400, 'VALIDATION_FAILED', [{ field: 'availableUntil', code: 'BEFORE_FROM', message: 'availableUntil must not be before availableFrom' }]);
+    }
+  }
+
   private async replaceWilayas(em: EntityManager, serviceId: string, codes: number[]): Promise<void> {
     await em.getRepository(ServiceWilaya).delete({ serviceId });
     if (codes.length === 0) return;
@@ -476,6 +506,7 @@ export class ServicesService {
       await this.assertCategory(em, dto.categoryId);
       const wilayaCodes = dto.wilayaCodes ?? [];
       await this.assertWilayas(em, wilayaCodes, wilayaCodes);
+      this.assertPeriod(dto.availableFrom, dto.availableUntil);
 
       const repository = em.getRepository(Service);
       const service = await repository.save(
@@ -493,11 +524,15 @@ export class ServicesService {
           priceType: dto.priceType,
           maxEventsPerDay: dto.maxEventsPerDay ?? 1,
           maxGuests: dto.maxGuests ?? null,
+          concurrentClients: dto.concurrentClients ?? 1,
+          availableFrom: dto.availableFrom ?? null,
+          availableUntil: dto.availableUntil ?? null,
           status: ServiceStatus.Draft,
         }),
       );
       await this.replaceWilayas(em, service.id, wilayaCodes);
       await this.replaceExtras(em, service.id, dto.extras ?? []);
+      await this.replaceHours(em, service.id, dto.hours ?? []);
       if (dto.status === ServiceStatus.Published) {
         await this.assertPublishable(em, service);
         await repository.update(service.id, { status: ServiceStatus.Published });
@@ -561,6 +596,15 @@ export class ServicesService {
           await this.assertWilayas(em, next, next.filter((c) => !current.includes(c)));
           await this.replaceWilayas(em, id, next);
           changes.wilayaCodes = { from: current, to: next };
+        }
+      }
+      this.assertPeriod(service.availableFrom, service.availableUntil);
+      if (dto.hours !== undefined) {
+        const current = await this.hoursOf(em, id);
+        const shape = (list: HourRange[]) => JSON.stringify([...list].map((h) => [h.weekday, h.startTime, h.endTime]).sort());
+        if (shape(current) !== shape(dto.hours)) {
+          await this.replaceHours(em, id, dto.hours);
+          changes.hours = { from: current, to: dto.hours };
         }
       }
       if (dto.extras !== undefined) {

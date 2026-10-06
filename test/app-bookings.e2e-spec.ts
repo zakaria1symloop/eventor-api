@@ -204,7 +204,8 @@ describe('App bookings (e2e)', () => {
     });
 
     it('refuses the same client booking the same service twice for overlapping hours (#80)', async () => {
-      const service = await bookableService({ maxEventsPerDay: 5 });
+      // Two clients may book the same hours of this one (issues 3 #7), so only the duplicate rule refuses.
+      const service = await bookableService({ maxEventsPerDay: 5, concurrentClients: 2 });
       const body = { serviceId: service.id, eventDate: '2027-07-11', startTime: '18:00', endTime: '23:00', wilayaCode: 16, eventType: EventType.Wedding };
       const first = await request(t.http).post(BASE).set(client.headers).send(body);
       expect(first.status).toBe(201);
@@ -220,6 +221,57 @@ describe('App bookings (e2e)', () => {
       expect((await request(t.http).post(BASE).set(otherClient.headers).send(body)).status).toBe(201);
       await request(t.http).post(`${BASE}/${first.body.data.id}/cancel`).set(client.headers).send({ reason: 'Changed plans' }).expect(200);
       expect((await request(t.http).post(BASE).set(client.headers).send(body)).status).toBe(201);
+    });
+
+    describe('service schedule (issues 3 #6, #7, #8)', () => {
+      // 2027-07-16 is a Friday (weekday 5), 2027-07-17 a Saturday.
+      const FRIDAY = '2027-07-16';
+      const book = (who: LoggedIn, body: Record<string, unknown>) =>
+        request(t.http).post(BASE).set(who.headers).send({ wilayaCode: 16, eventType: EventType.Wedding, ...body });
+
+      it('needs times inside the weekly hours, overnight included', async () => {
+        const service = await bookableService({ maxEventsPerDay: 5, concurrentClients: 5 });
+        await db().query("INSERT INTO service_hours (id, created_at, service_id, weekday, start_time, end_time) VALUES (UUID(), NOW(6), ?, 5, '20:00', '02:00')", [service.id]);
+
+        expectError(await book(client, { serviceId: service.id, eventDate: FRIDAY }), 422, 'SERVICE_TIMES_REQUIRED');
+        const outside = await book(client, { serviceId: service.id, eventDate: FRIDAY, startTime: '18:00', endTime: '22:00' });
+        expectError(outside, 422, 'OUTSIDE_SERVICE_HOURS');
+        expect(outside.body.details).toEqual({ weekday: 5, hours: [{ startTime: '20:00', endTime: '02:00' }] });
+        // Saturday has no hours: closed.
+        expectError(await book(client, { serviceId: service.id, eventDate: '2027-07-17', startTime: '20:00', endTime: '22:00' }), 422, 'OUTSIDE_SERVICE_HOURS');
+        expect((await book(client, { serviceId: service.id, eventDate: FRIDAY, startTime: '21:00', endTime: '01:30' })).status).toBe(201);
+
+        // The quote reports the same reasons instead of failing.
+        const quote = await request(t.http).post(`${BASE}/quote`).set(client.headers).send({ serviceId: service.id, eventDate: FRIDAY, startTime: '10:00', endTime: '12:00' });
+        expect(quote.body.data).toMatchObject({ available: false, unavailableReason: 'OUTSIDE_SERVICE_HOURS' });
+      });
+
+      it('lets "clients at the same time" book overlapping hours, then refuses SLOT_UNAVAILABLE', async () => {
+        const service = await bookableService({ maxEventsPerDay: 5, concurrentClients: 2 });
+        const third = await loginAs(t, UserRole.Client);
+        const slot = { serviceId: service.id, eventDate: '2027-07-18', startTime: '18:00', endTime: '22:00' };
+
+        expect((await book(client, slot)).status).toBe(201);
+        expect((await book(otherClient, { ...slot, startTime: '20:00', endTime: '23:00' })).status).toBe(201);
+        const full = await book(third, { ...slot, startTime: '21:00', endTime: '22:30' });
+        expectError(full, 409, 'SLOT_UNAVAILABLE');
+        expect(full.body.details).toMatchObject({ date: '2027-07-18' });
+        // Hours nobody has taken twice are still free; whole-day bookings only count against maxEventsPerDay.
+        expect((await book(third, { ...slot, startTime: '09:00', endTime: '12:00' })).status).toBe(201);
+        const fourth = await loginAs(t, UserRole.Client);
+        expect((await book(fourth, { serviceId: service.id, eventDate: '2027-07-18' })).status).toBe(201);
+      });
+
+      it('only takes event dates inside the period, and leaves the catalog after it', async () => {
+        const service = await bookableService({ availableFrom: '2027-07-01', availableUntil: '2027-07-31' });
+        const outside = await book(client, { serviceId: service.id, eventDate: '2027-08-01' });
+        expectError(outside, 422, 'OUTSIDE_SERVICE_PERIOD');
+        expect(outside.body.details).toEqual({ availableFrom: '2027-07-01', availableUntil: '2027-07-31' });
+        expect((await book(client, { serviceId: service.id, eventDate: '2027-07-20' })).status).toBe(201);
+
+        const ended = await bookableService({ availableUntil: '2020-01-01' });
+        expectError(await request(t.http).get(`/api/v1/app/services/${ended.id}`), 404, 'SERVICE_NOT_FOUND');
+      });
     });
 
     it('refuses an end without a start and an end equal to the start (#49)', async () => {

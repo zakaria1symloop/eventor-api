@@ -81,6 +81,10 @@ export class AdminBookingsController {
     'BOOKING_EXTRA_INVALID',
     'COMMUNE_WILAYA_MISMATCH',
     'DATE_UNAVAILABLE',
+    'OUTSIDE_SERVICE_PERIOD',
+    'SERVICE_TIMES_REQUIRED',
+    'OUTSIDE_SERVICE_HOURS',
+    'SLOT_UNAVAILABLE',
   )
   async create(@CurrentUser() auth: AuthUser, @Body() dto: CreateBookingDto) {
     return { data: await this.bookings.create(auth, dto) };
@@ -143,7 +147,7 @@ export class AdminBookingsController {
   })
   @ApiParam(ID)
   @ApiDataResponse(BookingDetailDto)
-  @ApiErrorResponses('VALIDATION_FAILED', 'BOOKING_NOT_FOUND', 'BOOKING_NOT_EDITABLE', 'BOOKING_DATE_PAST', 'DATE_UNAVAILABLE', 'RESCHEDULE_PENDING_EXISTS')
+  @ApiErrorResponses('VALIDATION_FAILED', 'BOOKING_NOT_FOUND', 'BOOKING_NOT_EDITABLE', 'BOOKING_DATE_PAST', 'DATE_UNAVAILABLE', 'OUTSIDE_SERVICE_PERIOD', 'SERVICE_TIMES_REQUIRED', 'OUTSIDE_SERVICE_HOURS', 'SLOT_UNAVAILABLE', 'RESCHEDULE_PENDING_EXISTS')
   async reschedule(@CurrentUser() auth: AuthUser, @Param('id') id: string, @Body() dto: RescheduleBookingDto) {
     return { data: await this.bookings.reschedule(auth, await this.bookings.resolveId(id), dto) };
   }

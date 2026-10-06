@@ -17,6 +17,7 @@ import { toArray, toBoolean, trim } from '../../common/dto/transforms.js';
 import { BookingStatus } from '../../common/enums/booking.enums.js';
 import { EventType, PriceType } from '../../common/enums/catalog.enums.js';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto.js';
+import { ServiceHourDto } from '../../services/dto/services.dto.js';
 import { DAY_STATES, type DayState } from '../app.policy.js';
 import { AppCategoryDto, AppCategoryRefDto, AppWilayaRefDto } from './app-me.dto.js';
 
@@ -184,6 +185,14 @@ export class AppServiceDetailDto extends AppServiceCardDto {
   @ApiProperty({ type: [AppPhotoDto] }) photos: AppPhotoDto[];
   @ApiProperty({ type: Number, nullable: true, example: 300 }) maxGuests: number | null;
   @ApiProperty({ example: 1, description: 'Events the provider takes per day for this service.' }) maxEventsPerDay: number;
+  @ApiProperty({ example: 1, description: 'Different clients who may book overlapping hours (timed bookings).' }) concurrentClients: number;
+  @ApiProperty({ type: String, format: 'date', nullable: true, example: '2027-03-01', description: 'First event date it can be booked for.' }) availableFrom: string | null;
+  @ApiProperty({ type: String, format: 'date', nullable: true, example: '2027-03-31', description: 'Last event date it can be booked for.' }) availableUntil: string | null;
+  @ApiProperty({
+    type: [ServiceHourDto],
+    description: 'Bookable hours per weekday (1 = Monday … 7 = Sunday). Empty = any time. When not empty, a booking needs times inside one range of its weekday.',
+  })
+  hours: ServiceHourDto[];
   @ApiProperty({ type: [AppRatingBucketDto] }) ratingBreakdown: AppRatingBucketDto[];
   @ApiProperty({ type: [AppReviewDto] }) recentReviews: AppReviewDto[];
   @ApiProperty({ type: [AppPackCardDto], description: '"Packs from this provider".' }) providerPacks: AppPackCardDto[];
@@ -236,9 +245,22 @@ export class AppCommunesQueryDto {
 
 // ── availability (screens 12 / 20) ──────────────────────────
 
+export class AppTimeRangeDto {
+  @ApiProperty({ example: '20:00' }) startTime: string;
+  @ApiProperty({ example: '00:00', description: 'At or before `startTime` = past midnight; 00:00 → 00:00 is the whole day.' }) endTime: string;
+}
+
 export class AppAvailabilityDayDto {
   @ApiProperty({ format: 'date', example: '2026-03-14' }) date: string;
   @ApiProperty({ enum: DAY_STATES, example: 'available' }) state: DayState;
+  @ApiProperty({
+    type: [AppTimeRangeDto],
+    nullable: true,
+    description:
+      'Service calendars only (null for packs): the hours still free that day — the service hours minus partial blocks and ' +
+      'moments already booked by `concurrentClients` clients. Empty unless `state` is `available`.',
+  })
+  freeRanges: AppTimeRangeDto[] | null;
 }
 
 export class AppAvailabilityDto {

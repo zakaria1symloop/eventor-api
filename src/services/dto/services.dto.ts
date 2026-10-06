@@ -218,6 +218,25 @@ export class ServiceFactDto {
   value_ar: string;
 }
 
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** One bookable range of a weekday (ISO 1 = Monday … 7 = Sunday). An end at or before the start runs past midnight. */
+export class ServiceHourDto {
+  @ApiProperty({ example: 5, minimum: 1, maximum: 7, description: '1 = Monday … 7 = Sunday.' })
+  @IsInt()
+  @Min(1)
+  @Max(7)
+  weekday: number;
+
+  @ApiProperty({ example: '20:00', description: '`HH:mm`, Africa/Algiers.' })
+  @Matches(TIME, { message: 'startTime must be HH:mm' })
+  startTime: string;
+
+  @ApiProperty({ example: '00:00', description: '`HH:mm`; at or before `startTime` = past midnight. Must differ from it.' })
+  @Matches(TIME, { message: 'endTime must be HH:mm' })
+  endTime: string;
+}
+
 export class ServiceExtraInputDto {
   @ApiProperty({ example: 'Drone footage', maxLength: 160 })
   @Transform(trim)
@@ -314,6 +333,10 @@ export class ServiceDetailDto extends ServiceRowDto {
   @ApiProperty({ type: [ServiceFactDto] }) facts: ServiceFactDto[];
   @ApiProperty({ example: 1 }) maxEventsPerDay: number;
   @ApiProperty({ type: Number, nullable: true, example: 400 }) maxGuests: number | null;
+  @ApiProperty({ example: 1, description: 'Different clients who may book overlapping hours.' }) concurrentClients: number;
+  @ApiProperty({ type: String, format: 'date', nullable: true, example: '2027-03-01', description: 'First event date it can be booked for.' }) availableFrom: string | null;
+  @ApiProperty({ type: String, format: 'date', nullable: true, example: '2027-03-31', description: 'Last event date; hidden from the catalog after it.' }) availableUntil: string | null;
+  @ApiProperty({ type: [ServiceHourDto], description: 'Bookable hours per weekday; empty = any time. When set, bookings need times inside them.' }) hours: ServiceHourDto[];
   @ApiProperty({ type: Number, nullable: true, example: 3 }) featuredPosition: number | null;
   @ApiProperty({ example: 57 }) favouritesCount: number;
   @ApiProperty({ type: [ServiceExtraDto] }) extras: ServiceExtraDto[];
@@ -418,6 +441,31 @@ export class UpdateServiceDto {
   @Min(1)
   @Max(100000)
   maxGuests?: number | null;
+
+  @ApiPropertyOptional({ example: 1, minimum: 1, maximum: 50, description: 'Different clients who may book overlapping hours (default 1). Whole-day bookings only count against `maxEventsPerDay`.' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  concurrentClients?: number;
+
+  @ApiPropertyOptional({ type: String, format: 'date', nullable: true, example: '2027-03-01', description: 'First event date it can be booked for; null = no limit.' })
+  @IsOptional()
+  @Matches(DATE, { message: 'availableFrom must be YYYY-MM-DD' })
+  availableFrom?: string | null;
+
+  @ApiPropertyOptional({ type: String, format: 'date', nullable: true, example: '2027-03-31', description: 'Last event date; the service leaves the catalog after it. Not before `availableFrom`.' })
+  @IsOptional()
+  @Matches(DATE, { message: 'availableUntil must be YYYY-MM-DD' })
+  availableUntil?: string | null;
+
+  @ApiPropertyOptional({ type: [ServiceHourDto], description: 'Replaces the set. Empty = bookable at any hour. Ranges of one weekday must not overlap.' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(28)
+  @ValidateNested({ each: true })
+  @Type(() => ServiceHourDto)
+  hours?: ServiceHourDto[];
 
   @ApiPropertyOptional({ type: [Number], example: [16, 9], description: 'Replaces the set; added wilayas must be open.' })
   @IsOptional()

@@ -526,6 +526,26 @@ export const ERROR_CODES = {
     en: 'The provider is not available on {date}.',
     ar: 'مقدم الخدمة غير متاح بتاريخ {date}.',
   },
+  SERVICE_TIMES_REQUIRED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'Choose a start and end time: this service is booked by the hour.',
+    ar: 'اختر وقت البداية والنهاية: هذه الخدمة تُحجز حسب الساعات.',
+  },
+  OUTSIDE_SERVICE_HOURS: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'This service is not available at these hours on that day.',
+    ar: 'هذه الخدمة غير متاحة في هذه الساعات في ذلك اليوم.',
+  },
+  OUTSIDE_SERVICE_PERIOD: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'This service can only be booked for events in its availability period.',
+    ar: 'لا يمكن حجز هذه الخدمة إلا لمناسبات ضمن فترة توفرها.',
+  },
+  SLOT_UNAVAILABLE: {
+    status: HttpStatus.CONFLICT,
+    en: 'These hours are already booked on {date}. Choose other times.',
+    ar: 'هذه الساعات محجوزة بالفعل بتاريخ {date}. اختر أوقاتًا أخرى.',
+  },
   BOOKING_DUPLICATE: {
     status: HttpStatus.CONFLICT,
     en: 'You already have booking {reference} for this on {date} at the same time.',

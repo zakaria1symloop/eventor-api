@@ -108,6 +108,16 @@ export class AppBookingsService {
     if (!profile || Number(profile.accepting_bookings) !== 1) unavailableReason = 'PROVIDER_NOT_ACCEPTING';
     else if (dto.eventDate < firstBookableDate) unavailableReason = 'MIN_NOTICE';
     else {
+      const obstacle = await this.bookings.scheduleObstacle(em, {
+        serviceId: dto.serviceId ?? null,
+        packId: dto.packId ?? null,
+        date: dto.eventDate,
+        startTime: dto.startTime ?? null,
+        endTime: dto.endTime ?? null,
+      });
+      if (obstacle) unavailableReason = obstacle.code;
+    }
+    if (unavailableReason === null) {
       const free = await this.bookings.isAvailable(em, {
         providerId,
         serviceId: dto.serviceId ?? null,

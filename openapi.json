@@ -2367,6 +2367,363 @@
         ]
       }
     },
+    "/api/v1/admin/me/avatar": {
+      "post": {
+        "description": "Account page and top bar. `max_photo_upload_mb`, type sniffed from the bytes, WebP variants built in the background, previous photo deleted. Returns my account.",
+        "operationId": "AdminMeController_uploadAvatar",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminMeDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VALIDATION_FAILED`: Some fields are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "value": {
+                      "statusCode": 400,
+                      "error": "Bad Request",
+                      "code": "VALIDATION_FAILED",
+                      "message": "Some fields are invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_SESSION_REVOKED`: Your session has ended. Please sign in again.\n\n`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FORBIDDEN_ROLE": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "FORBIDDEN_ROLE",
+                      "message": "Your account role cannot access this.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`FILE_TOO_LARGE`: The file is larger than {maxMb} MB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FILE_TOO_LARGE": {
+                    "value": {
+                      "statusCode": 413,
+                      "error": "Payload Too Large",
+                      "code": "FILE_TOO_LARGE",
+                      "message": "The file is larger than {maxMb} MB.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "`FILE_TYPE_NOT_ALLOWED`: This file type is not allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FILE_TYPE_NOT_ALLOWED": {
+                    "value": {
+                      "statusCode": 415,
+                      "error": "Unsupported Media Type",
+                      "code": "FILE_TYPE_NOT_ALLOWED",
+                      "message": "This file type is not allowed.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`RATE_LIMITED`: Too many requests. Please try again later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "RATE_LIMITED": {
+                    "value": {
+                      "statusCode": 429,
+                      "error": "Too Many Requests",
+                      "code": "RATE_LIMITED",
+                      "message": "Too many requests. Please try again later.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change my photo",
+        "tags": [
+          "admin-me"
+        ]
+      },
+      "delete": {
+        "description": "Back to initials. Returns my account.",
+        "operationId": "AdminMeController_removeAvatar",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminMeDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_SESSION_REVOKED`: Your session has ended. Please sign in again.\n\n`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FORBIDDEN_ROLE": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "FORBIDDEN_ROLE",
+                      "message": "Your account role cannot access this.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove my photo",
+        "tags": [
+          "admin-me"
+        ]
+      }
+    },
     "/api/v1/admin/me/password": {
       "post": {
         "description": "Signs out every other session. Used by SET-01.",
@@ -10393,6 +10750,463 @@
         ]
       }
     },
+    "/api/v1/admin/users/{id}/avatar": {
+      "post": {
+        "description": "Same rules as the app’s own upload: `max_photo_upload_mb`, type sniffed from the bytes, WebP variants built in the background, previous photo deleted. Audited as `user.avatar_replaced`. Returns the profile (user page).",
+        "operationId": "AdminUsersController_replaceAvatar",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UserDetailDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VALIDATION_FAILED`: Some fields are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "value": {
+                      "statusCode": 400,
+                      "error": "Bad Request",
+                      "code": "VALIDATION_FAILED",
+                      "message": "Some fields are invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_SESSION_REVOKED`: Your session has ended. Please sign in again.\n\n`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FORBIDDEN_ROLE": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "FORBIDDEN_ROLE",
+                      "message": "Your account role cannot access this.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`USER_NOT_FOUND`: The user was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "USER_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "USER_NOT_FOUND",
+                      "message": "The user was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`FILE_TOO_LARGE`: The file is larger than {maxMb} MB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FILE_TOO_LARGE": {
+                    "value": {
+                      "statusCode": 413,
+                      "error": "Payload Too Large",
+                      "code": "FILE_TOO_LARGE",
+                      "message": "The file is larger than {maxMb} MB.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "`FILE_TYPE_NOT_ALLOWED`: This file type is not allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FILE_TYPE_NOT_ALLOWED": {
+                    "value": {
+                      "statusCode": 415,
+                      "error": "Unsupported Media Type",
+                      "code": "FILE_TYPE_NOT_ALLOWED",
+                      "message": "This file type is not allowed.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`RATE_LIMITED`: Too many requests. Please try again later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "RATE_LIMITED": {
+                    "value": {
+                      "statusCode": 429,
+                      "error": "Too Many Requests",
+                      "code": "RATE_LIMITED",
+                      "message": "Too many requests. Please try again later.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Replace a user’s photo",
+        "tags": [
+          "admin-users"
+        ]
+      },
+      "delete": {
+        "description": "E.g. an inappropriate picture. The optional `note` goes to the activity log (`user.avatar_removed`). Returns the profile (user page).",
+        "operationId": "AdminUsersController_removeAvatar",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveAvatarDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UserDetailDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VALIDATION_FAILED`: Some fields are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "value": {
+                      "statusCode": 400,
+                      "error": "Bad Request",
+                      "code": "VALIDATION_FAILED",
+                      "message": "Some fields are invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_SESSION_REVOKED`: Your session has ended. Please sign in again.\n\n`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FORBIDDEN_ROLE": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "FORBIDDEN_ROLE",
+                      "message": "Your account role cannot access this.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`USER_NOT_FOUND`: The user was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "USER_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "USER_NOT_FOUND",
+                      "message": "The user was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove a user’s photo",
+        "tags": [
+          "admin-users"
+        ]
+      }
+    },
     "/api/v1/admin/users/{id}/unblock": {
       "post": {
         "description": "Services and packs become visible again, conversations writable; cancelled bookings stay cancelled. Returns the profile. Used by USR-13.",
@@ -12129,7 +12943,7 @@
             }
           },
           "409": {
-            "description": "`DATE_UNAVAILABLE`: The provider is not available on {date}.",
+            "description": "`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`SLOT_UNAVAILABLE`: These hours are already booked on {date}. Choose other times.",
             "content": {
               "application/json": {
                 "schema": {
@@ -12147,13 +12961,25 @@
                       "timestamp": "2026-09-15T10:00:00.000Z",
                       "requestId": "req_9f2a71c0"
                     }
+                  },
+                  "SLOT_UNAVAILABLE": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "SLOT_UNAVAILABLE",
+                      "message": "These hours are already booked on {date}. Choose other times.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
                   }
                 }
               }
             }
           },
           "422": {
-            "description": "`NOT_A_CLIENT`: Bookings can only be made for client accounts.<br>`SERVICE_UNAVAILABLE_FOR_BOOKING`: This service cannot be booked: it is not visible in the app.<br>`PACK_UNAVAILABLE`: This pack cannot be booked: it is not visible in the app.<br>`PROVIDER_NOT_ACCEPTING`: The provider is not accepting bookings.<br>`MIN_NOTICE`: The event date must be on or after {minDate}.<br>`BOOKING_EXTRA_INVALID`: Some extras do not belong to this service.<br>`COMMUNE_WILAYA_MISMATCH`: The commune is not in this wilaya.",
+            "description": "`NOT_A_CLIENT`: Bookings can only be made for client accounts.<br>`SERVICE_UNAVAILABLE_FOR_BOOKING`: This service cannot be booked: it is not visible in the app.<br>`PACK_UNAVAILABLE`: This pack cannot be booked: it is not visible in the app.<br>`PROVIDER_NOT_ACCEPTING`: The provider is not accepting bookings.<br>`MIN_NOTICE`: The event date must be on or after {minDate}.<br>`BOOKING_EXTRA_INVALID`: Some extras do not belong to this service.<br>`COMMUNE_WILAYA_MISMATCH`: The commune is not in this wilaya.<br>`OUTSIDE_SERVICE_PERIOD`: This service can only be booked for events in its availability period.<br>`SERVICE_TIMES_REQUIRED`: Choose a start and end time: this service is booked by the hour.<br>`OUTSIDE_SERVICE_HOURS`: This service is not available at these hours on that day.",
             "content": {
               "application/json": {
                 "schema": {
@@ -12238,6 +13064,42 @@
                       "error": "Unprocessable Entity",
                       "code": "COMMUNE_WILAYA_MISMATCH",
                       "message": "The commune is not in this wilaya.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "OUTSIDE_SERVICE_PERIOD": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "OUTSIDE_SERVICE_PERIOD",
+                      "message": "This service can only be booked for events in its availability period.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "SERVICE_TIMES_REQUIRED": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "SERVICE_TIMES_REQUIRED",
+                      "message": "Choose a start and end time: this service is booked by the hour.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "OUTSIDE_SERVICE_HOURS": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "OUTSIDE_SERVICE_HOURS",
+                      "message": "This service is not available at these hours on that day.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -13093,7 +13955,7 @@
             }
           },
           "409": {
-            "description": "`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`RESCHEDULE_PENDING_EXISTS`: A new date is already waiting for confirmation. Cancel it first.",
+            "description": "`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`SLOT_UNAVAILABLE`: These hours are already booked on {date}. Choose other times.<br>`RESCHEDULE_PENDING_EXISTS`: A new date is already waiting for confirmation. Cancel it first.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13124,6 +13986,18 @@
                       "requestId": "req_9f2a71c0"
                     }
                   },
+                  "SLOT_UNAVAILABLE": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "SLOT_UNAVAILABLE",
+                      "message": "These hours are already booked on {date}. Choose other times.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
                   "RESCHEDULE_PENDING_EXISTS": {
                     "value": {
                       "statusCode": 409,
@@ -13141,7 +14015,7 @@
             }
           },
           "422": {
-            "description": "`BOOKING_DATE_PAST`: The date is in the past.",
+            "description": "`BOOKING_DATE_PAST`: The date is in the past.<br>`OUTSIDE_SERVICE_PERIOD`: This service can only be booked for events in its availability period.<br>`SERVICE_TIMES_REQUIRED`: Choose a start and end time: this service is booked by the hour.<br>`OUTSIDE_SERVICE_HOURS`: This service is not available at these hours on that day.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13154,6 +14028,42 @@
                       "error": "Unprocessable Entity",
                       "code": "BOOKING_DATE_PAST",
                       "message": "The date is in the past.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "OUTSIDE_SERVICE_PERIOD": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "OUTSIDE_SERVICE_PERIOD",
+                      "message": "This service can only be booked for events in its availability period.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "SERVICE_TIMES_REQUIRED": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "SERVICE_TIMES_REQUIRED",
+                      "message": "Choose a start and end time: this service is booked by the hour.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "OUTSIDE_SERVICE_HOURS": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "OUTSIDE_SERVICE_HOURS",
+                      "message": "This service is not available at these hours on that day.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -45928,7 +46838,7 @@
             }
           },
           "409": {
-            "description": "`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`RESCHEDULE_PENDING_EXISTS`: A new date is already waiting for confirmation. Cancel it first.",
+            "description": "`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`SLOT_UNAVAILABLE`: These hours are already booked on {date}. Choose other times.<br>`RESCHEDULE_PENDING_EXISTS`: A new date is already waiting for confirmation. Cancel it first.",
             "content": {
               "application/json": {
                 "schema": {
@@ -45959,6 +46869,18 @@
                       "requestId": "req_9f2a71c0"
                     }
                   },
+                  "SLOT_UNAVAILABLE": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "SLOT_UNAVAILABLE",
+                      "message": "These hours are already booked on {date}. Choose other times.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
                   "RESCHEDULE_PENDING_EXISTS": {
                     "value": {
                       "statusCode": 409,
@@ -45976,7 +46898,7 @@
             }
           },
           "422": {
-            "description": "`BOOKING_DATE_PAST`: The date is in the past.",
+            "description": "`BOOKING_DATE_PAST`: The date is in the past.<br>`OUTSIDE_SERVICE_PERIOD`: This service can only be booked for events in its availability period.<br>`SERVICE_TIMES_REQUIRED`: Choose a start and end time: this service is booked by the hour.<br>`OUTSIDE_SERVICE_HOURS`: This service is not available at these hours on that day.",
             "content": {
               "application/json": {
                 "schema": {
@@ -45989,6 +46911,42 @@
                       "error": "Unprocessable Entity",
                       "code": "BOOKING_DATE_PAST",
                       "message": "The date is in the past.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "OUTSIDE_SERVICE_PERIOD": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "OUTSIDE_SERVICE_PERIOD",
+                      "message": "This service can only be booked for events in its availability period.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "SERVICE_TIMES_REQUIRED": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "SERVICE_TIMES_REQUIRED",
+                      "message": "Choose a start and end time: this service is booked by the hour.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "OUTSIDE_SERVICE_HOURS": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "OUTSIDE_SERVICE_HOURS",
+                      "message": "This service is not available at these hours on that day.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -46185,7 +47143,7 @@
             }
           },
           "409": {
-            "description": "`RESCHEDULE_NOT_PENDING`: This reschedule proposal is already {status}.<br>`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.",
+            "description": "`RESCHEDULE_NOT_PENDING`: This reschedule proposal is already {status}.<br>`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`SLOT_UNAVAILABLE`: These hours are already booked on {date}. Choose other times.",
             "content": {
               "application/json": {
                 "schema": {
@@ -46222,6 +47180,66 @@
                       "error": "Conflict",
                       "code": "DATE_UNAVAILABLE",
                       "message": "The provider is not available on {date}.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "SLOT_UNAVAILABLE": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "SLOT_UNAVAILABLE",
+                      "message": "These hours are already booked on {date}. Choose other times.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`OUTSIDE_SERVICE_PERIOD`: This service can only be booked for events in its availability period.<br>`SERVICE_TIMES_REQUIRED`: Choose a start and end time: this service is booked by the hour.<br>`OUTSIDE_SERVICE_HOURS`: This service is not available at these hours on that day.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "OUTSIDE_SERVICE_PERIOD": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "OUTSIDE_SERVICE_PERIOD",
+                      "message": "This service can only be booked for events in its availability period.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "SERVICE_TIMES_REQUIRED": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "SERVICE_TIMES_REQUIRED",
+                      "message": "Choose a start and end time: this service is booked by the hour.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "OUTSIDE_SERVICE_HOURS": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "OUTSIDE_SERVICE_HOURS",
+                      "message": "This service is not available at these hours on that day.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -49248,7 +50266,7 @@
             }
           },
           "409": {
-            "description": "`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`RESCHEDULE_PENDING_EXISTS`: A new date is already waiting for confirmation. Cancel it first.",
+            "description": "`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`SLOT_UNAVAILABLE`: These hours are already booked on {date}. Choose other times.<br>`RESCHEDULE_PENDING_EXISTS`: A new date is already waiting for confirmation. Cancel it first.",
             "content": {
               "application/json": {
                 "schema": {
@@ -49279,6 +50297,18 @@
                       "requestId": "req_9f2a71c0"
                     }
                   },
+                  "SLOT_UNAVAILABLE": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "SLOT_UNAVAILABLE",
+                      "message": "These hours are already booked on {date}. Choose other times.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
                   "RESCHEDULE_PENDING_EXISTS": {
                     "value": {
                       "statusCode": 409,
@@ -49296,7 +50326,7 @@
             }
           },
           "422": {
-            "description": "`BOOKING_DATE_PAST`: The date is in the past.",
+            "description": "`BOOKING_DATE_PAST`: The date is in the past.<br>`OUTSIDE_SERVICE_PERIOD`: This service can only be booked for events in its availability period.<br>`SERVICE_TIMES_REQUIRED`: Choose a start and end time: this service is booked by the hour.<br>`OUTSIDE_SERVICE_HOURS`: This service is not available at these hours on that day.",
             "content": {
               "application/json": {
                 "schema": {
@@ -49309,6 +50339,42 @@
                       "error": "Unprocessable Entity",
                       "code": "BOOKING_DATE_PAST",
                       "message": "The date is in the past.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "OUTSIDE_SERVICE_PERIOD": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "OUTSIDE_SERVICE_PERIOD",
+                      "message": "This service can only be booked for events in its availability period.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "SERVICE_TIMES_REQUIRED": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "SERVICE_TIMES_REQUIRED",
+                      "message": "Choose a start and end time: this service is booked by the hour.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "OUTSIDE_SERVICE_HOURS": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "OUTSIDE_SERVICE_HOURS",
+                      "message": "This service is not available at these hours on that day.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -49505,7 +50571,7 @@
             }
           },
           "409": {
-            "description": "`RESCHEDULE_NOT_PENDING`: This reschedule proposal is already {status}.<br>`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.",
+            "description": "`RESCHEDULE_NOT_PENDING`: This reschedule proposal is already {status}.<br>`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`SLOT_UNAVAILABLE`: These hours are already booked on {date}. Choose other times.",
             "content": {
               "application/json": {
                 "schema": {
@@ -49547,25 +50613,61 @@
                       "timestamp": "2026-09-15T10:00:00.000Z",
                       "requestId": "req_9f2a71c0"
                     }
+                  },
+                  "SLOT_UNAVAILABLE": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "SLOT_UNAVAILABLE",
+                      "message": "These hours are already booked on {date}. Choose other times.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
                   }
                 }
               }
             }
           },
           "422": {
-            "description": "`NOT_A_PROVIDER`: This action is only available for provider accounts.",
+            "description": "`OUTSIDE_SERVICE_PERIOD`: This service can only be booked for events in its availability period.<br>`SERVICE_TIMES_REQUIRED`: Choose a start and end time: this service is booked by the hour.<br>`OUTSIDE_SERVICE_HOURS`: This service is not available at these hours on that day.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponseDto"
                 },
                 "examples": {
-                  "NOT_A_PROVIDER": {
+                  "OUTSIDE_SERVICE_PERIOD": {
                     "value": {
                       "statusCode": 422,
                       "error": "Unprocessable Entity",
-                      "code": "NOT_A_PROVIDER",
-                      "message": "This action is only available for provider accounts.",
+                      "code": "OUTSIDE_SERVICE_PERIOD",
+                      "message": "This service can only be booked for events in its availability period.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "SERVICE_TIMES_REQUIRED": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "SERVICE_TIMES_REQUIRED",
+                      "message": "Choose a start and end time: this service is booked by the hour.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "OUTSIDE_SERVICE_HOURS": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "OUTSIDE_SERVICE_HOURS",
+                      "message": "This service is not available at these hours on that day.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -60909,6 +62011,10 @@
               "BOOKING_INVALID_TRANSITION",
               "BOOKING_NOT_EDITABLE",
               "DATE_UNAVAILABLE",
+              "SERVICE_TIMES_REQUIRED",
+              "OUTSIDE_SERVICE_HOURS",
+              "OUTSIDE_SERVICE_PERIOD",
+              "SLOT_UNAVAILABLE",
               "BOOKING_DUPLICATE",
               "SERVICE_UNAVAILABLE_FOR_BOOKING",
               "PACK_UNAVAILABLE",
@@ -64491,6 +65597,17 @@
           "reason",
           "bookings"
         ]
+      },
+      "RemoveAvatarDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "object",
+            "example": "Photo did not show the person.",
+            "maxLength": 300,
+            "description": "Kept in the activity log."
+          }
+        }
       },
       "PasswordResetResultDto": {
         "type": "object",
@@ -68814,6 +69931,33 @@
           "value_ar"
         ]
       },
+      "ServiceHourDto": {
+        "type": "object",
+        "properties": {
+          "weekday": {
+            "type": "number",
+            "example": 5,
+            "minimum": 1,
+            "maximum": 7,
+            "description": "1 = Monday … 7 = Sunday."
+          },
+          "startTime": {
+            "type": "string",
+            "example": "20:00",
+            "description": "`HH:mm`, Africa/Algiers."
+          },
+          "endTime": {
+            "type": "string",
+            "example": "00:00",
+            "description": "`HH:mm`; at or before `startTime` = past midnight. Must differ from it."
+          }
+        },
+        "required": [
+          "weekday",
+          "startTime",
+          "endTime"
+        ]
+      },
       "ServiceExtraDto": {
         "type": "object",
         "properties": {
@@ -69262,6 +70406,32 @@
             "nullable": true,
             "example": 400
           },
+          "concurrentClients": {
+            "type": "number",
+            "example": 1,
+            "description": "Different clients who may book overlapping hours."
+          },
+          "availableFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2027-03-01",
+            "description": "First event date it can be booked for."
+          },
+          "availableUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2027-03-31",
+            "description": "Last event date; hidden from the catalog after it."
+          },
+          "hours": {
+            "description": "Bookable hours per weekday; empty = any time. When set, bookings need times inside them.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceHourDto"
+            }
+          },
           "featuredPosition": {
             "type": "number",
             "nullable": true,
@@ -69309,7 +70479,8 @@
                 "provider_blocked",
                 "provider_not_verified",
                 "provider_deleted",
-                "no_open_wilaya"
+                "no_open_wilaya",
+                "period_ended"
               ]
             }
           },
@@ -69362,6 +70533,10 @@
           "facts",
           "maxEventsPerDay",
           "maxGuests",
+          "concurrentClients",
+          "availableFrom",
+          "availableUntil",
+          "hours",
           "featuredPosition",
           "favouritesCount",
           "extras",
@@ -69449,6 +70624,34 @@
             "nullable": true,
             "example": 400,
             "minimum": 1
+          },
+          "concurrentClients": {
+            "type": "number",
+            "example": 1,
+            "minimum": 1,
+            "maximum": 50,
+            "description": "Different clients who may book overlapping hours (default 1). Whole-day bookings only count against `maxEventsPerDay`."
+          },
+          "availableFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2027-03-01",
+            "description": "First event date it can be booked for; null = no limit."
+          },
+          "availableUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2027-03-31",
+            "description": "Last event date; the service leaves the catalog after it. Not before `availableFrom`."
+          },
+          "hours": {
+            "description": "Replaces the set. Empty = bookable at any hour. Ranges of one weekday must not overlap.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceHourDto"
+            }
           },
           "wilayaCodes": {
             "example": [
@@ -69593,6 +70796,34 @@
             "nullable": true,
             "example": 400,
             "minimum": 1
+          },
+          "concurrentClients": {
+            "type": "number",
+            "example": 1,
+            "minimum": 1,
+            "maximum": 50,
+            "description": "Different clients who may book overlapping hours (default 1). Whole-day bookings only count against `maxEventsPerDay`."
+          },
+          "availableFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2027-03-01",
+            "description": "First event date it can be booked for; null = no limit."
+          },
+          "availableUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2027-03-31",
+            "description": "Last event date; the service leaves the catalog after it. Not before `availableFrom`."
+          },
+          "hours": {
+            "description": "Replaces the set. Empty = bookable at any hour. Ranges of one weekday must not overlap.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceHourDto"
+            }
           },
           "wilayaCodes": {
             "example": [
@@ -76904,6 +78135,32 @@
             "example": 1,
             "description": "Events the provider takes per day for this service."
           },
+          "concurrentClients": {
+            "type": "number",
+            "example": 1,
+            "description": "Different clients who may book overlapping hours (timed bookings)."
+          },
+          "availableFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2027-03-01",
+            "description": "First event date it can be booked for."
+          },
+          "availableUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2027-03-31",
+            "description": "Last event date it can be booked for."
+          },
+          "hours": {
+            "description": "Bookable hours per weekday (1 = Monday … 7 = Sunday). Empty = any time. When not empty, a booking needs times inside one range of its weekday.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceHourDto"
+            }
+          },
           "ratingBreakdown": {
             "type": "array",
             "items": {
@@ -76956,10 +78213,32 @@
           "photos",
           "maxGuests",
           "maxEventsPerDay",
+          "concurrentClients",
+          "availableFrom",
+          "availableUntil",
+          "hours",
           "ratingBreakdown",
           "recentReviews",
           "providerPacks",
           "updatedAt"
+        ]
+      },
+      "AppTimeRangeDto": {
+        "type": "object",
+        "properties": {
+          "startTime": {
+            "type": "string",
+            "example": "20:00"
+          },
+          "endTime": {
+            "type": "string",
+            "example": "00:00",
+            "description": "At or before `startTime` = past midnight; 00:00 → 00:00 is the whole day."
+          }
+        },
+        "required": [
+          "startTime",
+          "endTime"
         ]
       },
       "AppAvailabilityDayDto": {
@@ -76978,11 +78257,20 @@
               "blocked"
             ],
             "example": "available"
+          },
+          "freeRanges": {
+            "nullable": true,
+            "description": "Service calendars only (null for packs): the hours still free that day — the service hours minus partial blocks and moments already booked by `concurrentClients` clients. Empty unless `state` is `available`.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppTimeRangeDto"
+            }
           }
         },
         "required": [
           "date",
-          "state"
+          "state",
+          "freeRanges"
         ]
       },
       "AppAvailabilityDto": {
@@ -77787,7 +79075,7 @@
             "type": "string",
             "nullable": true,
             "example": "DATE_UNAVAILABLE",
-            "description": "Why the date is refused, when `available` is false: `DATE_UNAVAILABLE`, `MIN_NOTICE` or `PROVIDER_NOT_ACCEPTING`."
+            "description": "Why the date is refused, when `available` is false: `DATE_UNAVAILABLE`, `MIN_NOTICE`, `PROVIDER_NOT_ACCEPTING`, `OUTSIDE_SERVICE_PERIOD`, `SERVICE_TIMES_REQUIRED`, `OUTSIDE_SERVICE_HOURS` or `SLOT_UNAVAILABLE` (the same codes `POST /app/bookings` answers)."
           },
           "firstBookableDate": {
             "type": "string",
@@ -79144,6 +80432,34 @@
             "example": 400,
             "minimum": 1
           },
+          "concurrentClients": {
+            "type": "number",
+            "example": 1,
+            "minimum": 1,
+            "maximum": 50,
+            "description": "Different clients who may book overlapping hours (default 1). Whole-day bookings only count against `maxEventsPerDay`."
+          },
+          "availableFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2027-03-01",
+            "description": "First event date it can be booked for; null = no limit."
+          },
+          "availableUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2027-03-31",
+            "description": "Last event date; the service leaves the catalog after it. Not before `availableFrom`."
+          },
+          "hours": {
+            "description": "Replaces the set. Empty = bookable at any hour. Ranges of one weekday must not overlap.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceHourDto"
+            }
+          },
           "wilayaCodes": {
             "example": [
               16,
@@ -79269,6 +80585,34 @@
             "nullable": true,
             "example": 400,
             "minimum": 1
+          },
+          "concurrentClients": {
+            "type": "number",
+            "example": 1,
+            "minimum": 1,
+            "maximum": 50,
+            "description": "Different clients who may book overlapping hours (default 1). Whole-day bookings only count against `maxEventsPerDay`."
+          },
+          "availableFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2027-03-01",
+            "description": "First event date it can be booked for; null = no limit."
+          },
+          "availableUntil": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2027-03-31",
+            "description": "Last event date; the service leaves the catalog after it. Not before `availableFrom`."
+          },
+          "hours": {
+            "description": "Replaces the set. Empty = bookable at any hour. Ranges of one weekday must not overlap.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceHourDto"
+            }
           },
           "wilayaCodes": {
             "example": [

@@ -350,6 +350,37 @@ describe('Admin services & availability (e2e)', () => {
   });
 
   describe('PATCH /admin/services/:id', () => {
+    it('saves weekly hours, clients at the same time and the period, and validates them (issues 3 #6–#8)', async () => {
+      const service = await publishable({ status: ServiceStatus.Draft } as never);
+      const hours = [
+        { weekday: 5, startTime: '20:00', endTime: '00:00' },
+        { weekday: 6, startTime: '10:00', endTime: '13:00' },
+        { weekday: 6, startTime: '18:00', endTime: '02:00' },
+      ];
+      const res = await request(t.http)
+        .patch(`${BASE}/${service.id}`)
+        .set(admin.headers)
+        .send({ hours, concurrentClients: 3, availableFrom: '2027-03-01', availableUntil: '2027-03-31' })
+        .expect(200);
+      expect(res.body.data).toMatchObject({ hours, concurrentClients: 3, availableFrom: '2027-03-01', availableUntil: '2027-03-31' });
+      expect((await audited('service.updated', service.id))?.changes).toMatchObject({ concurrentClients: { from: 1, to: 3 }, hours: { from: [], to: hours } });
+
+      const overlap = await request(t.http)
+        .patch(`${BASE}/${service.id}`)
+        .set(admin.headers)
+        .send({ hours: [{ weekday: 1, startTime: '10:00', endTime: '14:00' }, { weekday: 1, startTime: '13:00', endTime: '16:00' }] });
+      expectError(overlap, 400, 'VALIDATION_FAILED');
+      expect(overlap.body.details[0]).toMatchObject({ code: 'OVERLAP' });
+      expectError(await request(t.http).patch(`${BASE}/${service.id}`).set(admin.headers).send({ hours: [{ weekday: 8, startTime: '10:00', endTime: '11:00' }] }), 400, 'VALIDATION_FAILED');
+      const backwards = await request(t.http).patch(`${BASE}/${service.id}`).set(admin.headers).send({ availableUntil: '2027-02-01' });
+      expectError(backwards, 400, 'VALIDATION_FAILED');
+      expect(backwards.body.details[0]).toMatchObject({ field: 'availableUntil', code: 'BEFORE_FROM' });
+
+      // An empty set and nulls clear them.
+      const cleared = await request(t.http).patch(`${BASE}/${service.id}`).set(admin.headers).send({ hours: [], availableFrom: null, availableUntil: null }).expect(200);
+      expect(cleared.body.data).toMatchObject({ hours: [], availableFrom: null, availableUntil: null, concurrentClients: 3 });
+    });
+
     it('updates fields, replaces extras and wilayas, and audits the diff', async () => {
       const service = await publishable({ status: ServiceStatus.Draft } as never);
       await db().getRepository(ServiceExtra).save({ serviceId: service.id, nameEn: 'Old', nameAr: 'قديم', price: '1000.00', position: 0 });

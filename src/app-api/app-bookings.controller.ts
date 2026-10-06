@@ -160,7 +160,7 @@ export class AppBookingsController {
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiDataResponse(AppBookingDetailDto)
-  @ApiErrorResponses('VALIDATION_FAILED', 'BOOKING_NOT_FOUND', 'NOT_OWNER', 'BOOKING_NOT_EDITABLE', 'BOOKING_DATE_PAST', 'DATE_UNAVAILABLE', 'RESCHEDULE_PENDING_EXISTS')
+  @ApiErrorResponses('VALIDATION_FAILED', 'BOOKING_NOT_FOUND', 'NOT_OWNER', 'BOOKING_NOT_EDITABLE', 'BOOKING_DATE_PAST', 'DATE_UNAVAILABLE', 'OUTSIDE_SERVICE_PERIOD', 'SERVICE_TIMES_REQUIRED', 'OUTSIDE_SERVICE_HOURS', 'SLOT_UNAVAILABLE', 'RESCHEDULE_PENDING_EXISTS')
   async reschedule(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('BOOKING_NOT_FOUND')) id: string, @Body() dto: AppRescheduleDto, @ReqLang() lang: Lang) {
     return { data: await this.bookings.reschedule(auth, id, 'client', dto, lang) };
   }
@@ -174,7 +174,7 @@ export class AppBookingsController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiParam({ name: 'rid', format: 'uuid' })
   @ApiDataResponse(AppBookingDetailDto)
-  @ApiErrorResponses('BOOKING_NOT_FOUND', 'NOT_OWNER', 'RESCHEDULE_NOT_FOUND', 'RESCHEDULE_NOT_PENDING', 'BOOKING_NOT_EDITABLE', 'DATE_UNAVAILABLE')
+  @ApiErrorResponses('BOOKING_NOT_FOUND', 'NOT_OWNER', 'RESCHEDULE_NOT_FOUND', 'RESCHEDULE_NOT_PENDING', 'BOOKING_NOT_EDITABLE', 'DATE_UNAVAILABLE', 'OUTSIDE_SERVICE_PERIOD', 'SERVICE_TIMES_REQUIRED', 'OUTSIDE_SERVICE_HOURS', 'SLOT_UNAVAILABLE')
   async acceptReschedule(
     @CurrentUser() auth: AuthUser,
     @Param('id', uuidParam('BOOKING_NOT_FOUND')) id: string,

@@ -45,6 +45,7 @@ import { Review } from '../reviews/entities/review.entity.js';
 import { AvailabilityBlock } from '../services/entities/availability-block.entity.js';
 import { Favourite } from '../services/entities/favourite.entity.js';
 import { ServiceExtra } from '../services/entities/service-extra.entity.js';
+import { ServiceHour } from '../services/entities/service-hour.entity.js';
 import { ServicePhoto } from '../services/entities/service-photo.entity.js';
 import { ServiceWilaya } from '../services/entities/service-wilaya.entity.js';
 import { Service } from '../services/entities/service.entity.js';
@@ -88,6 +89,7 @@ export const entities: NonNullable<DataSourceOptions['entities']> = [
   Service,
   ServiceWilaya,
   ServiceExtra,
+  ServiceHour,
   ServicePhoto,
   AvailabilityBlock,
   // 5. packs

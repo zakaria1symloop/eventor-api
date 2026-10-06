@@ -36,6 +36,7 @@ import {
 import { PACK_VISIBLE_SQL } from '../packs/packs.policy.js';
 import { SERVICE_VISIBLE_SQL } from '../services/services.policy.js';
 import { SequencesService } from '../sequences/sequences.service.js';
+import { fitsHours, inPeriod, overlapping, weekdayOf, type HourRange } from '../services/scheduling.policy.js';
 import { SettingsService } from '../settings/settings.service.js';
 import {
   BOOKING_EVENTS,
@@ -799,6 +800,68 @@ export class BookingsService {
     if (clash) throw AppException.of('BOOKING_DUPLICATE', { reference: clash.reference, date: dto.eventDate });
   }
 
+  /**
+   * The service's own schedule (issues 3 #6–#8): event date inside its period,
+   * times inside its weekly hours (required when it has hours), and fewer than
+   * `concurrent_clients` timed bookings overlapping. A pack checks each item.
+   * Returns the first obstacle, or null; `assertSchedule` throws it.
+   */
+  async scheduleObstacle(
+    em: EntityManager,
+    input: { serviceId: string | null; packId: string | null; date: string; startTime: string | null; endTime: string | null; excludeBookingId?: string },
+  ): Promise<{ code: 'OUTSIDE_SERVICE_PERIOD' | 'SERVICE_TIMES_REQUIRED' | 'OUTSIDE_SERVICE_HOURS' | 'SLOT_UNAVAILABLE'; details: Record<string, unknown> } | null> {
+    const services: { id: string; concurrent_clients: number; available_from: string | Date | null; available_until: string | Date | null }[] = input.serviceId
+      ? await em.query('SELECT id, concurrent_clients, available_from, available_until FROM services WHERE id = ?', [input.serviceId])
+      : await em.query(
+          'SELECT s.id, s.concurrent_clients, s.available_from, s.available_until FROM pack_items pi JOIN services s ON s.id = pi.service_id WHERE pi.pack_id = ?',
+          [input.packId],
+        );
+    if (services.length === 0) return null;
+    const ids = services.map((s) => s.id);
+    const hourRows: { service_id: string; weekday: number; start_time: string; end_time: string }[] = await em.query(
+      'SELECT service_id, weekday, start_time, end_time FROM service_hours WHERE service_id IN (?)',
+      [ids],
+    );
+    const booked = timeSpan(input.startTime, input.endTime);
+
+    for (const service of services) {
+      const from = service.available_from ? dateOnly(service.available_from) : null;
+      const until = service.available_until ? dateOnly(service.available_until) : null;
+      if (!inPeriod(input.date, from, until)) return { code: 'OUTSIDE_SERVICE_PERIOD', details: { availableFrom: from, availableUntil: until } };
+
+      const hours: HourRange[] = hourRows
+        .filter((h) => h.service_id === service.id)
+        .map((h) => ({ weekday: Number(h.weekday), startTime: hhmm(h.start_time)!, endTime: hhmm(h.end_time)! }));
+      if (hours.length > 0 && !booked) return { code: 'SERVICE_TIMES_REQUIRED', details: { weekday: weekdayOf(input.date) } };
+      if (!fitsHours(hours, input.date, booked)) {
+        const today = hours.filter((h) => h.weekday === weekdayOf(input.date)).map(({ startTime, endTime }) => ({ startTime, endTime }));
+        return { code: 'OUTSIDE_SERVICE_HOURS', details: { weekday: weekdayOf(input.date), hours: today } };
+      }
+
+      if (booked) {
+        const others: { start_time: string | null; end_time: string | null }[] = await em.query(
+          `SELECT b.start_time, b.end_time FROM bookings b
+            WHERE b.event_date = ? AND b.status IN ('pending', 'accepted') AND b.deleted_at IS NULL AND b.id <> ?
+              AND (b.service_id = ? OR b.pack_id IN (SELECT pack_id FROM pack_items WHERE service_id = ?))`,
+          [input.date, input.excludeBookingId ?? '', service.id, service.id],
+        );
+        const taken = overlapping(
+          booked,
+          others.map((o) => timeSpan(hhmm(o.start_time), hhmm(o.end_time))),
+        );
+        if (taken >= Math.max(1, Number(service.concurrent_clients))) {
+          return { code: 'SLOT_UNAVAILABLE', details: { date: input.date, startTime: input.startTime, endTime: input.endTime } };
+        }
+      }
+    }
+    return null;
+  }
+
+  private async assertSchedule(em: EntityManager, input: Parameters<BookingsService['scheduleObstacle']>[1]): Promise<void> {
+    const obstacle = await this.scheduleObstacle(em, input);
+    if (obstacle) throw AppException.of(obstacle.code, obstacle.details);
+  }
+
   private async assertAvailable(
     em: EntityManager,
     input: Parameters<BookingsService['isAvailable']>[1],
@@ -966,6 +1029,13 @@ export class BookingsService {
     if ((options.source ?? BookingSource.Dashboard) !== BookingSource.Dashboard) {
       await this.assertNotDuplicate(em, dto);
     }
+    await this.assertSchedule(em, {
+      serviceId: dto.serviceId ?? null,
+      packId: dto.packId ?? null,
+      date: dto.eventDate,
+      startTime: dto.startTime ?? null,
+      endTime: dto.endTime ?? null,
+    });
 
     const computed = computeLines(lines);
     const totals = computeTotals(computed);
@@ -1457,6 +1527,14 @@ export class BookingsService {
           endTime: newEnd,
           excludeBookingId: booking.id,
         });
+        await this.assertSchedule(em, {
+          serviceId: booking.serviceId,
+          packId: booking.packId,
+          date: dto.date,
+          startTime: newStart,
+          endTime: newEnd,
+          excludeBookingId: booking.id,
+        });
       }
       const apply = booking.status === BookingStatus.Pending || force;
       const now = new Date();
@@ -1604,6 +1682,14 @@ export class BookingsService {
       if (action === 'accept') {
         await this.assertAvailable(em, {
           providerId: booking.providerId,
+          serviceId: booking.serviceId,
+          packId: booking.packId,
+          date: newDate,
+          startTime: newStart,
+          endTime: newEnd,
+          excludeBookingId: booking.id,
+        });
+        await this.assertSchedule(em, {
           serviceId: booking.serviceId,
           packId: booking.packId,
           date: newDate,
@@ -1858,10 +1944,19 @@ export class BookingsService {
         update[key] = value;
       };
       set('eventType', dto.eventType as Booking['eventType']);
-      assertEventTimes(
-        dto.startTime === undefined ? hhmm(booking.startTime) : dto.startTime,
-        dto.endTime === undefined ? hhmm(booking.endTime) : dto.endTime,
-      );
+      const nextStart = dto.startTime === undefined ? hhmm(booking.startTime) : dto.startTime;
+      const nextEnd = dto.endTime === undefined ? hhmm(booking.endTime) : dto.endTime;
+      assertEventTimes(nextStart, nextEnd);
+      if (dto.startTime !== undefined || dto.endTime !== undefined) {
+        await this.assertSchedule(em, {
+          serviceId: booking.serviceId,
+          packId: booking.packId,
+          date: dateOnly(booking.eventDate),
+          startTime: nextStart ?? null,
+          endTime: nextEnd ?? null,
+          excludeBookingId: booking.id,
+        });
+      }
       if (dto.startTime !== undefined)
         set('startTime', toTime(dto.startTime), booking.startTime);
       if (dto.endTime !== undefined)

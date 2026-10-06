@@ -67,6 +67,17 @@ export class Service extends AbstractEntity {
   @Column({ type: 'int', nullable: true })
   maxGuests: number | null;
 
+  /** Different clients who may book overlapping hours (timed bookings only; `maxEventsPerDay` still caps the day). */
+  @Column({ type: 'tinyint', unsigned: true, default: 1 })
+  concurrentClients: number;
+
+  /** Event dates the service can be booked for (inclusive); null = no limit. Hidden from the catalog after `availableUntil`. */
+  @Column({ type: 'date', nullable: true })
+  availableFrom: string | null;
+
+  @Column({ type: 'date', nullable: true })
+  availableUntil: string | null;
+
   @Column({ type: 'enum', enum: ServiceStatus, default: ServiceStatus.Draft })
   status: ServiceStatus;
 

@@ -180,10 +180,12 @@ export class Env {
   @IsString()
   MAIL_FROM = 'Eventor <no-reply@eventor.dz>';
 
-  // ── Push (FCM, stub for now) ──────────────────────────────
+  // ── Push (FCM HTTP v1; only logged while FCM_CREDENTIALS_PATH is empty) ──
+  /** Optional: defaults to the key file's `project_id`. */
   @IsString()
   FCM_PROJECT_ID = '';
 
+  /** Absolute path of the Firebase service-account key (JSON). */
   @IsString()
   FCM_CREDENTIALS_PATH = '';
 

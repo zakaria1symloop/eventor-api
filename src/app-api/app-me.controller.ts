@@ -22,7 +22,7 @@ import { Roles } from '../auth/decorators/roles.decorator.js';
 import { uuidParam } from '../common/dto/transforms.js';
 import { AppException } from '../common/errors/app.exception.js';
 import { UserRole } from '../common/enums/user.enums.js';
-import { UPLOAD_THROTTLE } from '../common/http/throttles.js';
+import { PUSH_TEST_THROTTLE, UPLOAD_THROTTLE } from '../common/http/throttles.js';
 import { uploadLimits } from '../common/http/upload-limits.js';
 import { ReqLang } from '../common/i18n/lang.decorator.js';
 import type { Lang } from '../common/i18n/language.js';
@@ -44,6 +44,7 @@ import {
   AppNotificationPreferencesDto,
   AppNotificationsQueryDto,
   AppSessionRowDto,
+  AppTestPushDto,
   CreateBudgetItemDto,
   CreateFavouriteDto,
   DeleteAppMeDto,
@@ -245,6 +246,21 @@ export class AppMeController {
   @ApiErrorResponses('VALIDATION_FAILED')
   async registerDevice(@CurrentUser() auth: AuthUser, @Body() dto: RegisterDeviceTokenDto) {
     return { data: await this.me.registerDeviceToken(auth, dto) };
+  }
+
+  @Post('device-tokens/test')
+  @HttpCode(HttpStatus.OK)
+  @Throttle(PUSH_TEST_THROTTLE)
+  @ApiOperation({
+    summary: 'Send a test push to my devices',
+    description:
+      'Setup check: sends "Eventor test notification" (`data.type = "test"`) to every device registered on this account and ' +
+      'waits for the answer from FCM. `driver: "log"` means the server has no Firebase key yet; `sent: 0` with `devices > 0` means ' +
+      'FCM refused the tokens (another Firebase project, or iOS without the APNs key).',
+  })
+  @ApiDataResponse(AppTestPushDto)
+  async testPush(@CurrentUser() auth: AuthUser, @ReqLang() lang: Lang) {
+    return { data: await this.me.testPush(auth, lang) };
   }
 
   @Delete('device-tokens/:token')

@@ -15,6 +15,9 @@ export const AUTH_THROTTLE = {
 /** Public form endpoints that send an email or create a request: same budget as auth. */
 export const FORM_THROTTLE = AUTH_THROTTLE;
 
+/** `POST /app/me/device-tokens/test` (a setup check that calls FCM): same budget as auth. */
+export const PUSH_TEST_THROTTLE = AUTH_THROTTLE;
+
 /** Every multipart upload route: `UPLOAD_THROTTLE_LIMIT` (30) per minute. */
 export const UPLOAD_THROTTLE = {
   default: { limit: () => Number(process.env.UPLOAD_THROTTLE_LIMIT) || 30, ttl: 60_000 },

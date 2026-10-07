@@ -181,7 +181,7 @@ export class AdminBookingsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Remind the provider',
-    description: 'Pending bookings only (409 BOOKING_NOT_EDITABLE). Email + push (stub) to the provider, `reminder_sent_at` set; at most once per 12 h (429 REMINDER_TOO_SOON with Retry-After). Used by BKG-01, BKG-03.',
+    description: 'Pending bookings only (409 BOOKING_NOT_EDITABLE). Email, notification and push to the provider, `reminder_sent_at` set; at most once per 12 h (429 REMINDER_TOO_SOON with Retry-After). Used by BKG-01, BKG-03.',
   })
   @ApiParam(ID)
   @ApiDataResponse(RemindResultDto)

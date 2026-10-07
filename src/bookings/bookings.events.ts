@@ -9,6 +9,8 @@ export const BOOKING_EVENTS = {
   reopened: 'booking.reopened',
   rescheduled: 'booking.rescheduled',
   rescheduleProposed: 'booking.reschedule_proposed',
+  /** The other party turned a proposed date down; the booking keeps its date. */
+  rescheduleRejected: 'booking.reschedule_rejected',
   priceChanged: 'booking.price_changed',
   /** Manual (BKG-03) or automatic (reply deadline − 12 h) reminder to the provider. */
   reminderSent: 'booking.reminder_sent',
@@ -46,6 +48,8 @@ export interface BookingRescheduledEvent extends BookingEvent {
   oldDate: string;
   newDate: string;
   applied: boolean;
+  /** Who proposed, accepted or rejected the date: not notified about their own action. */
+  actorId: string | null;
 }
 
 export interface BookingPriceChangedEvent extends BookingEvent {

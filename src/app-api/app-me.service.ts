@@ -20,6 +20,7 @@ import { runInTransaction } from '../database/transaction.js';
 import { FilesService } from '../files/files.service.js';
 import { DeviceToken } from '../notifications/entities/device-token.entity.js';
 import { NotificationPreference } from '../notifications/entities/notification-preference.entity.js';
+import { PushService, type PushTarget } from '../push/push.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { UserAccountsService } from '../users/user-accounts.service.js';
 import { ProviderProfile } from '../users/entities/provider-profile.entity.js';
@@ -42,6 +43,7 @@ import type {
   AppNotificationPreferencesDto,
   AppNotificationsQueryDto,
   AppSessionRowDto,
+  AppTestPushDto,
   MarkNotificationsReadDto,
   MarkedReadDto,
   RegisterDeviceTokenDto,
@@ -83,6 +85,7 @@ export class AppMeService {
     private readonly settings: SettingsService,
     private readonly events: DomainEvents,
     private readonly accounts: UserAccountsService,
+    private readonly push: PushService,
   ) {}
 
   // ── profile ─────────────────────────────────────────────────
@@ -473,6 +476,18 @@ export class AppMeService {
     const row = await repository.findOneBy({ token, userId: auth.id });
     if (!row) throw AppException.of('DEVICE_TOKEN_NOT_FOUND');
     await repository.softDelete(row.id);
+  }
+
+  /** Setup check from the app: a test push to every device of this account, waiting for FCM's answer. */
+  async testPush(auth: AuthUser, lang: Lang): Promise<AppTestPushDto> {
+    const targets: PushTarget[] = await this.dataSource.query('SELECT token, platform FROM device_tokens WHERE user_id = ? AND deleted_at IS NULL', [auth.id]);
+    const ar = lang === 'ar';
+    const result = await this.push.send(targets, {
+      title: ar ? 'إشعار تجريبي من Eventor' : 'Eventor test notification',
+      body: ar ? 'الإشعارات تعمل على هذا الجهاز.' : 'Push notifications work on this device.',
+      data: { type: 'test' },
+    });
+    return { driver: this.push.driver, devices: targets.length, sent: result.sent, removed: result.invalidTokens.length };
   }
 
   // ── notification preferences ────────────────────────────────

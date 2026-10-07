@@ -21,9 +21,9 @@ describe('Foundation (e2e)', () => {
       expect(res.headers['x-request-id']).toMatch(/^req_[0-9a-f]{8}$/);
     });
 
-    it('GET /health/ready reaches the database and reports the queue and mail drivers', async () => {
+    it('GET /health/ready reaches the database and reports the queue, mail and push drivers', async () => {
       const res = await request(t.http).get('/api/v1/health/ready').expect(200);
-      expect(res.body).toEqual({ status: 'ok', database: 'up', queue: 'inline', mail: 'console' });
+      expect(res.body).toEqual({ status: 'ok', database: 'up', queue: 'inline', mail: 'console', push: 'log' });
     });
 
     it('GET /health answers as an alias of /health/live', async () => {

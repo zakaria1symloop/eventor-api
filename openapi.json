@@ -1982,7 +1982,7 @@
     },
     "/api/v1/health/ready": {
       "get": {
-        "description": "Public. The database answers; `queue` and `mail` say which drivers are configured (`mail: \"console\"` means no SMTP — no email leaves the server).",
+        "description": "Public. The database answers; `queue`, `mail` and `push` say which drivers are configured (`mail: \"console\"` means no SMTP — no email leaves the server; `push: \"log\"` means no Firebase key — no push reaches a phone).",
         "operationId": "HealthController_ready",
         "parameters": [
           {
@@ -14527,7 +14527,7 @@
     },
     "/api/v1/admin/bookings/{id}/remind": {
       "post": {
-        "description": "Pending bookings only (409 BOOKING_NOT_EDITABLE). Email + push (stub) to the provider, `reminder_sent_at` set; at most once per 12 h (429 REMINDER_TOO_SOON with Retry-After). Used by BKG-01, BKG-03.",
+        "description": "Pending bookings only (409 BOOKING_NOT_EDITABLE). Email, notification and push to the provider, `reminder_sent_at` set; at most once per 12 h (429 REMINDER_TOO_SOON with Retry-After). Used by BKG-01, BKG-03.",
         "operationId": "AdminBookingsController_remind",
         "parameters": [
           {
@@ -39995,6 +39995,128 @@
         ]
       }
     },
+    "/api/v1/app/me/device-tokens/test": {
+      "post": {
+        "description": "Setup check: sends \"Eventor test notification\" (`data.type = \"test\"`) to every device registered on this account and waits for the answer from FCM. `driver: \"log\"` means the server has no Firebase key yet; `sent: 0` with `devices > 0` means FCM refused the tokens (another Firebase project, or iOS without the APNs key).",
+        "operationId": "AppMeController_testPush",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppTestPushDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_SESSION_REVOKED`: Your session has ended. Please sign in again.\n\n`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FORBIDDEN_ROLE": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "FORBIDDEN_ROLE",
+                      "message": "Your account role cannot access this.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Send a test push to my devices",
+        "tags": [
+          "app-me"
+        ]
+      }
+    },
     "/api/v1/app/me/device-tokens/{token}": {
       "delete": {
         "description": "Call it before `POST /app/auth/logout`.",
@@ -62822,13 +62944,23 @@
               "console"
             ],
             "description": "`smtp` when outgoing mail is configured; `console` means emails only reach the server log — codes and invoices are not delivered."
+          },
+          "push": {
+            "type": "string",
+            "example": "fcm",
+            "enum": [
+              "fcm",
+              "log"
+            ],
+            "description": "`fcm` when the Firebase service-account key is loaded; `log` means pushes only reach the server log — no phone gets them."
           }
         },
         "required": [
           "status",
           "database",
           "queue",
-          "mail"
+          "mail",
+          "push"
         ]
       },
       "UpdateMeDto": {
@@ -76607,24 +76739,63 @@
           "platform"
         ]
       },
+      "AppTestPushDto": {
+        "type": "object",
+        "properties": {
+          "driver": {
+            "type": "string",
+            "enum": [
+              "fcm",
+              "log"
+            ],
+            "example": "fcm",
+            "description": "`log`: the server has no Firebase key yet, so nothing reaches a phone (the push is only written to the server log)."
+          },
+          "devices": {
+            "type": "number",
+            "example": 1,
+            "description": "Devices registered on this account."
+          },
+          "sent": {
+            "type": "number",
+            "example": 1,
+            "description": "Devices FCM accepted the push for."
+          },
+          "removed": {
+            "type": "number",
+            "example": 0,
+            "description": "Tokens FCM called invalid or expired: removed — register the current token again."
+          }
+        },
+        "required": [
+          "driver",
+          "devices",
+          "sent",
+          "removed"
+        ]
+      },
       "AppNotificationPreferencesDto": {
         "type": "object",
         "properties": {
           "pushBookings": {
             "type": "boolean",
-            "example": true
+            "example": true,
+            "description": "Push for bookings and disputes (`booking.*`, `dispute.*` except messages, `academic_request.*`)."
           },
           "pushMessages": {
             "type": "boolean",
-            "example": true
+            "example": true,
+            "description": "Push for chat messages (`message.new`, `dispute.message`)."
           },
           "pushReviews": {
             "type": "boolean",
-            "example": true
+            "example": true,
+            "description": "Push for new reviews (`review.new`)."
           },
           "emailBookings": {
             "type": "boolean",
-            "example": true
+            "example": true,
+            "description": "Booking update emails. Invoices and security emails are always sent."
           },
           "updatedAt": {
             "type": "string",
@@ -76666,6 +76837,17 @@
           "type": {
             "type": "string",
             "enum": [
+              "booking.requested",
+              "booking.accepted",
+              "booking.declined",
+              "booking.cancelled",
+              "booking.completed",
+              "booking.rescheduled",
+              "booking.reschedule_proposed",
+              "booking.reschedule_rejected",
+              "booking.price_changed",
+              "booking.reminder",
+              "booking.review_requested",
               "dispute.opened",
               "dispute.message",
               "dispute.evidence_requested",

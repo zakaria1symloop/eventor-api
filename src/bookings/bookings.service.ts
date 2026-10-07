@@ -1583,6 +1583,7 @@ export class BookingsService {
           oldDate,
           newDate: dto.date,
           applied: apply,
+          actorId: auth.id,
         },
       );
     });
@@ -1739,12 +1740,13 @@ export class BookingsService {
         afterCommit,
         action === 'accept'
           ? BOOKING_EVENTS.rescheduled
-          : BOOKING_EVENTS.rescheduleProposed,
+          : BOOKING_EVENTS.rescheduleRejected,
         {
           ...this.eventBase(booking, true),
           oldDate: dateOnly(row.oldDate),
           newDate,
           applied: action === 'accept',
+          actorId: auth.id,
         },
       );
     });

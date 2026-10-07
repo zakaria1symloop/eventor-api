@@ -20,6 +20,7 @@ import { DevicePlatform } from '../../common/enums/messaging.enums.js';
 import { DocumentRejectReason, DocumentStatus, DocumentType } from '../../common/enums/file.enums.js';
 import { Language, UserRole, UserStatus, VerificationStatus } from '../../common/enums/user.enums.js';
 import { APP_NOTIFICATION_TYPES, type AppNotificationType } from '../../notifications/notifications.service.js';
+import type { PushDriver } from '../../push/push.service.js';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto.js';
 import { toPhone } from '../../users/users.policy.js';
 
@@ -185,11 +186,19 @@ export class AppDeviceTokenDto {
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) lastSeenAt: string | null;
 }
 
+export class AppTestPushDto {
+  @ApiProperty({ enum: ['fcm', 'log'], example: 'fcm', description: '`log`: the server has no Firebase key yet, so nothing reaches a phone (the push is only written to the server log).' })
+  driver: PushDriver;
+  @ApiProperty({ example: 1, description: 'Devices registered on this account.' }) devices: number;
+  @ApiProperty({ example: 1, description: 'Devices FCM accepted the push for.' }) sent: number;
+  @ApiProperty({ example: 0, description: 'Tokens FCM called invalid or expired: removed — register the current token again.' }) removed: number;
+}
+
 export class AppNotificationPreferencesDto {
-  @ApiProperty({ example: true }) pushBookings: boolean;
-  @ApiProperty({ example: true }) pushMessages: boolean;
-  @ApiProperty({ example: true }) pushReviews: boolean;
-  @ApiProperty({ example: true }) emailBookings: boolean;
+  @ApiProperty({ example: true, description: 'Push for bookings and disputes (`booking.*`, `dispute.*` except messages, `academic_request.*`).' }) pushBookings: boolean;
+  @ApiProperty({ example: true, description: 'Push for chat messages (`message.new`, `dispute.message`).' }) pushMessages: boolean;
+  @ApiProperty({ example: true, description: 'Push for new reviews (`review.new`).' }) pushReviews: boolean;
+  @ApiProperty({ example: true, description: 'Booking update emails. Invoices and security emails are always sent.' }) emailBookings: boolean;
   @ApiProperty({ format: 'date-time' }) updatedAt: string;
 }
 

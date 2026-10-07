@@ -6,6 +6,7 @@ import { Public } from '../auth/decorators/public.decorator.js';
 import { AppException } from '../common/errors/app.exception.js';
 import { ApiErrorResponses } from '../common/swagger/api-error-responses.decorator.js';
 import { MailService } from '../mail/mail.service.js';
+import { PushService, type PushDriver } from '../push/push.service.js';
 import { QueueService } from '../queue/queue.service.js';
 
 class LiveResponseDto {
@@ -29,6 +30,13 @@ class ReadyResponseDto {
     description: '`smtp` when outgoing mail is configured; `console` means emails only reach the server log — codes and invoices are not delivered.',
   })
   mail: 'smtp' | 'console';
+
+  @ApiProperty({
+    example: 'fcm',
+    enum: ['fcm', 'log'],
+    description: '`fcm` when the Firebase service-account key is loaded; `log` means pushes only reach the server log — no phone gets them.',
+  })
+  push: PushDriver;
 }
 
 @ApiTags('health')
@@ -40,6 +48,7 @@ export class HealthController {
     private readonly dataSource: DataSource,
     private readonly queue: QueueService,
     private readonly mail: MailService,
+    private readonly push: PushService,
   ) {}
 
   @Get()
@@ -57,7 +66,7 @@ export class HealthController {
   }
 
   @Get('ready')
-  @ApiOperation({ summary: 'Readiness', description: 'Public. The database answers; `queue` and `mail` say which drivers are configured (`mail: "console"` means no SMTP — no email leaves the server).' })
+  @ApiOperation({ summary: 'Readiness', description: 'Public. The database answers; `queue`, `mail` and `push` say which drivers are configured (`mail: "console"` means no SMTP — no email leaves the server; `push: "log"` means no Firebase key — no push reaches a phone).' })
   @ApiOkResponse({ type: ReadyResponseDto })
   @ApiErrorResponses('SERVICE_UNAVAILABLE')
   async ready(): Promise<ReadyResponseDto> {
@@ -66,6 +75,6 @@ export class HealthController {
     } catch {
       throw AppException.of('SERVICE_UNAVAILABLE');
     }
-    return { status: 'ok', database: 'up', queue: this.queue.driver, mail: this.mail.driver };
+    return { status: 'ok', database: 'up', queue: this.queue.driver, mail: this.mail.driver, push: this.push.driver };
   }
 }

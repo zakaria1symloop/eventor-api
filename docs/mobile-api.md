@@ -248,7 +248,7 @@ means the endpoint is not built yet.
 | 18 Budget | `GET /app/me/budget` · `PUT /app/me/budget` · `POST /app/me/budget/items` · `PATCH`/`DELETE /app/me/budget/items/{id}` |
 | 19 Ready Packs | `GET /app/packs?eventType&wilaya&order` |
 | 20 Pack detail | `GET /app/packs/{id}` · `GET /app/packs/{id}/availability?month=YYYY-MM` |
-| 16 Notifications | `GET /app/me/notifications` · `GET /app/me/notifications/unread-count` · `POST /app/me/notifications/read` · `DELETE /app/me/notifications/{id}` (hard delete) · `POST /app/me/device-tokens` |
+| 16 Notifications | `GET /app/me/notifications` · `GET /app/me/notifications/unread-count` · `POST /app/me/notifications/read` · `DELETE /app/me/notifications/{id}` (hard delete) · `POST /app/me/device-tokens` · `POST /app/me/device-tokens/test` |
 | — Profile & settings | `GET`/`PATCH /app/me` · `POST /app/me/avatar` · `POST /app/me/password` · `GET`/`DELETE /app/me/sessions` · `GET`/`PATCH /app/me/notification-preferences` · `DELETE /app/me` |
 | 14 Messages, 15 Chat | see **Messaging** below |
 | — Booking flow, Bookings tab, Leave a review | see **Bookings** below |
@@ -539,14 +539,68 @@ Requests sent without an account are followed by email only. Editing answers
 still goes through the emailed token link (status-rules §7); these routes are
 read-only.
 
-## 12. Notifications: types and deep links
+## 12. Notifications: types, push and deep links
 
-`AppNotificationDto.type` is a **closed enum** (also in the spec):
-`dispute.opened`, `dispute.message`, `dispute.evidence_requested`,
-`dispute.resolved`, `dispute.closed`, `review.new`, `review.shown`,
-`review.hidden`, `review.redacted`, `review_reply.hidden`,
-`review_reply.shown`, `report.resolved`, `report.dismissed`,
-`academic_request.cancelled`, `verification.approved`, `verification.rejected`.
+The same news reaches the user three ways: the **row** (`GET /app/me/notifications`,
+screen 16), the socket event **`notification:new`** while the app is open, and a
+**push** (FCM) for a phone in the background or closed. Chat messages are
+**push only** (`message.new`): chats keep their own unread counts.
+
+**Types.** `AppNotificationDto.type` is a **closed enum** (also in the spec). Route
+on `type` plus the ids in `data`:
+
+| `type` | Who gets it | Push | `data` | Open |
+| --- | --- | --- | --- | --- |
+| `booking.requested` | provider | ✓ | `bookingId`, `reference` | booking (provider side): Accept / Decline |
+| `booking.accepted` | client | ✓ | `bookingId`, `reference` | booking |
+| `booking.declined` | client | ✓ | `bookingId`, `reference` | booking |
+| `booking.cancelled` | the other party | ✓ | `bookingId`, `reference` | booking |
+| `booking.completed` | both, except whoever confirmed last | ✓ | `bookingId`, `reference` | booking |
+| `booking.rescheduled` | the other party (both when Eventor moved it) | ✓ | `bookingId`, `reference` | booking |
+| `booking.reschedule_proposed` | the other party (both when Eventor proposed) | ✓ | `bookingId`, `reference` | booking: accept / reject the date |
+| `booking.reschedule_rejected` | the other party | ✓ | `bookingId`, `reference` | booking |
+| `booking.price_changed` | client | ✓ | `bookingId`, `reference` | booking |
+| `booking.reminder` | provider | ✓ | `bookingId`, `reference` | booking (provider side): Accept / Decline |
+| `booking.review_requested` | client | ✓ | `bookingId`, `reference` | write a review for `bookingId` |
+| `message.new` | the other participants | push only | `conversationId`, `messageId`, `conversationKind` (`direct` / `support`) | chat `conversationId` |
+| `dispute.opened` | the other party | ✓ | `disputeId`, `reference`, `bookingId`, `conversationId` | dispute |
+| `dispute.message` | both parties | ✓ | `disputeId`, `bookingId`, `conversationId`, `messageId` | dispute chat `conversationId` |
+| `dispute.evidence_requested` | the party asked | ✓ | as `dispute.message` | dispute: add evidence |
+| `dispute.resolved` | both parties | ✓ | `disputeId`, `bookingId`, `conversationId` | dispute |
+| `dispute.closed` | both parties | — | `disputeId`, `bookingId`, `conversationId` | dispute |
+| `review.new` | provider | ✓ | `reviewId`, `bookingId`, `rating` | the review |
+| `review.shown` / `review.hidden` / `review.redacted` | the review's author | — | `reviewId` | my review |
+| `review_reply.hidden` / `review_reply.shown` | provider | — | `reviewId`, `replyId` | the review |
+| `report.resolved` / `report.dismissed` | the reporter | — | `reportId`, `targetType` | stay on the list |
+| `academic_request.cancelled` | providers | ✓ | `requestId`, `reference` | bookings |
+| `verification.approved` | provider | ✓ | — | provider home |
+| `verification.rejected` | provider | ✓ | `documentType` | my documents |
+| `test` | you | push only | — | nothing (setup check) |
+
+**The push.** An FCM *notification* message: `notification.title` / `body` are
+already in the user's language (the stored `language`, see 3), so the OS shows
+it as is in the background. `data` holds strings only: `type`, the ids above
+and, for row types, `notificationId` (mark it read with
+`POST /app/me/notifications/read` when the user taps it). Android: every push
+uses the channel **`eventor_default`**, and pushes about one chat or one booking
+replace each other (`tag`); iOS groups them by `thread-id`.
+
+**Registering a phone.** After sign-in, on every app start and on FCM's token
+refresh: `POST /app/me/device-tokens` `{ token, platform: "android" | "ios" }`
+(idempotent). Before sign-out: `DELETE /app/me/device-tokens/{token}`. Tokens FCM
+reports as dead are removed by the server, and registering again brings them
+back. `POST /app/me/device-tokens/test` sends a test push to every device of the
+account and answers `{ driver, devices, sent, removed }`: `driver: "log"` means
+the server has no Firebase key yet; `sent: 0` with `devices > 0` means FCM
+refused the token (the app is in another Firebase project, or iOS without the
+APNs key in Firebase).
+
+**Switches** (`GET/PATCH /app/me/notification-preferences`): `pushBookings` mutes
+the pushes of `booking.*`, `dispute.*` (except messages) and
+`academic_request.*`; `pushMessages` mutes `message.new` and `dispute.message`;
+`pushReviews` mutes `review.new`. The rows are written either way, and
+`verification.*` always pushes. `emailBookings` mutes booking update emails
+(invoices and security emails are always sent).
 
 **Deep links.** Web URLs (like the invite email's
 `{APP_PUBLIC_URL}/set-password?token=…`, or a `data.href`) are **for
@@ -608,9 +662,9 @@ the list on reconnect; a dropped event must never lose a message.
 `notification:new` fires for **every** notification row written for you —
 including `verification.approved` / `verification.rejected` when an admin
 decides on your documents — so a connected app learns about approval without
-reloading. **Push (FCM) is still a logging stub**: nothing reaches a closed
-app until Firebase credentials are configured server-side; the in-app rows and
-this socket event are the reliable channel today.
+reloading. A phone in the background or closed gets the push instead (12).
+While the app is open, show your own banner from this event or from FCM's
+foreground callback, and skip `message.new` for the chat on screen.
 
 ## 14. What is still not built
 
@@ -629,6 +683,16 @@ on uploads. 429 carries `Retry-After`. Back off — do not hammer `refresh` in a
 loop when it fails.
 
 ## 16. Changelog
+
+### 2026-10-07 — push notifications (FCM) for bookings, chat and the rest
+
+- **Push is live** once the server has its Firebase key: `GET /health/ready` answers `push: "fcm"` (`"log"` = only logged). Every type marked ✓ in section 12 reaches the phone.
+- **Bookings now write notification rows and push**: `booking.requested`, `booking.accepted`, `booking.declined`, `booking.cancelled`, `booking.completed`, `booking.rescheduled`, `booking.reschedule_proposed`, `booking.reschedule_rejected`, `booking.price_changed`, `booking.reminder`, `booking.review_requested` (new values of `AppNotificationDto.type`). Whoever made the change is not notified.
+- **Chat messages push** `message.new` (no row), titled with the sender's name, body masked exactly like `message:new`; a photo without caption reads "📷 Photo". Dispute chats keep `dispute.message`.
+- Push `data` always carries `type`, plus `notificationId` for row types.
+- The notification switches now apply (`pushBookings`, `pushMessages`, `pushReviews`, `emailBookings`).
+- New `POST /app/me/device-tokens/test`: a test push to your devices.
+- Rejecting a proposed date now tells the proposer `booking.reschedule_rejected` (it used to repeat the "new date proposed" email), and the proposer is no longer emailed about their own proposal.
 
 ### 2026-10-07 — two provider checkboxes: "Only one booking per day" and "Allow several clients at the same time"
 

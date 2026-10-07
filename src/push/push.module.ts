@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { pushProvider, PushService } from './push.service.js';
 
-/** FCM push. Currently a logging stub (PushProvider interface ready for FCM HTTP v1). */
+/** Push to phones: FCM HTTP v1 when `FCM_CREDENTIALS_PATH` is set, a logging stub otherwise. */
 @Global()
 @Module({
   providers: [pushProvider, PushService],

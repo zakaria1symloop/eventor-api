@@ -101,12 +101,12 @@ completed ──reopen (admin)──▶ accepted
 | pending → declined | provider or admin (reason) | — | availability released | 🔔📱 client |
 | pending → cancelled | client, provider or admin (reason) | — | availability released | 🔔📱 other party |
 | accepted → cancelled | client, provider or admin (reason) | **no fee or window enforced** (cash); the service's policy text is shown; disagreements → dispute | availability released; invoice voided (soft delete) | 🔔📱 other party |
-| accepted → completed | job at event end + `dispute_window_hours` (72 h) if no dispute is open; **immediately** if both parties tap "All good"; or admin | event date passed | `completed_at`, counters | after `review_open_after_hours` 🔔📱 client "Leave a review" |
+| accepted → completed | job at event end + `dispute_window_hours` (72 h) if no dispute is open; **immediately** if both parties tap "All good"; or admin | event date passed | `completed_at`, counters | 🔔📱 both parties, except whoever confirmed last · after `review_open_after_hours` 🔔📱 client "Leave a review" |
 | completed → accepted | admin (reason) | — | review request withdrawn if no review yet | — |
 
 **Other booking actions:**
 - **Reply deadline:** pending longer than `booking_reply_deadline_hours` (48 h). Reminder to the provider at −12 h, then a "no reply" flag (a filter on BKG-01 and on the Overview).
-- **Reschedule:** either party proposes and the other accepts. A pending booking changes directly; an admin can force it.
+- **Reschedule:** either party proposes and the other accepts. A pending booking changes directly; an admin can force it. 🔔📱 the other party on a proposal, a move and a rejection (both parties when the admin acts).
 - **Price change:** by the provider while pending, or by an admin. A new invoice version is issued if the booking is already accepted. 🔔📱 the client.
 - **Remind provider:** admin action. 🔔📱 the provider.
 
@@ -192,6 +192,7 @@ Payment is cash, so a dispute is **only a way to raise a problem on a booking an
 - **Conversation status:** `open ⇄ closed`, admin only (scope: all or one participant). A dispute chat closes 7 days after resolution.
 - **Contact details:** masked (`body_masked`) until the pair has an accepted booking. Admins see the original text.
 - **Message status:** `visible → hidden | deleted`. Admin can do this to any message. The sender can delete their own within 5 min, except in dispute chats.
+- **Push:** 📱 every message to the other participants (`message.new`, masked like the chat, no 🔔 row). Dispute chats use `dispute.message`; system messages send nothing.
 
 ## 11. Other statuses
 

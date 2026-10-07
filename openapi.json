@@ -70418,9 +70418,16 @@
               "$ref": "#/components/schemas/ServiceFactDto"
             }
           },
+          "onePerDay": {
+            "type": "boolean",
+            "example": true,
+            "description": "\"Only one booking per day\" is ticked."
+          },
           "maxEventsPerDay": {
             "type": "number",
-            "example": 1
+            "nullable": true,
+            "example": 1,
+            "description": "1 when `onePerDay`; null = no daily limit."
           },
           "maxGuests": {
             "type": "number",
@@ -70552,6 +70559,7 @@
           "cancellationPolicyEn",
           "cancellationPolicyAr",
           "facts",
+          "onePerDay",
           "maxEventsPerDay",
           "maxGuests",
           "concurrentClients",
@@ -70634,11 +70642,19 @@
               "$ref": "#/components/schemas/ServiceFactDto"
             }
           },
+          "onePerDay": {
+            "type": "boolean",
+            "example": true,
+            "description": "The provider's checkbox \"Only one booking per day\": true = 1 booking a day, false = no daily limit (only the hours and `concurrentClients` limit bookings). Wins over `maxEventsPerDay`."
+          },
           "maxEventsPerDay": {
             "type": "number",
+            "nullable": true,
             "example": 1,
             "minimum": 1,
-            "maximum": 20
+            "maximum": 20,
+            "deprecated": true,
+            "description": "Deprecated: send `onePerDay`. null = no daily limit."
           },
           "maxGuests": {
             "type": "number",
@@ -70806,11 +70822,19 @@
               "on_quote"
             ]
           },
+          "onePerDay": {
+            "type": "boolean",
+            "example": true,
+            "description": "The provider's checkbox \"Only one booking per day\": true = 1 booking a day, false = no daily limit (only the hours and `concurrentClients` limit bookings). Wins over `maxEventsPerDay`."
+          },
           "maxEventsPerDay": {
             "type": "number",
+            "nullable": true,
             "example": 1,
             "minimum": 1,
-            "maximum": 20
+            "maximum": 20,
+            "deprecated": true,
+            "description": "Deprecated: send `onePerDay`. null = no daily limit."
           },
           "maxGuests": {
             "type": "number",
@@ -71104,8 +71128,9 @@
           },
           "maxEventsPerDay": {
             "type": "number",
+            "nullable": true,
             "example": 1,
-            "description": "Max events per day of the provider’s services (highest)."
+            "description": "Bookings per day of the provider’s services (highest); null when one of them has no daily limit."
           },
           "days": {
             "description": "Every day of the month.",
@@ -78151,10 +78176,16 @@
             "nullable": true,
             "example": 300
           },
+          "onePerDay": {
+            "type": "boolean",
+            "example": true,
+            "description": "\"Only one booking per day\": a day with one pending or accepted booking is full."
+          },
           "maxEventsPerDay": {
             "type": "number",
+            "nullable": true,
             "example": 1,
-            "description": "Events the provider takes per day for this service."
+            "description": "1 when `onePerDay`; null = no daily limit."
           },
           "concurrentClients": {
             "type": "number",
@@ -78233,6 +78264,7 @@
           "extras",
           "photos",
           "maxGuests",
+          "onePerDay",
           "maxEventsPerDay",
           "concurrentClients",
           "availableFrom",
@@ -78303,8 +78335,9 @@
           },
           "maxEventsPerDay": {
             "type": "number",
+            "nullable": true,
             "example": 1,
-            "description": "Events accepted per day (the smallest among a pack’s items)."
+            "description": "Bookings accepted per day (the smallest among a pack’s items); null = no daily limit."
           },
           "minNoticeDays": {
             "type": "number",
@@ -80489,11 +80522,19 @@
               "$ref": "#/components/schemas/ServiceFactDto"
             }
           },
+          "onePerDay": {
+            "type": "boolean",
+            "example": true,
+            "description": "The provider's checkbox \"Only one booking per day\": true = 1 booking a day, false = no daily limit (only the hours and `concurrentClients` limit bookings). Wins over `maxEventsPerDay`."
+          },
           "maxEventsPerDay": {
             "type": "number",
+            "nullable": true,
             "example": 1,
             "minimum": 1,
-            "maximum": 20
+            "maximum": 20,
+            "deprecated": true,
+            "description": "Deprecated: send `onePerDay`. null = no daily limit."
           },
           "maxGuests": {
             "type": "number",
@@ -80643,11 +80684,19 @@
               "on_quote"
             ]
           },
+          "onePerDay": {
+            "type": "boolean",
+            "example": true,
+            "description": "The provider's checkbox \"Only one booking per day\": true = 1 booking a day, false = no daily limit (only the hours and `concurrentClients` limit bookings). Wins over `maxEventsPerDay`."
+          },
           "maxEventsPerDay": {
             "type": "number",
+            "nullable": true,
             "example": 1,
             "minimum": 1,
-            "maximum": 20
+            "maximum": 20,
+            "deprecated": true,
+            "description": "Deprecated: send `onePerDay`. null = no daily limit."
           },
           "maxGuests": {
             "type": "number",

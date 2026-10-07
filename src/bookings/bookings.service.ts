@@ -743,7 +743,8 @@ export class BookingsService {
         ).map((r: { service_id: string }) => r.service_id);
     const [capacityRow] = serviceIds.length
       ? await em.query(
-          'SELECT COALESCE(MIN(max_events_per_day), 1) AS n FROM services WHERE id IN (?)',
+          // MIN skips NULL (no daily limit); every item without a limit leaves n NULL.
+          'SELECT MIN(max_events_per_day) AS n FROM services WHERE id IN (?)',
           [serviceIds],
         )
       : [{ n: 1 }];
@@ -777,7 +778,7 @@ export class BookingsService {
         b.kind !== AvailabilityKind.Blocked &&
         b.booking_id !== input.excludeBookingId,
     ).length;
-    return taken < Number(capacityRow.n);
+    return capacityRow.n === null || taken < Number(capacityRow.n);
   }
 
   /**

@@ -247,8 +247,9 @@ export class AppCatalogService {
       where.push(`NOT EXISTS (SELECT 1 FROM availability_blocks ab WHERE ab.provider_id = s.provider_id AND ab.date = ?
           AND ab.deleted_at IS NULL AND ab.kind = 'blocked' AND ab.start_time IS NULL AND (ab.service_id IS NULL OR ab.service_id = s.id))`);
       params.push(query.eventDate);
-      where.push(`(SELECT COUNT(*) FROM bookings bk WHERE bk.provider_id = s.provider_id AND bk.event_date = ?
-          AND bk.deleted_at IS NULL AND bk.status IN ('pending', 'accepted')) < s.max_events_per_day`);
+      where.push(`(s.max_events_per_day IS NULL OR (SELECT COUNT(*) FROM bookings bk WHERE bk.provider_id = s.provider_id
+          AND ? BETWEEN bk.event_date AND COALESCE(bk.end_date, bk.event_date)
+          AND bk.deleted_at IS NULL AND bk.status IN ('pending', 'accepted')) < s.max_events_per_day)`);
       params.push(query.eventDate);
     }
     if (query.favourite) {
@@ -356,7 +357,8 @@ export class AppCatalogService {
         height: photo.height === null ? null : Number(photo.height),
       })),
       maxGuests: row.max_guests === null ? null : Number(row.max_guests),
-      maxEventsPerDay: Number(row.max_events_per_day),
+      onePerDay: row.max_events_per_day !== null && Number(row.max_events_per_day) === 1,
+      maxEventsPerDay: row.max_events_per_day === null ? null : Number(row.max_events_per_day),
       concurrentClients: Number(row.concurrent_clients),
       availableFrom: row.available_from ? dateOnly(row.available_from) : null,
       availableUntil: row.available_until ? dateOnly(row.available_until) : null,
@@ -701,7 +703,8 @@ export class AppCatalogService {
       providerIds: string[];
       serviceIds: string[];
       month: string;
-      capacity: number;
+      /** Bookings per day; null = no daily limit. */
+      capacity: number | null;
       /** One service: its period, weekly hours and clients at the same time give `freeRanges` (issues 3 #10). */
       schedule?: { serviceId: string; hours: HourRange[]; from: string | null; until: string | null; concurrent: number };
     },
@@ -805,7 +808,7 @@ export class AppCatalogService {
       providerIds: [row.provider_id],
       serviceIds: [row.id],
       month,
-      capacity: Number(row.max_events_per_day),
+      capacity: row.max_events_per_day === null ? null : Number(row.max_events_per_day),
       schedule: {
         serviceId: row.id,
         hours: await this.serviceHours(em, row.id),
@@ -828,7 +831,9 @@ export class AppCatalogService {
       [id],
     );
     // status-rules §4: a pack's daily capacity is the smallest among its items.
-    const capacity = items.length > 0 ? Math.min(...items.map((item: any) => Number(item.max_events_per_day))) : 1;
+    // Items without a daily limit don't constrain; null when none has one.
+    const limits = items.filter((item: any) => item.max_events_per_day !== null).map((item: any) => Number(item.max_events_per_day));
+    const capacity = items.length === 0 ? 1 : limits.length > 0 ? Math.min(...limits) : null;
     return this.availability(em, {
       providerIds: [...new Set<string>(items.map((item: any) => item.provider_id as string))].concat(items.length === 0 ? [pack.provider_id] : []),
       serviceIds: items.map((item: any) => item.id),

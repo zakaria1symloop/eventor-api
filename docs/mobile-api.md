@@ -630,6 +630,13 @@ loop when it fails.
 
 ## 16. Changelog
 
+### 2026-10-07 — "Only one booking per day" replaces the max-events number
+
+- The provider's daily limit is now a checkbox. Send **`onePerDay`** (boolean) on `POST/PATCH /app/provider/services`: `true` = one booking a day, `false` = no daily limit (only the hours and `concurrentClients` limit bookings). New services start with `true`.
+- Service details (`GET /app/services/{id}`, `GET /app/provider/services/{id}`) gain `onePerDay`; **`maxEventsPerDay` is now `number | null`**: 1 when ticked, `null` = no daily limit. The same on the calendars (`maxEventsPerDay: null` when unlimited); a day without a limit is never `busy` because of bookings alone.
+- `maxEventsPerDay` is still accepted on writes but **deprecated**; `onePerDay` wins when both are sent.
+- Existing services: those at 1 stay ticked; those that allowed more than one a day now have no daily limit.
+
 ### 2026-10-06 — service schedule and multi-day bookings (issues 3 #6–#11, report #79, #81, #82)
 
 **Service fields** (provider `POST/PATCH /app/provider/services`, service detail on both sides):

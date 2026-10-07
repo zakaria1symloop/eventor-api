@@ -8,6 +8,7 @@ import { AdminListIndexes1789700000000 } from './1789700000000-AdminListIndexes.
 import { SessionsRevokedReason1789800000000 } from './1789800000000-SessionsRevokedReason.js';
 import { ServiceScheduling1791277544612 } from './1791277544612-ServiceScheduling.js';
 import { BookingEndDate1791278976405 } from './1791278976405-BookingEndDate.js';
+import { OneBookingPerDay1791360000000 } from './1791360000000-OneBookingPerDay.js';
 
 /**
  * Ordered migration registry, explicit for the same reason as the entity
@@ -24,4 +25,5 @@ export const migrations: NonNullable<DataSourceOptions['migrations']> = [
   SessionsRevokedReason1789800000000,
   ServiceScheduling1791277544612,
   BookingEndDate1791278976405,
+  OneBookingPerDay1791360000000,
 ];

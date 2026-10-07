@@ -68,7 +68,8 @@ export class AvailabilityService {
          ORDER BY b.event_date, b.start_time`,
         [providerId, first, last],
       ),
-      em.query('SELECT COALESCE(MAX(max_events_per_day), 1) AS n FROM services WHERE provider_id = ? AND deleted_at IS NULL', [providerId]),
+      // 255 stands for "no daily limit" inside MAX, then becomes null.
+      em.query('SELECT MAX(COALESCE(max_events_per_day, 255)) AS n, COUNT(*) AS services FROM services WHERE provider_id = ? AND deleted_at IS NULL', [providerId]),
     ]);
 
     const byDay = new Map<string, AvailabilityBlockDto[]>();
@@ -108,7 +109,8 @@ export class AvailabilityService {
       const items = byDay.get(date) ?? [];
       days.push({ date, status: dayStatus(items), items });
     }
-    return { providerId, month, maxEventsPerDay: Number(capacity.n), days };
+    const highest = Number(capacity.services) === 0 ? 1 : Number(capacity.n);
+    return { providerId, month, maxEventsPerDay: highest === 255 ? null : highest, days };
   }
 
   async createBlock(auth: AuthUser, providerId: string, dto: CreateAvailabilityBlockDto): Promise<AvailabilityBlockDto> {

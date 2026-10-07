@@ -92,8 +92,10 @@ export type DayState = (typeof DAY_STATES)[number];
  * hand, `busy` when held and booked events already fill `maxEventsPerDay`, and
  * `available` otherwise. Past days are `blocked` — nothing can be booked there.
  */
-export function dayState(input: { past: boolean; manualBlock: boolean; taken: number; capacity: number }): DayState {
+export function dayState(input: { past: boolean; manualBlock: boolean; taken: number; capacity: number | null }): DayState {
   if (input.past || input.manualBlock) return 'blocked';
+  // null = no daily limit: only manual blocks (and, for services, the free hours) close a day.
+  if (input.capacity === null) return 'available';
   return input.taken >= Math.max(1, input.capacity) ? 'busy' : 'available';
 }
 

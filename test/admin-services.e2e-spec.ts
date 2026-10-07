@@ -350,6 +350,19 @@ describe('Admin services & availability (e2e)', () => {
   });
 
   describe('PATCH /admin/services/:id', () => {
+    it('saves "Only one booking per day" (onePerDay) and keeps the old number field working', async () => {
+      const service = await publishable({ status: ServiceStatus.Draft } as never);
+      const off = await request(t.http).patch(`${BASE}/${service.id}`).set(admin.headers).send({ onePerDay: false }).expect(200);
+      expect(off.body.data).toMatchObject({ onePerDay: false, maxEventsPerDay: null });
+      const on = await request(t.http).patch(`${BASE}/${service.id}`).set(admin.headers).send({ onePerDay: true }).expect(200);
+      expect(on.body.data).toMatchObject({ onePerDay: true, maxEventsPerDay: 1 });
+      // Deprecated number still accepted; onePerDay wins when both are sent.
+      const legacy = await request(t.http).patch(`${BASE}/${service.id}`).set(admin.headers).send({ maxEventsPerDay: 3 }).expect(200);
+      expect(legacy.body.data).toMatchObject({ onePerDay: false, maxEventsPerDay: 3 });
+      const both = await request(t.http).patch(`${BASE}/${service.id}`).set(admin.headers).send({ maxEventsPerDay: 3, onePerDay: true }).expect(200);
+      expect(both.body.data).toMatchObject({ onePerDay: true, maxEventsPerDay: 1 });
+    });
+
     it('saves weekly hours, clients at the same time and the period, and validates them (issues 3 #6–#8)', async () => {
       const service = await publishable({ status: ServiceStatus.Draft } as never);
       const hours = [

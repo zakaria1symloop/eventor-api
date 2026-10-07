@@ -245,6 +245,24 @@ describe('App provider (e2e)', () => {
       expect(list.body.data.map((s: { id: string }) => s.id)).toContain(created.body.data.id);
     });
 
+    it('saves "Only one booking per day" as a checkbox (onePerDay)', async () => {
+      const created = await request(t.http)
+        .post(`${BASE}/services`)
+        .set(provider.headers)
+        .send({ categoryId, titleEn: 'Tent rental', basePrice: '15000.00', priceType: PriceType.PerDay, wilayaCodes: [16], onePerDay: false });
+      expect(created.status).toBe(201);
+      expect(created.body.data).toMatchObject({ onePerDay: false, maxEventsPerDay: null });
+
+      const ticked = await request(t.http).patch(`${BASE}/services/${created.body.data.id}`).set(provider.headers).send({ onePerDay: true });
+      expect(ticked.body.data).toMatchObject({ onePerDay: true, maxEventsPerDay: 1 });
+      // A new service starts ticked.
+      const fresh = await request(t.http)
+        .post(`${BASE}/services`)
+        .set(provider.headers)
+        .send({ categoryId, titleEn: 'Photo booth 2', basePrice: '25000.00', priceType: PriceType.PerEvent, wilayaCodes: [16] });
+      expect(fresh.body.data).toMatchObject({ onePerDay: true, maxEventsPerDay: 1 });
+    });
+
     it('returns one of my services in the detail shape, with priceType on list rows', async () => {
       const service = await ownService({ status: ServiceStatus.Published, priceType: PriceType.PerDay });
 

@@ -122,3 +122,9 @@ export function fromCents(cents: number): string {
   const abs = Math.abs(Math.round(cents));
   return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`;
 }
+
+/** The daily limit a save asks for: `onePerDay` wins (1 or no limit), then `maxEventsPerDay`, else `current`. */
+export function dailyLimit(dto: { onePerDay?: boolean; maxEventsPerDay?: number | null }, current: number | null): number | null {
+  if (dto.onePerDay !== undefined) return dto.onePerDay ? 1 : null;
+  return dto.maxEventsPerDay !== undefined ? dto.maxEventsPerDay : current;
+}

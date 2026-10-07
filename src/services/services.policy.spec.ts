@@ -3,6 +3,7 @@ import { UserStatus, VerificationStatus } from '../common/enums/user.enums.js';
 import { dayStatus } from './availability.service.js';
 import {
   canTransition,
+  dailyLimit,
   featureRefusal,
   fromCents,
   isServiceVisible,
@@ -138,5 +139,16 @@ describe('availability day status', () => {
     expect(dayStatus([block(AvailabilityKind.Blocked)])).toBe('blocked');
     expect(dayStatus([block(AvailabilityKind.Blocked), block(AvailabilityKind.Held)])).toBe('held');
     expect(dayStatus([block(AvailabilityKind.Held), block(AvailabilityKind.Booked)])).toBe('booked');
+  });
+});
+
+describe('dailyLimit ("Only one booking per day")', () => {
+  it('lets the checkbox win, then the old number, then keeps the current value', () => {
+    expect(dailyLimit({ onePerDay: true }, null)).toBe(1);
+    expect(dailyLimit({ onePerDay: false }, 1)).toBeNull();
+    expect(dailyLimit({ onePerDay: false, maxEventsPerDay: 3 }, 1)).toBeNull();
+    expect(dailyLimit({ maxEventsPerDay: 3 }, 1)).toBe(3);
+    expect(dailyLimit({ maxEventsPerDay: null }, 1)).toBeNull();
+    expect(dailyLimit({}, 1)).toBe(1);
   });
 });

@@ -45,6 +45,7 @@ import { SERVICE_EVENTS, type ServiceEvent, type ServiceHiddenEvent } from './se
 import { assertValidHours, type HourRange } from './scheduling.policy.js';
 import {
   canTransition,
+  dailyLimit,
   featureRefusal,
   fromCents,
   MAX_FEATURED_SERVICES,
@@ -332,6 +333,7 @@ export class ServicesService {
       cancellationPolicyEn: service.cancellationPolicyEn,
       cancellationPolicyAr: service.cancellationPolicyAr,
       facts: service.facts ?? [],
+      onePerDay: service.maxEventsPerDay === 1,
       maxEventsPerDay: service.maxEventsPerDay,
       maxGuests: service.maxGuests,
       concurrentClients: service.concurrentClients,
@@ -522,7 +524,7 @@ export class ServicesService {
           facts: dto.facts ?? null,
           basePrice: dto.basePrice,
           priceType: dto.priceType,
-          maxEventsPerDay: dto.maxEventsPerDay ?? 1,
+          maxEventsPerDay: dailyLimit(dto, 1),
           maxGuests: dto.maxGuests ?? null,
           concurrentClients: dto.concurrentClients ?? 1,
           availableFrom: dto.availableFrom ?? null,
@@ -577,6 +579,8 @@ export class ServicesService {
         changes.categoryId = { from: service.categoryId, to: dto.categoryId };
         service.categoryId = dto.categoryId;
       }
+      // "Only one booking per day" decides the daily limit when sent.
+      if (dto.onePerDay !== undefined) dto.maxEventsPerDay = dailyLimit(dto, service.maxEventsPerDay);
       for (const field of UPDATABLE_FIELDS) {
         const next = dto[field];
         if (next !== undefined && next !== service[field]) {

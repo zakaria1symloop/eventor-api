@@ -61,8 +61,9 @@ export class Service extends AbstractEntity {
   @Column({ type: 'enum', enum: PriceType })
   priceType: PriceType;
 
-  @Column({ type: 'tinyint', unsigned: true, default: 1 })
-  maxEventsPerDay: number;
+  /** 1 = "Only one booking per day" (the provider's checkbox); null = no daily limit. */
+  @Column({ type: 'tinyint', unsigned: true, nullable: true, default: 1 })
+  maxEventsPerDay: number | null;
 
   @Column({ type: 'int', nullable: true })
   maxGuests: number | null;

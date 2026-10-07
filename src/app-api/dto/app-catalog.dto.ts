@@ -184,7 +184,8 @@ export class AppServiceDetailDto extends AppServiceCardDto {
   @ApiProperty({ type: [AppServiceExtraDto], description: '"What’s included" / paid add-ons.' }) extras: AppServiceExtraDto[];
   @ApiProperty({ type: [AppPhotoDto] }) photos: AppPhotoDto[];
   @ApiProperty({ type: Number, nullable: true, example: 300 }) maxGuests: number | null;
-  @ApiProperty({ example: 1, description: 'Events the provider takes per day for this service.' }) maxEventsPerDay: number;
+  @ApiProperty({ example: true, description: '"Only one booking per day": a day with one pending or accepted booking is full.' }) onePerDay: boolean;
+  @ApiProperty({ type: Number, nullable: true, example: 1, description: '1 when `onePerDay`; null = no daily limit.' }) maxEventsPerDay: number | null;
   @ApiProperty({ example: 1, description: 'Different clients who may book overlapping hours (timed bookings).' }) concurrentClients: number;
   @ApiProperty({ type: String, format: 'date', nullable: true, example: '2027-03-01', description: 'First event date it can be booked for.' }) availableFrom: string | null;
   @ApiProperty({ type: String, format: 'date', nullable: true, example: '2027-03-31', description: 'Last event date it can be booked for.' }) availableUntil: string | null;
@@ -265,7 +266,7 @@ export class AppAvailabilityDayDto {
 
 export class AppAvailabilityDto {
   @ApiProperty({ example: '2026-03' }) month: string;
-  @ApiProperty({ example: 1, description: 'Events accepted per day (the smallest among a pack’s items).' }) maxEventsPerDay: number;
+  @ApiProperty({ type: Number, nullable: true, example: 1, description: 'Bookings accepted per day (the smallest among a pack’s items); null = no daily limit.' }) maxEventsPerDay: number | null;
   @ApiProperty({ example: 0, description: '`booking_min_notice_days`: days before which nothing can be booked.' }) minNoticeDays: number;
   @ApiProperty({ format: 'date', example: '2026-03-01', description: 'First bookable day (Africa/Algiers).' }) firstBookableDate: string;
   @ApiProperty({ type: [AppAvailabilityDayDto] }) days: AppAvailabilityDayDto[];

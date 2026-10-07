@@ -331,7 +331,8 @@ export class ServiceDetailDto extends ServiceRowDto {
   @ApiProperty({ type: String, nullable: true }) cancellationPolicyEn: string | null;
   @ApiProperty({ type: String, nullable: true }) cancellationPolicyAr: string | null;
   @ApiProperty({ type: [ServiceFactDto] }) facts: ServiceFactDto[];
-  @ApiProperty({ example: 1 }) maxEventsPerDay: number;
+  @ApiProperty({ example: true, description: '"Only one booking per day" is ticked.' }) onePerDay: boolean;
+  @ApiProperty({ type: Number, nullable: true, example: 1, description: '1 when `onePerDay`; null = no daily limit.' }) maxEventsPerDay: number | null;
   @ApiProperty({ type: Number, nullable: true, example: 400 }) maxGuests: number | null;
   @ApiProperty({ example: 1, description: 'Different clients who may book overlapping hours.' }) concurrentClients: number;
   @ApiProperty({ type: String, format: 'date', nullable: true, example: '2027-03-01', description: 'First event date it can be booked for.' }) availableFrom: string | null;
@@ -428,12 +429,29 @@ export class UpdateServiceDto {
   @IsEnum(PriceType)
   priceType?: PriceType;
 
-  @ApiPropertyOptional({ example: 1, minimum: 1, maximum: 20 })
+  @ApiPropertyOptional({
+    example: true,
+    description:
+      'The provider\'s checkbox "Only one booking per day": true = 1 booking a day, false = no daily limit (only the hours and `concurrentClients` limit bookings). Wins over `maxEventsPerDay`.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  onePerDay?: boolean;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    example: 1,
+    minimum: 1,
+    maximum: 20,
+    deprecated: true,
+    description: 'Deprecated: send `onePerDay`. null = no daily limit.',
+  })
   @IsOptional()
   @IsInt()
   @Min(1)
   @Max(20)
-  maxEventsPerDay?: number;
+  maxEventsPerDay?: number | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true, example: 400, minimum: 1 })
   @IsOptional()

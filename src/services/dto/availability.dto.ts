@@ -80,6 +80,6 @@ export class AvailabilityDayDto {
 export class AvailabilityMonthDto {
   @ApiProperty({ format: 'uuid' }) providerId: string;
   @ApiProperty({ example: '2026-10' }) month: string;
-  @ApiProperty({ example: 1, description: 'Max events per day of the provider’s services (highest).' }) maxEventsPerDay: number;
+  @ApiProperty({ type: Number, nullable: true, example: 1, description: 'Bookings per day of the provider’s services (highest); null when one of them has no daily limit.' }) maxEventsPerDay: number | null;
   @ApiProperty({ type: [AvailabilityDayDto], description: 'Every day of the month.' }) days: AvailabilityDayDto[];
 }

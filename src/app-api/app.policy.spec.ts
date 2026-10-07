@@ -141,6 +141,12 @@ describe('dayState (calendar on screens 12 / 20)', () => {
     expect(dayState({ past: false, manualBlock: false, taken: 3, capacity: 2 })).toBe('busy');
   });
 
+  it('never fills up without a daily limit ("Only one booking per day" unticked)', () => {
+    expect(dayState({ past: false, manualBlock: false, taken: 12, capacity: null })).toBe('available');
+    expect(dayState({ past: false, manualBlock: true, taken: 0, capacity: null })).toBe('blocked');
+    expect(dayState({ past: true, manualBlock: false, taken: 0, capacity: null })).toBe('blocked');
+  });
+
   it('is blocked when the provider blocked it, or it is before the notice window', () => {
     expect(dayState({ past: false, manualBlock: true, taken: 0, capacity: 1 })).toBe('blocked');
     expect(dayState({ past: true, manualBlock: false, taken: 0, capacity: 1 })).toBe('blocked');

@@ -305,6 +305,24 @@ describe('App bookings (e2e)', () => {
         expect(quote.body.data).toMatchObject({ available: false, unavailableReason: 'OUTSIDE_SERVICE_HOURS' });
       });
 
+      it('takes any number of bookings a day when "Only one booking per day" is unticked', async () => {
+        const unlimited = await bookableService({ maxEventsPerDay: null });
+        const third = await loginAs(t, UserRole.Client);
+        for (const who of [client, otherClient, third]) {
+          expect((await book(who, { serviceId: unlimited.id, eventDate: '2027-07-25' })).status).toBe(201);
+        }
+        const detail = await request(t.http).get(`/api/v1/app/services/${unlimited.id}`);
+        expect(detail.body.data).toMatchObject({ onePerDay: false, maxEventsPerDay: null });
+        const month = await request(t.http).get(`/api/v1/app/services/${unlimited.id}/availability?month=2027-07`);
+        expect(month.body.data.maxEventsPerDay).toBeNull();
+        expect(month.body.data.days.find((d: { date: string }) => d.date === '2027-07-25').state).toBe('available');
+
+        // Ticked: the second booking of the day is refused.
+        const onePerDay = await bookableService({ maxEventsPerDay: 1 });
+        expect((await book(client, { serviceId: onePerDay.id, eventDate: '2027-07-26' })).status).toBe(201);
+        expectError(await book(otherClient, { serviceId: onePerDay.id, eventDate: '2027-07-26' }), 409, 'DATE_UNAVAILABLE');
+      });
+
       it('lets "clients at the same time" book overlapping hours, then refuses SLOT_UNAVAILABLE', async () => {
         const service = await bookableService({ maxEventsPerDay: 5, concurrentClients: 2 });
         const third = await loginAs(t, UserRole.Client);

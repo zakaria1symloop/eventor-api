@@ -263,6 +263,15 @@ describe('App provider (e2e)', () => {
       expect(fresh.body.data).toMatchObject({ onePerDay: true, maxEventsPerDay: 1 });
     });
 
+    it('saves "Allow several clients at the same time" from the app (allowSimultaneous)', async () => {
+      const created = await request(t.http)
+        .post(`${BASE}/services`)
+        .set(provider.headers)
+        .send({ categoryId, titleEn: 'Open buffet', basePrice: '2000.00', priceType: PriceType.PerPerson, wilayaCodes: [16], allowSimultaneous: true });
+      expect(created.status).toBe(201);
+      expect(created.body.data).toMatchObject({ allowSimultaneous: true, concurrentClients: null });
+    });
+
     it('returns one of my services in the detail shape, with priceType on list rows', async () => {
       const service = await ownService({ status: ServiceStatus.Published, priceType: PriceType.PerDay });
 

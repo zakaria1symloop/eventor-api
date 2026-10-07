@@ -359,7 +359,8 @@ export class AppCatalogService {
       maxGuests: row.max_guests === null ? null : Number(row.max_guests),
       onePerDay: row.max_events_per_day !== null && Number(row.max_events_per_day) === 1,
       maxEventsPerDay: row.max_events_per_day === null ? null : Number(row.max_events_per_day),
-      concurrentClients: Number(row.concurrent_clients),
+      allowSimultaneous: row.concurrent_clients === null || Number(row.concurrent_clients) !== 1,
+      concurrentClients: row.concurrent_clients === null ? null : Number(row.concurrent_clients),
       availableFrom: row.available_from ? dateOnly(row.available_from) : null,
       availableUntil: row.available_until ? dateOnly(row.available_until) : null,
       hours: await this.serviceHours(em, id),
@@ -706,7 +707,7 @@ export class AppCatalogService {
       /** Bookings per day; null = no daily limit. */
       capacity: number | null;
       /** One service: its period, weekly hours and clients at the same time give `freeRanges` (issues 3 #10). */
-      schedule?: { serviceId: string; hours: HourRange[]; from: string | null; until: string | null; concurrent: number };
+      schedule?: { serviceId: string; hours: HourRange[]; from: string | null; until: string | null; concurrent: number | null };
     },
   ): Promise<AppAvailabilityDto> {
     const { first, last, days } = parseMonth(input.month);
@@ -814,7 +815,7 @@ export class AppCatalogService {
         hours: await this.serviceHours(em, row.id),
         from: row.available_from ? dateOnly(row.available_from) : null,
         until: row.available_until ? dateOnly(row.available_until) : null,
-        concurrent: Number(row.concurrent_clients),
+        concurrent: row.concurrent_clients === null ? null : Number(row.concurrent_clients),
       },
     });
   }

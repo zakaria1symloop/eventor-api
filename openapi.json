@@ -70434,10 +70434,16 @@
             "nullable": true,
             "example": 400
           },
+          "allowSimultaneous": {
+            "type": "boolean",
+            "example": false,
+            "description": "\"Allow several clients at the same time\" is ticked."
+          },
           "concurrentClients": {
             "type": "number",
+            "nullable": true,
             "example": 1,
-            "description": "Different clients who may book overlapping hours."
+            "description": "1 = one client per time slot; null when `allowSimultaneous`."
           },
           "availableFrom": {
             "type": "string",
@@ -70562,6 +70568,7 @@
           "onePerDay",
           "maxEventsPerDay",
           "maxGuests",
+          "allowSimultaneous",
           "concurrentClients",
           "availableFrom",
           "availableUntil",
@@ -70645,7 +70652,7 @@
           "onePerDay": {
             "type": "boolean",
             "example": true,
-            "description": "The provider's checkbox \"Only one booking per day\": true = 1 booking a day, false = no daily limit (only the hours and `concurrentClients` limit bookings). Wins over `maxEventsPerDay`."
+            "description": "The provider's checkbox \"Only one booking per day\": true = 1 booking a day, false = no daily limit (only the hours and `allowSimultaneous` limit bookings). Wins over `maxEventsPerDay`."
           },
           "maxEventsPerDay": {
             "type": "number",
@@ -70662,12 +70669,19 @@
             "example": 400,
             "minimum": 1
           },
+          "allowSimultaneous": {
+            "type": "boolean",
+            "example": false,
+            "description": "The provider's checkbox \"Allow several clients at the same time\": true = any number of different clients can book the same hours, false = one client per time slot (409 `SLOT_UNAVAILABLE` for the next). Default false. Wins over `concurrentClients`."
+          },
           "concurrentClients": {
             "type": "number",
+            "nullable": true,
             "example": 1,
             "minimum": 1,
             "maximum": 50,
-            "description": "Different clients who may book overlapping hours (default 1). Whole-day bookings only count against `maxEventsPerDay`."
+            "deprecated": true,
+            "description": "Deprecated: send `allowSimultaneous`. null = no limit."
           },
           "availableFrom": {
             "type": "string",
@@ -70825,7 +70839,7 @@
           "onePerDay": {
             "type": "boolean",
             "example": true,
-            "description": "The provider's checkbox \"Only one booking per day\": true = 1 booking a day, false = no daily limit (only the hours and `concurrentClients` limit bookings). Wins over `maxEventsPerDay`."
+            "description": "The provider's checkbox \"Only one booking per day\": true = 1 booking a day, false = no daily limit (only the hours and `allowSimultaneous` limit bookings). Wins over `maxEventsPerDay`."
           },
           "maxEventsPerDay": {
             "type": "number",
@@ -70842,12 +70856,19 @@
             "example": 400,
             "minimum": 1
           },
+          "allowSimultaneous": {
+            "type": "boolean",
+            "example": false,
+            "description": "The provider's checkbox \"Allow several clients at the same time\": true = any number of different clients can book the same hours, false = one client per time slot (409 `SLOT_UNAVAILABLE` for the next). Default false. Wins over `concurrentClients`."
+          },
           "concurrentClients": {
             "type": "number",
+            "nullable": true,
             "example": 1,
             "minimum": 1,
             "maximum": 50,
-            "description": "Different clients who may book overlapping hours (default 1). Whole-day bookings only count against `maxEventsPerDay`."
+            "deprecated": true,
+            "description": "Deprecated: send `allowSimultaneous`. null = no limit."
           },
           "availableFrom": {
             "type": "string",
@@ -78187,10 +78208,16 @@
             "example": 1,
             "description": "1 when `onePerDay`; null = no daily limit."
           },
+          "allowSimultaneous": {
+            "type": "boolean",
+            "example": false,
+            "description": "\"Allow several clients at the same time\": different clients may book the same hours."
+          },
           "concurrentClients": {
             "type": "number",
+            "nullable": true,
             "example": 1,
-            "description": "Different clients who may book overlapping hours (timed bookings)."
+            "description": "1 = one client per time slot; null when `allowSimultaneous`."
           },
           "availableFrom": {
             "type": "string",
@@ -78266,6 +78293,7 @@
           "maxGuests",
           "onePerDay",
           "maxEventsPerDay",
+          "allowSimultaneous",
           "concurrentClients",
           "availableFrom",
           "availableUntil",
@@ -78313,7 +78341,7 @@
           },
           "freeRanges": {
             "nullable": true,
-            "description": "Service calendars only (null for packs): the hours still free that day — the service hours minus partial blocks and moments already booked by `concurrentClients` clients. Empty unless `state` is `available`.",
+            "description": "Service calendars only (null for packs): the hours still free that day — the service hours minus partial blocks and moments already booked (unless `allowSimultaneous`). Empty unless `state` is `available`.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AppTimeRangeDto"
@@ -80525,7 +80553,7 @@
           "onePerDay": {
             "type": "boolean",
             "example": true,
-            "description": "The provider's checkbox \"Only one booking per day\": true = 1 booking a day, false = no daily limit (only the hours and `concurrentClients` limit bookings). Wins over `maxEventsPerDay`."
+            "description": "The provider's checkbox \"Only one booking per day\": true = 1 booking a day, false = no daily limit (only the hours and `allowSimultaneous` limit bookings). Wins over `maxEventsPerDay`."
           },
           "maxEventsPerDay": {
             "type": "number",
@@ -80542,12 +80570,19 @@
             "example": 400,
             "minimum": 1
           },
+          "allowSimultaneous": {
+            "type": "boolean",
+            "example": false,
+            "description": "The provider's checkbox \"Allow several clients at the same time\": true = any number of different clients can book the same hours, false = one client per time slot (409 `SLOT_UNAVAILABLE` for the next). Default false. Wins over `concurrentClients`."
+          },
           "concurrentClients": {
             "type": "number",
+            "nullable": true,
             "example": 1,
             "minimum": 1,
             "maximum": 50,
-            "description": "Different clients who may book overlapping hours (default 1). Whole-day bookings only count against `maxEventsPerDay`."
+            "deprecated": true,
+            "description": "Deprecated: send `allowSimultaneous`. null = no limit."
           },
           "availableFrom": {
             "type": "string",
@@ -80687,7 +80722,7 @@
           "onePerDay": {
             "type": "boolean",
             "example": true,
-            "description": "The provider's checkbox \"Only one booking per day\": true = 1 booking a day, false = no daily limit (only the hours and `concurrentClients` limit bookings). Wins over `maxEventsPerDay`."
+            "description": "The provider's checkbox \"Only one booking per day\": true = 1 booking a day, false = no daily limit (only the hours and `allowSimultaneous` limit bookings). Wins over `maxEventsPerDay`."
           },
           "maxEventsPerDay": {
             "type": "number",
@@ -80704,12 +80739,19 @@
             "example": 400,
             "minimum": 1
           },
+          "allowSimultaneous": {
+            "type": "boolean",
+            "example": false,
+            "description": "The provider's checkbox \"Allow several clients at the same time\": true = any number of different clients can book the same hours, false = one client per time slot (409 `SLOT_UNAVAILABLE` for the next). Default false. Wins over `concurrentClients`."
+          },
           "concurrentClients": {
             "type": "number",
+            "nullable": true,
             "example": 1,
             "minimum": 1,
             "maximum": 50,
-            "description": "Different clients who may book overlapping hours (default 1). Whole-day bookings only count against `maxEventsPerDay`."
+            "deprecated": true,
+            "description": "Deprecated: send `allowSimultaneous`. null = no limit."
           },
           "availableFrom": {
             "type": "string",

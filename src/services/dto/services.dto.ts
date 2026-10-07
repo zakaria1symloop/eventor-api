@@ -334,7 +334,8 @@ export class ServiceDetailDto extends ServiceRowDto {
   @ApiProperty({ example: true, description: '"Only one booking per day" is ticked.' }) onePerDay: boolean;
   @ApiProperty({ type: Number, nullable: true, example: 1, description: '1 when `onePerDay`; null = no daily limit.' }) maxEventsPerDay: number | null;
   @ApiProperty({ type: Number, nullable: true, example: 400 }) maxGuests: number | null;
-  @ApiProperty({ example: 1, description: 'Different clients who may book overlapping hours.' }) concurrentClients: number;
+  @ApiProperty({ example: false, description: '"Allow several clients at the same time" is ticked.' }) allowSimultaneous: boolean;
+  @ApiProperty({ type: Number, nullable: true, example: 1, description: '1 = one client per time slot; null when `allowSimultaneous`.' }) concurrentClients: number | null;
   @ApiProperty({ type: String, format: 'date', nullable: true, example: '2027-03-01', description: 'First event date it can be booked for.' }) availableFrom: string | null;
   @ApiProperty({ type: String, format: 'date', nullable: true, example: '2027-03-31', description: 'Last event date; hidden from the catalog after it.' }) availableUntil: string | null;
   @ApiProperty({ type: [ServiceHourDto], description: 'Bookable hours per weekday; empty = any time. When set, bookings need times inside them.' }) hours: ServiceHourDto[];
@@ -432,7 +433,7 @@ export class UpdateServiceDto {
   @ApiPropertyOptional({
     example: true,
     description:
-      'The provider\'s checkbox "Only one booking per day": true = 1 booking a day, false = no daily limit (only the hours and `concurrentClients` limit bookings). Wins over `maxEventsPerDay`.',
+      'The provider\'s checkbox "Only one booking per day": true = 1 booking a day, false = no daily limit (only the hours and `allowSimultaneous` limit bookings). Wins over `maxEventsPerDay`.',
   })
   @IsOptional()
   @IsBoolean()
@@ -460,12 +461,29 @@ export class UpdateServiceDto {
   @Max(100000)
   maxGuests?: number | null;
 
-  @ApiPropertyOptional({ example: 1, minimum: 1, maximum: 50, description: 'Different clients who may book overlapping hours (default 1). Whole-day bookings only count against `maxEventsPerDay`.' })
+  @ApiPropertyOptional({
+    example: false,
+    description:
+      'The provider\'s checkbox "Allow several clients at the same time": true = any number of different clients can book the same hours, false = one client per time slot (409 `SLOT_UNAVAILABLE` for the next). Default false. Wins over `concurrentClients`.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  allowSimultaneous?: boolean;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    example: 1,
+    minimum: 1,
+    maximum: 50,
+    deprecated: true,
+    description: 'Deprecated: send `allowSimultaneous`. null = no limit.',
+  })
   @IsOptional()
   @IsInt()
   @Min(1)
   @Max(50)
-  concurrentClients?: number;
+  concurrentClients?: number | null;
 
   @ApiPropertyOptional({ type: String, format: 'date', nullable: true, example: '2027-03-01', description: 'First event date it can be booked for; null = no limit.' })
   @IsOptional()

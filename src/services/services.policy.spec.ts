@@ -3,6 +3,7 @@ import { UserStatus, VerificationStatus } from '../common/enums/user.enums.js';
 import { dayStatus } from './availability.service.js';
 import {
   canTransition,
+  concurrencyLimit,
   dailyLimit,
   featureRefusal,
   fromCents,
@@ -150,5 +151,16 @@ describe('dailyLimit ("Only one booking per day")', () => {
     expect(dailyLimit({ maxEventsPerDay: 3 }, 1)).toBe(3);
     expect(dailyLimit({ maxEventsPerDay: null }, 1)).toBeNull();
     expect(dailyLimit({}, 1)).toBe(1);
+  });
+});
+
+describe('concurrencyLimit ("Allow several clients at the same time")', () => {
+  it('lets the checkbox win, then the old number, then keeps the current value', () => {
+    expect(concurrencyLimit({ allowSimultaneous: true }, 1)).toBeNull();
+    expect(concurrencyLimit({ allowSimultaneous: false }, null)).toBe(1);
+    expect(concurrencyLimit({ allowSimultaneous: false, concurrentClients: 5 }, null)).toBe(1);
+    expect(concurrencyLimit({ concurrentClients: 3 }, 1)).toBe(3);
+    expect(concurrencyLimit({ concurrentClients: null }, 1)).toBeNull();
+    expect(concurrencyLimit({}, 1)).toBe(1);
   });
 });

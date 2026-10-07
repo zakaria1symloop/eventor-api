@@ -45,6 +45,7 @@ import { SERVICE_EVENTS, type ServiceEvent, type ServiceHiddenEvent } from './se
 import { assertValidHours, type HourRange } from './scheduling.policy.js';
 import {
   canTransition,
+  concurrencyLimit,
   dailyLimit,
   featureRefusal,
   fromCents,
@@ -336,6 +337,7 @@ export class ServicesService {
       onePerDay: service.maxEventsPerDay === 1,
       maxEventsPerDay: service.maxEventsPerDay,
       maxGuests: service.maxGuests,
+      allowSimultaneous: service.concurrentClients !== 1,
       concurrentClients: service.concurrentClients,
       availableFrom: service.availableFrom,
       availableUntil: service.availableUntil,
@@ -526,7 +528,7 @@ export class ServicesService {
           priceType: dto.priceType,
           maxEventsPerDay: dailyLimit(dto, 1),
           maxGuests: dto.maxGuests ?? null,
-          concurrentClients: dto.concurrentClients ?? 1,
+          concurrentClients: concurrencyLimit(dto, 1),
           availableFrom: dto.availableFrom ?? null,
           availableUntil: dto.availableUntil ?? null,
           status: ServiceStatus.Draft,
@@ -581,6 +583,8 @@ export class ServicesService {
       }
       // "Only one booking per day" decides the daily limit when sent.
       if (dto.onePerDay !== undefined) dto.maxEventsPerDay = dailyLimit(dto, service.maxEventsPerDay);
+      // "Allow several clients at the same time" decides the slot limit when sent.
+      if (dto.allowSimultaneous !== undefined) dto.concurrentClients = concurrencyLimit(dto, service.concurrentClients);
       for (const field of UPDATABLE_FIELDS) {
         const next = dto[field];
         if (next !== undefined && next !== service[field]) {

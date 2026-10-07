@@ -810,14 +810,14 @@ export class BookingsService {
   /**
    * The service's own schedule (issues 3 #6–#8): event date inside its period,
    * times inside its weekly hours (required when it has hours), and fewer than
-   * `concurrent_clients` timed bookings overlapping. A pack checks each item.
+   * `concurrent_clients` timed bookings overlapping (none when it is null). A pack checks each item.
    * Returns the first obstacle, or null; `assertSchedule` throws it.
    */
   async scheduleObstacle(
     em: EntityManager,
     input: { serviceId: string | null; packId: string | null; date: string; startTime: string | null; endTime: string | null; excludeBookingId?: string },
   ): Promise<{ code: 'OUTSIDE_SERVICE_PERIOD' | 'SERVICE_TIMES_REQUIRED' | 'OUTSIDE_SERVICE_HOURS' | 'SLOT_UNAVAILABLE'; details: Record<string, unknown> } | null> {
-    const services: { id: string; concurrent_clients: number; available_from: string | Date | null; available_until: string | Date | null }[] = input.serviceId
+    const services: { id: string; concurrent_clients: number | null; available_from: string | Date | null; available_until: string | Date | null }[] = input.serviceId
       ? await em.query('SELECT id, concurrent_clients, available_from, available_until FROM services WHERE id = ?', [input.serviceId])
       : await em.query(
           'SELECT s.id, s.concurrent_clients, s.available_from, s.available_until FROM pack_items pi JOIN services s ON s.id = pi.service_id WHERE pi.pack_id = ?',
@@ -845,7 +845,8 @@ export class BookingsService {
         return { code: 'OUTSIDE_SERVICE_HOURS', details: { weekday: weekdayOf(input.date), hours: today } };
       }
 
-      if (booked) {
+      // null = "Allow several clients at the same time": no slot limit.
+      if (booked && service.concurrent_clients !== null) {
         const others: { start_time: string | null; end_time: string | null }[] = await em.query(
           `SELECT b.start_time, b.end_time FROM bookings b
             WHERE ? BETWEEN b.event_date AND COALESCE(b.end_date, b.event_date)

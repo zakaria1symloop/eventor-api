@@ -91,14 +91,14 @@ export function overlapping(span: Span | null, others: (Span | null)[]): number 
 /**
  * The free time of one day: the service's hours that weekday (all day when it has
  * none) minus partial blocks and minus the moments already booked by
- * `capacity` clients. Returned as `HH:mm` pairs; an end at or before the start
+ * `capacity` clients (null = no limit: bookings never fill a moment). Returned as `HH:mm` pairs; an end at or before the start
  * runs past midnight. Empty = nothing free.
  */
-export function freeRanges(input: { hours: HourRange[]; date: string; blocks: Span[]; booked: Span[]; capacity: number }): { startTime: string; endTime: string }[] {
+export function freeRanges(input: { hours: HourRange[]; date: string; blocks: Span[]; booked: Span[]; capacity: number | null }): { startTime: string; endTime: string }[] {
   let free: Span[] = input.hours.length > 0 ? dayRanges(input.hours, input.date) : [{ start: 0, end: 1440 }];
 
-  // Moments where `capacity` timed bookings already overlap.
-  const edges = input.booked.flatMap((b) => [
+  // Moments where `capacity` timed bookings already overlap (never full without a limit).
+  const edges = (input.capacity === null ? [] : input.booked).flatMap((b) => [
     { at: b.start, delta: 1 },
     { at: b.end, delta: -1 },
   ]);
@@ -108,8 +108,9 @@ export function freeRanges(input: { hours: HourRange[]; date: string; blocks: Sp
   let fullSince: number | null = null;
   for (const edge of edges) {
     open += edge.delta;
-    if (open >= Math.max(1, input.capacity) && fullSince === null) fullSince = edge.at;
-    if (open < Math.max(1, input.capacity) && fullSince !== null) {
+    const capacity = Math.max(1, input.capacity ?? 1);
+    if (open >= capacity && fullSince === null) fullSince = edge.at;
+    if (open < capacity && fullSince !== null) {
       if (edge.at > fullSince) full.push({ start: fullSince, end: edge.at });
       fullSince = null;
     }

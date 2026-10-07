@@ -186,7 +186,8 @@ export class AppServiceDetailDto extends AppServiceCardDto {
   @ApiProperty({ type: Number, nullable: true, example: 300 }) maxGuests: number | null;
   @ApiProperty({ example: true, description: '"Only one booking per day": a day with one pending or accepted booking is full.' }) onePerDay: boolean;
   @ApiProperty({ type: Number, nullable: true, example: 1, description: '1 when `onePerDay`; null = no daily limit.' }) maxEventsPerDay: number | null;
-  @ApiProperty({ example: 1, description: 'Different clients who may book overlapping hours (timed bookings).' }) concurrentClients: number;
+  @ApiProperty({ example: false, description: '"Allow several clients at the same time": different clients may book the same hours.' }) allowSimultaneous: boolean;
+  @ApiProperty({ type: Number, nullable: true, example: 1, description: '1 = one client per time slot; null when `allowSimultaneous`.' }) concurrentClients: number | null;
   @ApiProperty({ type: String, format: 'date', nullable: true, example: '2027-03-01', description: 'First event date it can be booked for.' }) availableFrom: string | null;
   @ApiProperty({ type: String, format: 'date', nullable: true, example: '2027-03-31', description: 'Last event date it can be booked for.' }) availableUntil: string | null;
   @ApiProperty({
@@ -259,7 +260,7 @@ export class AppAvailabilityDayDto {
     nullable: true,
     description:
       'Service calendars only (null for packs): the hours still free that day — the service hours minus partial blocks and ' +
-      'moments already booked by `concurrentClients` clients. Empty unless `state` is `available`.',
+      'moments already booked (unless `allowSimultaneous`). Empty unless `state` is `available`.',
   })
   freeRanges: AppTimeRangeDto[] | null;
 }

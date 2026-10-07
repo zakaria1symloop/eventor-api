@@ -128,3 +128,9 @@ export function dailyLimit(dto: { onePerDay?: boolean; maxEventsPerDay?: number 
   if (dto.onePerDay !== undefined) return dto.onePerDay ? 1 : null;
   return dto.maxEventsPerDay !== undefined ? dto.maxEventsPerDay : current;
 }
+
+/** Clients per time slot a save asks for: `allowSimultaneous` wins (no limit, or 1), then `concurrentClients`, else `current`. */
+export function concurrencyLimit(dto: { allowSimultaneous?: boolean; concurrentClients?: number | null }, current: number | null): number | null {
+  if (dto.allowSimultaneous !== undefined) return dto.allowSimultaneous ? null : 1;
+  return dto.concurrentClients !== undefined ? dto.concurrentClients : current;
+}

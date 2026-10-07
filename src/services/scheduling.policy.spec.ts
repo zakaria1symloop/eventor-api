@@ -81,5 +81,9 @@ describe('scheduling policy', () => {
     ]);
     // A closed weekday has nothing free.
     expect(freeRanges({ hours, date: SUN, blocks: [], booked: [], capacity: 1 })).toEqual([]);
+    // No limit ("Allow several clients at the same time"): bookings never take a moment away.
+    expect(freeRanges({ hours: [], date: SUN, blocks: [], booked: [span('19:00', '21:00')!, span('19:00', '21:00')!], capacity: null })).toEqual([
+      { startTime: '00:00', endTime: '00:00' },
+    ]);
   });
 });

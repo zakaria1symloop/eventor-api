@@ -305,6 +305,28 @@ describe('App bookings (e2e)', () => {
         expect(quote.body.data).toMatchObject({ available: false, unavailableReason: 'OUTSIDE_SERVICE_HOURS' });
       });
 
+      it('lets several clients book the same hours when "Allow several clients at the same time" is ticked', async () => {
+        const shared = await bookableService({ maxEventsPerDay: null, concurrentClients: null });
+        const third = await loginAs(t, UserRole.Client);
+        const slot = { serviceId: shared.id, eventDate: '2027-07-27', startTime: '18:00', endTime: '22:00' };
+        for (const who of [client, otherClient, third]) {
+          expect((await book(who, slot)).status).toBe(201);
+        }
+        const detail = await request(t.http).get(`/api/v1/app/services/${shared.id}`);
+        expect(detail.body.data).toMatchObject({ allowSimultaneous: true, concurrentClients: null });
+        // Bookings never take the hours away: the whole day stays free.
+        const month = await request(t.http).get(`/api/v1/app/services/${shared.id}/availability?month=2027-07`);
+        expect(month.body.data.days.find((d: { date: string }) => d.date === '2027-07-27')).toMatchObject({
+          state: 'available',
+          freeRanges: [{ startTime: '00:00', endTime: '00:00' }],
+        });
+
+        // Unticked (the default): the second client on the same hours is refused.
+        const single = await bookableService({ maxEventsPerDay: null });
+        expect((await book(client, { ...slot, serviceId: single.id })).status).toBe(201);
+        expectError(await book(otherClient, { ...slot, serviceId: single.id }), 409, 'SLOT_UNAVAILABLE');
+      });
+
       it('takes any number of bookings a day when "Only one booking per day" is unticked', async () => {
         const unlimited = await bookableService({ maxEventsPerDay: null });
         const third = await loginAs(t, UserRole.Client);

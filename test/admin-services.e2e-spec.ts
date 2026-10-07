@@ -350,6 +350,20 @@ describe('Admin services & availability (e2e)', () => {
   });
 
   describe('PATCH /admin/services/:id', () => {
+    it('saves "Allow several clients at the same time" (allowSimultaneous)', async () => {
+      const service = await publishable({ status: ServiceStatus.Draft } as never);
+      const fresh = await request(t.http).get(`${BASE}/${service.id}`).set(admin.headers).expect(200);
+      expect(fresh.body.data).toMatchObject({ allowSimultaneous: false, concurrentClients: 1 });
+
+      const on = await request(t.http).patch(`${BASE}/${service.id}`).set(admin.headers).send({ allowSimultaneous: true }).expect(200);
+      expect(on.body.data).toMatchObject({ allowSimultaneous: true, concurrentClients: null });
+      const off = await request(t.http).patch(`${BASE}/${service.id}`).set(admin.headers).send({ allowSimultaneous: false }).expect(200);
+      expect(off.body.data).toMatchObject({ allowSimultaneous: false, concurrentClients: 1 });
+      // Deprecated number still accepted; the checkbox wins when both are sent.
+      const both = await request(t.http).patch(`${BASE}/${service.id}`).set(admin.headers).send({ concurrentClients: 4, allowSimultaneous: true }).expect(200);
+      expect(both.body.data).toMatchObject({ allowSimultaneous: true, concurrentClients: null });
+    });
+
     it('saves "Only one booking per day" (onePerDay) and keeps the old number field working', async () => {
       const service = await publishable({ status: ServiceStatus.Draft } as never);
       const off = await request(t.http).patch(`${BASE}/${service.id}`).set(admin.headers).send({ onePerDay: false }).expect(200);

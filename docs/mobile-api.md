@@ -630,9 +630,12 @@ loop when it fails.
 
 ## 16. Changelog
 
-### 2026-10-07 — "Only one booking per day" replaces the max-events number
+### 2026-10-07 — two provider checkboxes: "Only one booking per day" and "Allow several clients at the same time"
 
-- The provider's daily limit is now a checkbox. Send **`onePerDay`** (boolean) on `POST/PATCH /app/provider/services`: `true` = one booking a day, `false` = no daily limit (only the hours and `concurrentClients` limit bookings). New services start with `true`.
+- "Clients at the same time" is now a checkbox too. Send **`allowSimultaneous`** (boolean) on `POST/PATCH /app/provider/services`: `true` = any number of different clients can book the same hours, `false` = one client per time slot (409 `SLOT_UNAVAILABLE` for the next). New services start with `false`.
+- Service details gain `allowSimultaneous`; **`concurrentClients` is now `number | null`** (1 = one client per slot, `null` = several) and deprecated on writes, where `allowSimultaneous` wins. With `allowSimultaneous`, calendar `freeRanges` are never reduced by bookings.
+- Existing services: those at 1 stay "one client per time slot"; any set above 1 now allow several.
+- The provider's daily limit is now a checkbox. Send **`onePerDay`** (boolean) on `POST/PATCH /app/provider/services`: `true` = one booking a day, `false` = no daily limit (only the hours and `allowSimultaneous` limit bookings). New services start with `true`.
 - Service details (`GET /app/services/{id}`, `GET /app/provider/services/{id}`) gain `onePerDay`; **`maxEventsPerDay` is now `number | null`**: 1 when ticked, `null` = no daily limit. The same on the calendars (`maxEventsPerDay: null` when unlimited); a day without a limit is never `busy` because of bookings alone.
 - `maxEventsPerDay` is still accepted on writes but **deprecated**; `onePerDay` wins when both are sent.
 - Existing services: those at 1 stay ticked; those that allowed more than one a day now have no daily limit.

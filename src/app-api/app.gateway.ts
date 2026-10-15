@@ -10,6 +10,7 @@ import { SessionAudience } from '../common/enums/auth.enums.js';
 import { UserRole, UserStatus } from '../common/enums/user.enums.js';
 import { BOOKING_EVENTS, type BookingEvent, type BookingStatusChangedEvent } from '../bookings/bookings.events.js';
 import { MESSAGING_EVENTS, type ConversationUpdatedEvent, type MessageCreatedEvent } from '../messaging/messaging.events.js';
+import { AVAILABILITY_EVENTS, type AvailabilityChangedEvent } from '../services/services.events.js';
 import { NOTIFICATION_EVENTS, type UserNotificationCreatedEvent } from '../notifications/notifications.service.js';
 import { User } from '../users/entities/user.entity.js';
 import { socketToken } from '../messaging/messaging.gateway.js';
@@ -164,6 +165,22 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection {
     for (const userId of [event.clientId, event.providerId]) {
       if (userId) this.server.to(appUserRoom(userId)).emit('booking:updated', payload);
     }
+    // A booking holds, books or frees calendar days: the provider calendar reloads the month.
+    if (event.providerId) {
+      this.server.to(appUserRoom(event.providerId)).emit('availability:updated', {
+        providerId: event.providerId,
+        serviceId: null,
+        date: null,
+        reason: 'booking',
+        bookingId: event.bookingId,
+      });
+    }
+  }
+
+  /** The provider's own calendar, when a manual block is added or removed (by them or by an admin). */
+  @OnEvent(AVAILABILITY_EVENTS.changed)
+  onAvailability(event: AvailabilityChangedEvent): void {
+    this.server?.to(appUserRoom(event.providerId)).emit('availability:updated', { ...event, bookingId: null });
   }
 }
 
@@ -173,6 +190,7 @@ export const APP_SOCKET_EVENTS = {
   messageNew: 'message:new',
   conversationUpdated: 'conversation:updated',
   bookingUpdated: 'booking:updated',
+  availabilityUpdated: 'availability:updated',
   notificationNew: 'notification:new',
 } as const;
 

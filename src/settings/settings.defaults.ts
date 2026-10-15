@@ -1,3 +1,5 @@
+import { PRIVACY_AR, PRIVACY_EN, TERMS_AR, TERMS_EN } from '../legal/legal-drafts.js';
+
 export interface InvoiceIssuer {
   name: string;
   address: string;
@@ -38,6 +40,12 @@ export interface SettingsMap {
   support_phone: string;
   terms_url: string;
   privacy_url: string;
+  legal_terms_en: string;
+  legal_terms_ar: string;
+  legal_privacy_en: string;
+  legal_privacy_ar: string;
+  store_url_android: string;
+  store_url_ios: string;
 }
 
 export type SettingKey = keyof SettingsMap;
@@ -72,6 +80,12 @@ export const SETTINGS_DEFAULTS: Readonly<SettingsMap> = Object.freeze({
   support_phone: '',
   terms_url: '',
   privacy_url: '',
+  legal_terms_en: TERMS_EN,
+  legal_terms_ar: TERMS_AR,
+  legal_privacy_en: PRIVACY_EN,
+  legal_privacy_ar: PRIVACY_AR,
+  store_url_android: '',
+  store_url_ios: '',
 });
 
 export const SETTING_KEYS = Object.keys(SETTINGS_DEFAULTS) as SettingKey[];

@@ -12,6 +12,7 @@ export const SETTING_SECTIONS = [
   'languages',
   'notifications',
   'support',
+  'legal',
   'maintenance',
 ] as const;
 export type SettingSection = (typeof SETTING_SECTIONS)[number];
@@ -25,6 +26,8 @@ export const SETTING_TYPES = [
   'url',
   'phone',
   'version',
+  /** Long multi-line text (the legal pages). Line breaks are kept. */
+  'text',
   'enum_list',
   'object',
 ] as const;
@@ -124,11 +127,18 @@ const DEFINITIONS: Record<SettingKey, Def> = {
   support_phone: { section: 'support', type: 'phone', maxLength: 20, allowEmpty: true, sensitive: false },
   terms_url: { section: 'support', type: 'url', maxLength: 500, allowEmpty: true, sensitive: false },
   privacy_url: { section: 'support', type: 'url', maxLength: 500, allowEmpty: true, sensitive: false },
+  // Legal pages ({ADMIN_URL}/{lang}/legal/terms and /legal/privacy); markdown-lite, see src/legal/legal-drafts.ts
+  legal_terms_en: { section: 'legal', type: 'text', maxLength: 60_000, sensitive: false },
+  legal_terms_ar: { section: 'legal', type: 'text', maxLength: 60_000, sensitive: false },
+  legal_privacy_en: { section: 'legal', type: 'text', maxLength: 60_000, sensitive: false },
+  legal_privacy_ar: { section: 'legal', type: 'text', maxLength: 60_000, sensitive: false },
   // Maintenance
   maintenance_mode: { section: 'maintenance', type: 'boolean', sensitive: true },
   maintenance_message_en: { section: 'maintenance', type: 'string', maxLength: 500, allowEmpty: true, sensitive: false },
   maintenance_message_ar: { section: 'maintenance', type: 'string', maxLength: 500, allowEmpty: true, sensitive: false },
   min_app_version: { section: 'maintenance', type: 'version', maxLength: 20, sensitive: false },
+  store_url_android: { section: 'maintenance', type: 'url', maxLength: 500, allowEmpty: true, sensitive: false },
+  store_url_ios: { section: 'maintenance', type: 'url', maxLength: 500, allowEmpty: true, sensitive: false },
 };
 
 /** Every setting with its section, type, limits and sensitivity (SET-01). */
@@ -222,6 +232,15 @@ export function validateSettingValue(key: string, value: unknown): ValidationRes
           ok = false;
         }
         if (!ok) return fail(field, 'IS_URL', `${key} must be an http(s) URL`);
+      }
+      return { ok: true, value: text };
+    }
+    case 'text': {
+      if (typeof value !== 'string') return fail(field, 'IS_STRING', `${key} must be a string`);
+      const text = value.replace(/\r\n/g, '\n').trim();
+      if (text === '' && !def.allowEmpty) return fail(field, 'IS_NOT_EMPTY', `${key} must not be empty`);
+      if (def.maxLength !== null && text.length > def.maxLength) {
+        return fail(field, 'MAX_LENGTH', `${key} must be shorter than or equal to ${def.maxLength} characters`);
       }
       return { ok: true, value: text };
     }

@@ -7,12 +7,14 @@ import { AuditLevel } from '../common/enums/admin.enums.js';
 import { AvailabilityKind } from '../common/enums/catalog.enums.js';
 import { UserRole } from '../common/enums/user.enums.js';
 import { AppException } from '../common/errors/app.exception.js';
+import { DomainEvents } from '../common/events/domain-events.js';
 import { runInTransaction } from '../database/transaction.js';
 import { User } from '../users/entities/user.entity.js';
 import { algiersToday, dateOnly } from '../users/users.service.js';
 import type { AvailabilityBlockDto, AvailabilityDayDto, AvailabilityMonthDto, CreateAvailabilityBlockDto } from './dto/availability.dto.js';
 import { AvailabilityBlock } from './entities/availability-block.entity.js';
 import { Service } from './entities/service.entity.js';
+import { AVAILABILITY_EVENTS, type AvailabilityChangedEvent } from './services.events.js';
 
 const hhmm = (value: string | null): string | null => (value ? String(value).slice(0, 5) : null);
 
@@ -30,6 +32,7 @@ export class AvailabilityService {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly audit: AuditService,
+    private readonly events: DomainEvents,
   ) {}
 
   private async provider(em: EntityManager, id: string): Promise<User> {
@@ -121,7 +124,7 @@ export class AvailabilityService {
     if (dto.startTime && dto.endTime && dto.endTime <= dto.startTime) {
       throw new AppException(400, 'VALIDATION_FAILED', [{ field: 'endTime', code: 'AFTER_START', message: 'endTime must be after startTime' }]);
     }
-    return runInTransaction(this.dataSource, async (em) => {
+    return runInTransaction(this.dataSource, async (em, afterCommit) => {
       const provider = await this.provider(em, providerId);
       if (dto.date < algiersToday()) throw AppException.of('AVAILABILITY_DATE_PAST', { date: dto.date });
       let service: Service | null = null;
@@ -154,6 +157,7 @@ export class AvailabilityService {
         },
         em,
       );
+      this.events.emitAfterCommit<AvailabilityChangedEvent>(afterCommit, AVAILABILITY_EVENTS.changed, { providerId, serviceId: service?.id ?? null, date: dto.date, reason: 'blocked' });
       return {
         id: block.id,
         kind: block.kind,
@@ -169,7 +173,7 @@ export class AvailabilityService {
   }
 
   async removeBlock(auth: AuthUser, id: string): Promise<void> {
-    await runInTransaction(this.dataSource, async (em) => {
+    await runInTransaction(this.dataSource, async (em, afterCommit) => {
       const block = await em.getRepository(AvailabilityBlock).findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
       if (!block) throw AppException.of('AVAILABILITY_BLOCK_NOT_FOUND');
       if (block.kind !== AvailabilityKind.Blocked) throw AppException.of('AVAILABILITY_BLOCK_NOT_REMOVABLE', { kind: block.kind });
@@ -185,6 +189,12 @@ export class AvailabilityService {
         },
         em,
       );
+      this.events.emitAfterCommit<AvailabilityChangedEvent>(afterCommit, AVAILABILITY_EVENTS.changed, {
+        providerId: block.providerId,
+        serviceId: block.serviceId,
+        date: dateOnly(block.date),
+        reason: 'unblocked',
+      });
     });
   }
 }

@@ -37256,6 +37256,180 @@
         "security": []
       }
     },
+    "/api/v1/app/auth/delete-account": {
+      "post": {
+        "description": "Public route behind the \"Delete my account\" web page (`deleteAccountUrl` in `/app/config`, required by Google Play). The email and password of a client or provider account, then the same deletion as `DELETE /app/me`: 409 `ACCOUNT_HAS_ACTIVE_ITEMS` while an upcoming booking or an open dispute remains. Same lockout as sign-in. Blocked and unverified accounts can delete too.",
+        "operationId": "AppAuthController_deleteAccount",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Account deleted."
+          },
+          "400": {
+            "description": "`VALIDATION_FAILED`: Some fields are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "value": {
+                      "statusCode": 400,
+                      "error": "Bad Request",
+                      "code": "VALIDATION_FAILED",
+                      "message": "Some fields are invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`INVALID_CREDENTIALS`: The email or password is incorrect.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "INVALID_CREDENTIALS": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "INVALID_CREDENTIALS",
+                      "message": "The email or password is incorrect.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ROLE_NOT_ALLOWED_IN_APP`: Only client and provider accounts can use the app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "ROLE_NOT_ALLOWED_IN_APP": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "ROLE_NOT_ALLOWED_IN_APP",
+                      "message": "Only client and provider accounts can use the app.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`ACCOUNT_HAS_ACTIVE_ITEMS`: This account has {upcomingBookings} accepted upcoming bookings and {openDisputes} open disputes. Resolve them first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "ACCOUNT_HAS_ACTIVE_ITEMS": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "ACCOUNT_HAS_ACTIVE_ITEMS",
+                      "message": "This account has {upcomingBookings} accepted upcoming bookings and {openDisputes} open disputes. Resolve them first.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`ACCOUNT_LOCKED`: Too many failed attempts. Try again in {retryAfterSeconds} seconds.<br>`RATE_LIMITED`: Too many requests. Please try again later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "ACCOUNT_LOCKED": {
+                    "value": {
+                      "statusCode": 429,
+                      "error": "Too Many Requests",
+                      "code": "ACCOUNT_LOCKED",
+                      "message": "Too many failed attempts. Try again in {retryAfterSeconds} seconds.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "RATE_LIMITED": {
+                    "value": {
+                      "statusCode": 429,
+                      "error": "Too Many Requests",
+                      "code": "RATE_LIMITED",
+                      "message": "Too many requests. Please try again later.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete an account from the web",
+        "tags": [
+          "app-auth"
+        ],
+        "x-public": true,
+        "security": []
+      }
+    },
     "/api/v1/app/auth/refresh": {
       "post": {
         "description": "Public route authenticated by the refresh token in the body (screen 01 Splash restores the session with it). Returns `refreshToken` **in the body** (mobile has no cookie jar): store it in the OS keychain / keystore, never in plain preferences. It rotates on every `/app/auth/refresh`, and replaying a rotated one revokes the whole session. A refresh token minted for the dashboard is refused.",
@@ -41152,6 +41326,540 @@
         ]
       }
     },
+    "/api/v1/app/me/blocks": {
+      "get": {
+        "description": "Profile · Blocked users, newest first. Unblock with `DELETE /app/me/blocks/{userId}`.",
+        "operationId": "AppMeController_listBlocks",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Object"
+                }
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Object"
+                }
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "`field:asc` or `field:desc`. Each endpoint lists the fields it can sort by.",
+            "schema": {
+              "example": "createdAt:desc",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AppBlockedUserDto"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/PageMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VALIDATION_FAILED`: Some fields are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "value": {
+                      "statusCode": 400,
+                      "error": "Bad Request",
+                      "code": "VALIDATION_FAILED",
+                      "message": "Some fields are invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_SESSION_REVOKED`: Your session has ended. Please sign in again.\n\n`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FORBIDDEN_ROLE": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "FORBIDDEN_ROLE",
+                      "message": "Your account role cannot access this.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Users I blocked",
+        "tags": [
+          "app-me"
+        ]
+      },
+      "post": {
+        "description": "From a chat, a provider profile or a review. Idempotent. Once either of two users blocked the other: no message either way (`POST …/messages` and starting a chat answer 403 `USER_BLOCKED`), no new booking request between them (`POST /app/bookings` answers 403 `USER_BLOCKED`), and their direct chat shows `blockedByMe` / `blockedMe` with `canWrite: false`. Bookings made before keep going (status changes, invoices, check-in, disputes). Reviews stay public (report them instead). Eventor support cannot be blocked.",
+        "operationId": "AppMeController_block",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppBlockUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppBlockedUserDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VALIDATION_FAILED`: Some fields are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "value": {
+                      "statusCode": 400,
+                      "error": "Bad Request",
+                      "code": "VALIDATION_FAILED",
+                      "message": "Some fields are invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`AUTH_SESSION_REVOKED`: Your session has ended. Please sign in again.\n\n`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FORBIDDEN_ROLE": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "FORBIDDEN_ROLE",
+                      "message": "Your account role cannot access this.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`USER_NOT_FOUND`: The user was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "USER_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "USER_NOT_FOUND",
+                      "message": "The user was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`BLOCK_TARGET_INVALID`: You cannot block this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "BLOCK_TARGET_INVALID": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "BLOCK_TARGET_INVALID",
+                      "message": "You cannot block this account.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Block a user",
+        "tags": [
+          "app-me"
+        ]
+      }
+    },
+    "/api/v1/app/me/blocks/{userId}": {
+      "delete": {
+        "description": "Chat and booking requests work again (unless the other user blocked you too).",
+        "operationId": "AppMeController_unblock",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Unblocked."
+          },
+          "401": {
+            "description": "`AUTH_SESSION_REVOKED`: Your session has ended. Please sign in again.\n\n`AUTH_TOKEN_MISSING`: Authentication is required.<br>`AUTH_TOKEN_INVALID`: The access token is invalid.<br>`AUTH_TOKEN_EXPIRED`: The access token has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "AUTH_TOKEN_MISSING": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_MISSING",
+                      "message": "Authentication is required.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_INVALID",
+                      "message": "The access token is invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AUTH_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 401,
+                      "error": "Unauthorized",
+                      "code": "AUTH_TOKEN_EXPIRED",
+                      "message": "The access token has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "FORBIDDEN_ROLE": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "FORBIDDEN_ROLE",
+                      "message": "Your account role cannot access this.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`BLOCK_NOT_FOUND`: You have not blocked this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "BLOCK_NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "BLOCK_NOT_FOUND",
+                      "message": "You have not blocked this account.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Unblock a user",
+        "tags": [
+          "app-me"
+        ]
+      }
+    },
     "/api/v1/app/me/favourites": {
       "get": {
         "description": "Screen 17 Favorites. Services and packs together, newest first. A row whose target stopped being visible stays in the list with `available: false`, so the grid does not silently shrink. `categoryId` is the chip row (services only, since packs have no single category).",
@@ -43890,6 +44598,16 @@
             }
           },
           {
+            "name": "providerId",
+            "required": false,
+            "in": "query",
+            "description": "Only the services of this provider: screen 13 \"See all (N)\", with `servicesCount` from `GET /app/providers/{id}` as the total.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
             "name": "wilaya",
             "required": false,
             "in": "query",
@@ -45934,7 +46652,7 @@
             }
           },
           "403": {
-            "description": "`EMAIL_NOT_VERIFIED`: Verify your email address before signing in.",
+            "description": "`EMAIL_NOT_VERIFIED`: Verify your email address before signing in.<br>`USER_BLOCKED`: You cannot do this: one of you has blocked the other.",
             "content": {
               "application/json": {
                 "schema": {
@@ -45947,6 +46665,18 @@
                       "error": "Forbidden",
                       "code": "EMAIL_NOT_VERIFIED",
                       "message": "Verify your email address before signing in.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "USER_BLOCKED": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "USER_BLOCKED",
+                      "message": "You cannot do this: one of you has blocked the other.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -57585,13 +58315,25 @@
             }
           },
           "403": {
-            "description": "`NOT_OWNER`: You do not own this item.<br>`CONVERSATION_READ_ONLY`: You cannot write in this conversation.",
+            "description": "`USER_BLOCKED`: You cannot do this: one of you has blocked the other.<br>`NOT_OWNER`: You do not own this item.<br>`CONVERSATION_READ_ONLY`: You cannot write in this conversation.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponseDto"
                 },
                 "examples": {
+                  "USER_BLOCKED": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "USER_BLOCKED",
+                      "message": "You cannot do this: one of you has blocked the other.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
                   "NOT_OWNER": {
                     "value": {
                       "statusCode": 403,
@@ -58261,7 +59003,7 @@
             }
           },
           "403": {
-            "description": "`NOT_A_PARTICIPANT`: You are not part of this conversation.<br>`CONVERSATION_READ_ONLY`: You cannot write in this conversation.",
+            "description": "`NOT_A_PARTICIPANT`: You are not part of this conversation.<br>`USER_BLOCKED`: You cannot do this: one of you has blocked the other.<br>`CONVERSATION_READ_ONLY`: You cannot write in this conversation.",
             "content": {
               "application/json": {
                 "schema": {
@@ -58274,6 +59016,18 @@
                       "error": "Forbidden",
                       "code": "NOT_A_PARTICIPANT",
                       "message": "You are not part of this conversation.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "USER_BLOCKED": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "USER_BLOCKED",
+                      "message": "You cannot do this: one of you has blocked the other.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -61951,6 +62705,113 @@
           "app-reviews"
         ]
       }
+    },
+    "/api/v1/public/legal/{doc}": {
+      "get": {
+        "description": "Public. In the `Accept-Language` language (en / ar).",
+        "operationId": "LegalController_get",
+        "parameters": [
+          {
+            "name": "doc",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "terms",
+                "privacy"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicLegalDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`NOT_FOUND`: The requested resource was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "NOT_FOUND": {
+                    "value": {
+                      "statusCode": 404,
+                      "error": "Not Found",
+                      "code": "NOT_FOUND",
+                      "message": "The requested resource was not found.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`RATE_LIMITED`: Too many requests. Please try again later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "RATE_LIMITED": {
+                    "value": {
+                      "statusCode": 429,
+                      "error": "Too Many Requests",
+                      "code": "RATE_LIMITED",
+                      "message": "Too many requests. Please try again later.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Terms of Use or Privacy Policy",
+        "tags": [
+          "public-legal"
+        ],
+        "x-public": true,
+        "security": []
+      }
     }
   },
   "info": {
@@ -62095,6 +62956,9 @@
               "NOT_A_PROVIDER",
               "USER_ALREADY_BLOCKED",
               "USER_NOT_BLOCKED",
+              "USER_BLOCKED",
+              "BLOCK_TARGET_INVALID",
+              "BLOCK_NOT_FOUND",
               "ACCOUNT_HAS_ACTIVE_ITEMS",
               "TYPED_NAME_MISMATCH",
               "BULK_ACTION_REFUSED",
@@ -62393,6 +63257,7 @@
               "url",
               "phone",
               "version",
+              "text",
               "enum_list",
               "object"
             ],
@@ -62471,6 +63336,7 @@
               "languages",
               "notifications",
               "support",
+              "legal",
               "maintenance"
             ],
             "example": "commission"
@@ -76941,6 +77807,57 @@
           "unread"
         ]
       },
+      "AppBlockedUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The blocked user."
+          },
+          "name": {
+            "type": "string",
+            "example": "Studio Lumière",
+            "description": "Business name for a provider, full name for a client."
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "client",
+              "provider"
+            ],
+            "example": "provider"
+          },
+          "blockedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "avatarUrl",
+          "role",
+          "blockedAt"
+        ]
+      },
+      "AppBlockUserDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The client or provider to block (`other.id` of a chat, a provider id, a review author)."
+          }
+        },
+        "required": [
+          "userId"
+        ]
+      },
       "AppFavouriteDto": {
         "type": "object",
         "properties": {
@@ -79193,12 +80110,27 @@
           "termsUrl": {
             "type": "string",
             "nullable": true,
-            "example": "https://eventor.dz/terms"
+            "example": "https://admin.eventor.dz/en/legal/terms",
+            "description": "Terms of Use in the request language: the URL set in Settings when there is one, otherwise the Eventor page. Link it from sign-up (\"By continuing you agree to…\"), Settings and Help."
           },
           "privacyUrl": {
             "type": "string",
             "nullable": true,
-            "example": "https://eventor.dz/privacy"
+            "example": "https://admin.eventor.dz/en/legal/privacy",
+            "description": "Privacy Policy, same rules as `termsUrl`."
+          },
+          "deleteAccountUrl": {
+            "type": "string",
+            "example": "https://admin.eventor.dz/en/delete-account",
+            "description": "Public web page to delete an account without the app (Google Play Data safety form). Deleting in the app stays `DELETE /app/me`."
+          },
+          "storeUrls": {
+            "type": "object",
+            "example": {
+              "android": "https://play.google.com/store/apps/details?id=com.symloop.eventor",
+              "ios": null
+            },
+            "description": "Store pages for the force-update screen (24), set in Settings · Maintenance; null until the app is published there."
           },
           "uploads": {
             "type": "object",
@@ -79252,6 +80184,8 @@
           "supportPhone",
           "termsUrl",
           "privacyUrl",
+          "deleteAccountUrl",
+          "storeUrls",
           "uploads",
           "limits",
           "passwordPolicy",
@@ -81424,7 +82358,17 @@
           "canWrite": {
             "type": "boolean",
             "example": true,
-            "description": "You may write here (open chat, account not blocked)."
+            "description": "You may write here: open chat, account not blocked by Eventor, and neither of you blocked the other."
+          },
+          "blockedByMe": {
+            "type": "boolean",
+            "example": false,
+            "description": "You blocked the other person of this direct chat (`POST /app/me/blocks`): show \"You blocked this user\" and an Unblock button."
+          },
+          "blockedMe": {
+            "type": "boolean",
+            "example": false,
+            "description": "The other person blocked you: show \"You can’t reply to this conversation\". Always false in support and dispute chats."
           }
         },
         "required": [
@@ -81436,7 +82380,9 @@
           "lastMessageAt",
           "unreadCount",
           "booking",
-          "canWrite"
+          "canWrite",
+          "blockedByMe",
+          "blockedMe"
         ]
       },
       "AppConversationDetailDto": {
@@ -81502,7 +82448,17 @@
           "canWrite": {
             "type": "boolean",
             "example": true,
-            "description": "You may write here (open chat, account not blocked)."
+            "description": "You may write here: open chat, account not blocked by Eventor, and neither of you blocked the other."
+          },
+          "blockedByMe": {
+            "type": "boolean",
+            "example": false,
+            "description": "You blocked the other person of this direct chat (`POST /app/me/blocks`): show \"You blocked this user\" and an Unblock button."
+          },
+          "blockedMe": {
+            "type": "boolean",
+            "example": false,
+            "description": "The other person blocked you: show \"You can’t reply to this conversation\". Always false in support and dispute chats."
           },
           "participants": {
             "type": "array",
@@ -81541,6 +82497,8 @@
           "unreadCount",
           "booking",
           "canWrite",
+          "blockedByMe",
+          "blockedMe",
           "participants",
           "contactUnmasked",
           "disputeId",
@@ -82256,6 +83214,45 @@
         },
         "required": [
           "note"
+        ]
+      },
+      "PublicLegalDto": {
+        "type": "object",
+        "properties": {
+          "doc": {
+            "type": "string",
+            "enum": [
+              "terms",
+              "privacy"
+            ]
+          },
+          "lang": {
+            "type": "string",
+            "enum": [
+              "en",
+              "ar"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "example": "Privacy Policy"
+          },
+          "body": {
+            "type": "string",
+            "description": "Markdown-lite: `## ` headings, `- ` bullets, blank lines between paragraphs, `**bold**`."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When an admin last changed it (the draft date until then)."
+          }
+        },
+        "required": [
+          "doc",
+          "lang",
+          "title",
+          "body",
+          "updatedAt"
         ]
       }
     }

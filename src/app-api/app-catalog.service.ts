@@ -222,6 +222,10 @@ export class AppCatalogService {
       where.push('s.category_id IN (?)');
       params.push(query.categoryId);
     }
+    if (query.providerId) {
+      where.push('s.provider_id = ?');
+      params.push(query.providerId);
+    }
     if (query.wilaya?.length) {
       where.push('EXISTS (SELECT 1 FROM service_wilayas sw JOIN wilayas w ON w.code = sw.wilaya_code AND w.is_open = 1 WHERE sw.service_id = s.id AND sw.wilaya_code IN (?))');
       params.push(query.wilaya);

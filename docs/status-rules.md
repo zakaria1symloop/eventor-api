@@ -192,6 +192,7 @@ Payment is cash, so a dispute is **only a way to raise a problem on a booking an
 - **Conversation status:** `open ⇄ closed`, admin only (scope: all or one participant). A dispute chat closes 7 days after resolution.
 - **Contact details:** masked (`body_masked`) until the pair has an accepted booking. Admins see the original text.
 - **Message status:** `visible → hidden | deleted`. Admin can do this to any message. The sender can delete their own within 5 min, except in dispute chats.
+- **Blocking (users):** a client or provider can block another (`POST /app/me/blocks`). Either direction stops messages and new booking requests between them (403 `USER_BLOCKED`); bookings made before continue; reviews stay public. Eventor support can't be blocked.
 - **Push:** 📱 every message to the other participants (`message.new`, masked like the chat, no 🔔 row). Dispute chats use `dispute.message`; system messages send nothing.
 
 ## 11. Other statuses

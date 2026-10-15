@@ -1,6 +1,7 @@
 import type { Repository } from 'typeorm';
 import type { Setting } from '../admin/entities/setting.entity.js';
 import { SEED_SETTINGS } from '../database/migrations/1789552455600-SeedV1.js';
+import { SETTINGS_ADDED_20261015 } from '../database/migrations/1791500000001-LegalSettings.js';
 import { AppException } from '../common/errors/app.exception.js';
 import { SETTINGS_DEFAULTS, SETTING_KEYS } from './settings.defaults.js';
 import { SettingsService } from './settings.service.js';
@@ -28,8 +29,10 @@ describe('SettingsService', () => {
   });
 
   it('seeds exactly the keys the service knows, with the same values', () => {
-    expect(Object.keys(SEED_SETTINGS).sort()).toEqual([...SETTING_KEYS].sort());
-    expect(SEED_SETTINGS).toEqual(SETTINGS_DEFAULTS);
+    // SeedV1, plus the keys later migrations added.
+    const seeded = { ...SEED_SETTINGS, ...SETTINGS_ADDED_20261015 };
+    expect(Object.keys(seeded).sort()).toEqual([...SETTING_KEYS].sort());
+    expect(seeded).toEqual(SETTINGS_DEFAULTS);
   });
 
   it('falls back to defaults for missing rows and ignores unknown keys', async () => {

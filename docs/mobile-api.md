@@ -643,6 +643,7 @@ const socket = io(`${API_URL}/app`, {
 | `conversation:updated` | `{ conversationId, reason }` | a message, a read, a chat created or closed |
 | `booking:updated` | `{ bookingId, reference, status }` | any booking of yours moves |
 | `notification:new` | the row `GET /app/me/notifications` returns | a notification is written for you |
+| `availability:updated` | `{ providerId, serviceId, date, reason, bookingId }` | your calendar changed (provider): a block added or removed, or a booking moved (`date: null`, reload the month) |
 
 Client → server, both acknowledged:
 
@@ -683,6 +684,18 @@ on uploads. 429 carries `Retry-After`. Back off — do not hammer `refresh` in a
 loop when it fails.
 
 ## 16. Changelog
+
+### 2026-10-15 — store requirements: legal pages, blocking users, web account deletion
+
+- **Legal pages:** `termsUrl` and `privacyUrl` in `GET /app/config` are never null any more. They point to the public pages `{ADMIN_URL}/{lang}/legal/terms` and `/legal/privacy` in the request language, unless an admin sets other URLs in Settings. The texts are drafts until SYMLOOP's final version, editable in Settings · Legal. JSON for your own screens: `GET /public/legal/{terms|privacy}` (markdown-lite `body`).
+- **Account deletion on the web:** `deleteAccountUrl` in `/app/config` (Google Play Data safety form). The page calls `POST /app/auth/delete-account { email, password }`: the same deletion and the same 409 `ACCOUNT_HAS_ACTIVE_ITEMS` as `DELETE /app/me`.
+- **Store links:** `storeUrls: { android, ios }` in `/app/config` for the force-update screen (24); null until set in Settings · Maintenance.
+- **Blocking users** (Apple 1.2):
+  - Endpoints: `POST /app/me/blocks { userId }` → 201, `DELETE /app/me/blocks/{userId}` → 204, `GET /app/me/blocks` (paginated `{ id, name, avatarUrl, role, blockedAt }`).
+  - Once either user blocked the other: no messages either way and no new booking request (403 `USER_BLOCKED`, `details.blockedByMe`). Their direct chat shows `blockedByMe` / `blockedMe` with `canWrite: false`.
+  - Bookings made before keep going. Reviews stay public (report them instead). Eventor support can't be blocked (422 `BLOCK_TARGET_INVALID`).
+- **All services of a provider:** `GET /app/services?providerId=` (paginated), for "See all (N)" on screen 13.
+- **Calendar live updates:** socket event `availability:updated { providerId, serviceId, date, reason, bookingId }`, sent to the provider when a block is added or removed (by them or an admin, `reason: "blocked" | "unblocked"`) and when a booking moves (`reason: "booking"`, `date: null`: reload the month).
 
 ### 2026-10-07 — push notifications (FCM) for bookings, chat and the rest
 

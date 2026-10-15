@@ -51,6 +51,7 @@ import type {
   AppRescheduleRowDto,
   AppBookingTimelineEntryDto,
 } from './dto/app-bookings.dto.js';
+import { assertNotBlocked } from './app-blocks.service.js';
 
 /** Which side of the booking the caller is on. */
 export type Party = 'client' | 'provider';
@@ -211,6 +212,11 @@ export class AppBookingsService {
   async create(auth: AuthUser, dto: AppCreateBookingDto, source: BookingSource, lang: Lang): Promise<AppBookingDetailDto> {
     this.assertTarget(dto);
     await this.assertEmailVerified(auth);
+    // No new booking request between two users when either blocked the other.
+    const [target] = dto.serviceId
+      ? await this.dataSource.query('SELECT provider_id FROM services WHERE id = ?', [dto.serviceId])
+      : await this.dataSource.query('SELECT provider_id FROM packs WHERE id = ?', [dto.packId]);
+    if (target) await assertNotBlocked(this.dataSource, auth.id, [target.provider_id]);
     const id = await runInTransaction(this.dataSource, (em, afterCommit) =>
       this.bookings.createInTransaction(
         em,

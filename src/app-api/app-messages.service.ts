@@ -15,6 +15,7 @@ import { runInTransaction } from '../database/transaction.js';
 import { FilesService } from '../files/files.service.js';
 import type { UploadedPhotoFile } from '../files/photo-gallery.js';
 import { MESSAGING_EVENTS, type ConversationUpdatedEvent } from '../messaging/messaging.events.js';
+import { assertNotBlocked, blockSets } from './app-blocks.service.js';
 import { MessagingService } from '../messaging/messaging.service.js';
 import { ReportsService } from '../reviews/reports.service.js';
 import { avatarUrl } from './app-refs.js';
@@ -147,7 +148,8 @@ export class AppMessagesService {
 
     const ids = (rows as any[]).map((r) => r.id);
     const [people, lastMessages] = await Promise.all([this.people(em, ids), this.lastMessages(em, ids)]);
-    const data = (rows as any[]).map((r) => this.toRow(r, auth, lang, people.get(r.id) ?? [], lastMessages.get(r.id) ?? null));
+    const blocks = await blockSets(em, auth.id, [...new Set([...people.values()].flat().map((p) => p.id).filter((id) => id !== auth.id))]);
+    const data = (rows as any[]).map((r) => this.toRow(r, auth, lang, people.get(r.id) ?? [], lastMessages.get(r.id) ?? null, blocks));
     return paginate(data, Number(count.n), query);
   }
 
@@ -163,9 +165,20 @@ export class AppMessagesService {
     return new Map(rows.map((r) => [r.conversation_id, r]));
   }
 
-  private toRow(r: any, auth: AuthUser, lang: Lang, people: AppChatPersonDto[], last: any | null): AppConversationRowDto {
+  private toRow(
+    r: any,
+    auth: AuthUser,
+    lang: Lang,
+    people: AppChatPersonDto[],
+    last: any | null,
+    blocks: { byMe: Set<string>; me: Set<string> },
+  ): AppConversationRowDto {
     const unmasked = Number(r.unmasked) === 1;
     const other = people.find((p) => p.id !== auth.id) ?? null;
+    // Blocking concerns the client and the provider of a direct chat, never Eventor support.
+    const parties = r.kind === ConversationKind.Direct ? people.filter((p) => p.id !== auth.id && p.role !== ParticipantRole.Support) : [];
+    const blockedByMe = parties.some((p) => blocks.byMe.has(p.id));
+    const blockedMe = parties.some((p) => blocks.me.has(p.id));
     return {
       id: r.id,
       kind: r.kind as ConversationKind,
@@ -190,7 +203,9 @@ export class AppMessagesService {
             total: String(r.total),
           }
         : null,
-      canWrite: r.status === ConversationStatus.Open && Number(r.my_can_write ?? 0) === 1,
+      canWrite: r.status === ConversationStatus.Open && Number(r.my_can_write ?? 0) === 1 && !blockedByMe && !blockedMe,
+      blockedByMe,
+      blockedMe,
     };
   }
 
@@ -212,8 +227,9 @@ export class AppMessagesService {
     );
     const people = (await this.people(em, [id])).get(id) ?? [];
     const last = (await this.lastMessages(em, [id])).get(id) ?? null;
+    const blocks = await blockSets(em, auth.id, people.map((p) => p.id).filter((pid) => pid !== auth.id));
     return {
-      ...this.toRow(r, auth, lang, people, last),
+      ...this.toRow(r, auth, lang, people, last, blocks),
       participants: people,
       contactUnmasked: Number(r.unmasked) === 1,
       disputeId: r.dispute_id ?? null,
@@ -307,6 +323,7 @@ export class AppMessagesService {
       if (other.id === auth.id || other.role === UserRole.Admin || other.role === auth.role) {
         throw AppException.of('RECIPIENT_INVALID', { userId: dto.userId });
       }
+      await assertNotBlocked(em, auth.id, [other.id]);
       const clientId = auth.role === UserRole.Client ? auth.id : other.id;
       const providerId = auth.role === UserRole.Provider ? auth.id : other.id;
 
@@ -383,6 +400,13 @@ export class AppMessagesService {
     const messageId = await runInTransaction(this.dataSource, async (em, afterCommit) => {
       const { conversation, me } = await this.participant(em, id, auth.id);
       this.assertCanWrite(conversation, me);
+      if (conversation.kind === ConversationKind.Direct) {
+        const others: { user_id: string }[] = await em.query(
+          "SELECT user_id FROM conversation_participants WHERE conversation_id = ? AND user_id <> ? AND role <> 'support'",
+          [id, auth.id],
+        );
+        await assertNotBlocked(em, auth.id, others.map((o) => o.user_id));
+      }
       let fileId: string | null = null;
       if (file) {
         const stored = await this.files.store(

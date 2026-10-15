@@ -10,6 +10,8 @@ import { ServiceScheduling1791277544612 } from './1791277544612-ServiceSchedulin
 import { BookingEndDate1791278976405 } from './1791278976405-BookingEndDate.js';
 import { OneBookingPerDay1791360000000 } from './1791360000000-OneBookingPerDay.js';
 import { AllowSimultaneous1791380000000 } from './1791380000000-AllowSimultaneous.js';
+import { UserBlocks1791500000000 } from './1791500000000-UserBlocks.js';
+import { LegalSettings1791500000001 } from './1791500000001-LegalSettings.js';
 
 /**
  * Ordered migration registry, explicit for the same reason as the entity
@@ -28,4 +30,6 @@ export const migrations: NonNullable<DataSourceOptions['migrations']> = [
   BookingEndDate1791278976405,
   OneBookingPerDay1791360000000,
   AllowSimultaneous1791380000000,
+  UserBlocks1791500000000,
+  LegalSettings1791500000001,
 ];

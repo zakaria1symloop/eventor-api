@@ -4,6 +4,7 @@ import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AcademicModule } from './academic/academic.module.js';
 import { AppApiModule } from './app-api/app-api.module.js';
+import { LegalModule } from './legal/legal.module.js';
 import { ActivityLogModule } from './activity-log/activity-log.module.js';
 import { AdminsModule } from './admins/admins.module.js';
 import { AuditModule } from './audit/audit.module.js';
@@ -70,6 +71,7 @@ import { VerificationModule } from './verification/verification.module.js';
     ReviewsModule,
     StatsModule,
     AppApiModule,
+    LegalModule,
   ],
   providers: [
     { provide: APP_PIPE, useFactory: createValidationPipe },

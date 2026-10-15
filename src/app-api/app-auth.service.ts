@@ -313,7 +313,8 @@ export class AppAuthService {
     }
   }
 
-  async login(email: string, password: string, lang: Lang): Promise<AppSessionDto> {
+  /** Lockout, then the password: shared by sign-in and the web account deletion. */
+  private async checkCredentials(email: string, password: string): Promise<User> {
     const attempts = this.dataSource.getRepository(LoginAttempt);
     const now = new Date();
     const since = new Date(now.getTime() - LOCKOUT_WINDOW_MS);
@@ -326,18 +327,37 @@ export class AppAuthService {
     const retryAfter = lockoutRetryAfterSeconds(failures, now);
     if (retryAfter !== null) throw AppException.of('ACCOUNT_LOCKED', { retryAfterSeconds: retryAfter });
 
-    const ip = getRequestContext()?.ip ?? null;
     const user = await this.dataSource.getRepository(User).findOneBy({ email });
     const valid = await this.passwords.verify(user?.passwordHash, password);
     if (!user || !valid) {
-      await attempts.save(attempts.create({ email, ip, success: false, createdAt: new Date() }));
+      await attempts.save(attempts.create({ email, ip: getRequestContext()?.ip ?? null, success: false, createdAt: new Date() }));
       throw AppException.of('INVALID_CREDENTIALS');
     }
+    return user;
+  }
+
+  /**
+   * The public "Delete my account" web page (Google Play needs one outside the
+   * app): the email and password of a client or provider, then exactly what
+   * `DELETE /app/me` does. Blocked and unverified accounts may delete too, since
+   * they cannot sign in to the app; admin accounts cannot.
+   */
+  async deleteFromWeb(email: string, password: string): Promise<void> {
+    const user = await this.checkCredentials(email, password);
+    if (user.role === UserRole.Admin) throw AppException.of('ROLE_NOT_ALLOWED_IN_APP');
+    await this.me.deleteVerifiedAccount(
+      { id: user.id, role: user.role, audience: SessionAudience.App, sessionId: null, language: user.language },
+      user,
+    );
+  }
+
+  async login(email: string, password: string, lang: Lang): Promise<AppSessionDto> {
+    const user = await this.checkCredentials(email, password);
     this.assertAppAccount(user);
     if (!user.emailVerifiedAt && !this.env.AUTH_SKIP_EMAIL_VERIFICATION) {
       throw AppException.of('EMAIL_NOT_VERIFIED', { email: user.email });
     }
-
+    const ip = getRequestContext()?.ip ?? null;
     return runInTransaction(this.dataSource, async (em) => {
       const repository = em.getRepository(LoginAttempt);
       await repository.save(repository.create({ email, ip, success: true, createdAt: new Date() }));

@@ -186,6 +186,20 @@ export class AppDeviceTokenDto {
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) lastSeenAt: string | null;
 }
 
+export class AppBlockUserDto {
+  @ApiProperty({ format: 'uuid', description: 'The client or provider to block (`other.id` of a chat, a provider id, a review author).' })
+  @IsUUID('4')
+  userId: string;
+}
+
+export class AppBlockedUserDto {
+  @ApiProperty({ format: 'uuid', description: 'The blocked user.' }) id: string;
+  @ApiProperty({ example: 'Studio Lumière', description: 'Business name for a provider, full name for a client.' }) name: string;
+  @ApiProperty({ type: String, nullable: true }) avatarUrl: string | null;
+  @ApiProperty({ enum: ['client', 'provider'], example: 'provider' }) role: string;
+  @ApiProperty({ format: 'date-time' }) blockedAt: string;
+}
+
 export class AppTestPushDto {
   @ApiProperty({ enum: ['fcm', 'log'], example: 'fcm', description: '`log`: the server has no Firebase key yet, so nothing reaches a phone (the push is only written to the server log).' })
   driver: PushDriver;

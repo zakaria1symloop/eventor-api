@@ -326,6 +326,21 @@ export const ERROR_CODES = {
     en: 'This account is not blocked.',
     ar: 'هذا الحساب غير محظور.',
   },
+  USER_BLOCKED: {
+    status: HttpStatus.FORBIDDEN,
+    en: 'You cannot do this: one of you has blocked the other.',
+    ar: 'لا يمكنك القيام بذلك: أحدكما قام بحظر الآخر.',
+  },
+  BLOCK_TARGET_INVALID: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'You cannot block this account.',
+    ar: 'لا يمكنك حظر هذا الحساب.',
+  },
+  BLOCK_NOT_FOUND: {
+    status: HttpStatus.NOT_FOUND,
+    en: 'You have not blocked this account.',
+    ar: 'لم تقم بحظر هذا الحساب.',
+  },
   ACCOUNT_HAS_ACTIVE_ITEMS: {
     status: HttpStatus.CONFLICT,
     en: 'This account has {upcomingBookings} accepted upcoming bookings and {openDisputes} open disputes. Resolve them first.',

@@ -85,6 +85,7 @@ export class AppBookingsController {
   @ApiErrorResponses(
     'VALIDATION_FAILED',
     'EMAIL_NOT_VERIFIED',
+    'USER_BLOCKED',
     'SERVICE_NOT_FOUND',
     'PACK_NOT_FOUND',
     'SERVICE_UNAVAILABLE_FOR_BOOKING',

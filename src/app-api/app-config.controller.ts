@@ -11,6 +11,7 @@ import type { Lang } from '../common/i18n/language.js';
 import { SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE } from '../common/i18n/language.js';
 import { ApiDataResponse } from '../common/swagger/api-data-response.decorator.js';
 import { ApiErrorResponses } from '../common/swagger/api-error-responses.decorator.js';
+import { legalPageUrl } from '../legal/legal.controller.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { AppConfigDto } from './dto/app-catalog.dto.js';
 import { ALLOWED_DOCUMENT_MIME } from './app-me.service.js';
@@ -68,6 +69,8 @@ export class AppConfigController {
       'support_phone',
       'terms_url',
       'privacy_url',
+      'store_url_android',
+      'store_url_ios',
       'max_photo_upload_mb',
       'max_document_upload_mb',
       'max_photos_per_service',
@@ -97,8 +100,10 @@ export class AppConfigController {
       emailVerificationRequired: !this.env.AUTH_SKIP_EMAIL_VERIFICATION,
       supportEmail: orNull(settings.support_email),
       supportPhone: orNull(settings.support_phone),
-      termsUrl: orNull(settings.terms_url),
-      privacyUrl: orNull(settings.privacy_url),
+      termsUrl: orNull(settings.terms_url) ?? legalPageUrl(this.env.ADMIN_URL, lang, 'terms'),
+      privacyUrl: orNull(settings.privacy_url) ?? legalPageUrl(this.env.ADMIN_URL, lang, 'privacy'),
+      deleteAccountUrl: legalPageUrl(this.env.ADMIN_URL, lang, 'delete-account'),
+      storeUrls: { android: orNull(settings.store_url_android), ios: orNull(settings.store_url_ios) },
       uploads: {
         maxPhotoMb: settings.max_photo_upload_mb,
         maxDocumentMb: settings.max_document_upload_mb,

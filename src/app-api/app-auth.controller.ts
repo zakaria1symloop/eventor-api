@@ -121,6 +121,22 @@ export class AppAuthController {
     return { data: await this.auth.login(dto.email, dto.password, lang) };
   }
 
+  @Post('delete-account')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Delete an account from the web',
+    description:
+      'Public route behind the "Delete my account" web page (`deleteAccountUrl` in `/app/config`, required by Google Play). ' +
+      'The email and password of a client or provider account, then the same deletion as `DELETE /app/me`: 409 ' +
+      '`ACCOUNT_HAS_ACTIVE_ITEMS` while an upcoming booking or an open dispute remains. Same lockout as sign-in. Blocked ' +
+      'and unverified accounts can delete too.',
+  })
+  @ApiResponse({ status: 204, description: 'Account deleted.' })
+  @ApiErrorResponses('VALIDATION_FAILED', 'INVALID_CREDENTIALS', 'ACCOUNT_LOCKED', 'ACCOUNT_HAS_ACTIVE_ITEMS', 'ROLE_NOT_ALLOWED_IN_APP', 'RATE_LIMITED')
+  async deleteAccount(@Body() dto: AppLoginDto): Promise<void> {
+    await this.auth.deleteFromWeb(dto.email, dto.password);
+  }
+
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

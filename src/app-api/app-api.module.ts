@@ -8,6 +8,7 @@ import { AppReviewsService } from './app-reviews.service.js';
 import { PacksModule } from '../packs/packs.module.js';
 import { AppGateway } from './app.gateway.js';
 import { AppChatPushListener } from './app-chat-push.listener.js';
+import { AppBlocksService } from './app-blocks.service.js';
 import { AppMessagesController } from './app-messages.controller.js';
 import { AppMessagesService } from './app-messages.service.js';
 import { ServicesModule } from '../services/services.module.js';
@@ -66,6 +67,7 @@ import { AppMeService } from './app-me.service.js';
     AppReviewsService,
     AppGateway,
     AppChatPushListener,
+    AppBlocksService,
   ],
   exports: [AppMeService],
 })

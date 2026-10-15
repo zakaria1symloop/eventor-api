@@ -11,6 +11,19 @@ export const SERVICE_EVENTS = {
   updated: 'service.updated',
 } as const;
 
+/** A provider's calendar changed: a manual block was added or removed (admin or provider). */
+export const AVAILABILITY_EVENTS = {
+  changed: 'availability.changed',
+} as const;
+
+export interface AvailabilityChangedEvent {
+  providerId: string;
+  /** Null for a block on every service. */
+  serviceId: string | null;
+  date: string;
+  reason: 'blocked' | 'unblocked';
+}
+
 export interface ServiceRecipient {
   userId: string;
   email: string;

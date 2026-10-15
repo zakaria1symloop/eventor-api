@@ -284,6 +284,10 @@ export class AppServicesQueryDto extends PaginationQueryDto {
   @IsOptional() @Transform(toArray) @IsUUID('4', { each: true })
   categoryId?: string[];
 
+  @ApiPropertyOptional({ format: 'uuid', description: 'Only the services of this provider: screen 13 "See all (N)", with `servicesCount` from `GET /app/providers/{id}` as the total.' })
+  @IsOptional() @IsUUID('4')
+  providerId?: string;
+
   @ApiPropertyOptional({ type: [Number], example: [16], description: 'Repeat for several wilayas.' })
   @IsOptional() @Transform(toArray) @Type(() => Number) @IsInt({ each: true }) @Min(1, { each: true }) @Max(58, { each: true })
   wilaya?: number[];
@@ -477,8 +481,27 @@ export class AppConfigDto {
   emailVerificationRequired: boolean;
   @ApiProperty({ type: String, nullable: true, format: 'email', example: 'support@eventor.dz' }) supportEmail: string | null;
   @ApiProperty({ type: String, nullable: true, example: '+213555000000' }) supportPhone: string | null;
-  @ApiProperty({ type: String, nullable: true, example: 'https://eventor.dz/terms' }) termsUrl: string | null;
-  @ApiProperty({ type: String, nullable: true, example: 'https://eventor.dz/privacy' }) privacyUrl: string | null;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'https://admin.eventor.dz/en/legal/terms',
+    description:
+      'Terms of Use in the request language: the URL set in Settings when there is one, otherwise the Eventor page. ' +
+      'Link it from sign-up ("By continuing you agree to…"), Settings and Help.',
+  })
+  termsUrl: string | null;
+  @ApiProperty({ type: String, nullable: true, example: 'https://admin.eventor.dz/en/legal/privacy', description: 'Privacy Policy, same rules as `termsUrl`.' })
+  privacyUrl: string | null;
+  @ApiProperty({
+    example: 'https://admin.eventor.dz/en/delete-account',
+    description: 'Public web page to delete an account without the app (Google Play Data safety form). Deleting in the app stays `DELETE /app/me`.',
+  })
+  deleteAccountUrl: string;
+  @ApiProperty({
+    example: { android: 'https://play.google.com/store/apps/details?id=com.symloop.eventor', ios: null },
+    description: 'Store pages for the force-update screen (24), set in Settings · Maintenance; null until the app is published there.',
+  })
+  storeUrls: { android: string | null; ios: string | null };
   @ApiProperty({
     example: { maxPhotoMb: 8, maxDocumentMb: 5, maxPhotosPerService: 12, imageTypes: ['jpeg', 'png', 'webp'] },
     description: 'Upload limits, so the app can refuse a file before sending it.',

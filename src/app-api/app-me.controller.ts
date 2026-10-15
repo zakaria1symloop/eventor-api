@@ -27,12 +27,15 @@ import { uploadLimits } from '../common/http/upload-limits.js';
 import { ReqLang } from '../common/i18n/lang.decorator.js';
 import type { Lang } from '../common/i18n/language.js';
 import { ApiPaginatedResponse } from '../common/pagination/paginated.js';
+import { PaginationQueryDto } from '../common/pagination/pagination-query.dto.js';
 import { ApiDataResponse } from '../common/swagger/api-data-response.decorator.js';
 import { ApiAuthErrors, ApiErrorResponses } from '../common/swagger/api-error-responses.decorator.js';
+import { AppBlocksService } from './app-blocks.service.js';
 import { AppBudgetService } from './app-budget.service.js';
 import { AppFavouritesService } from './app-favourites.service.js';
 import { AppMeService, type UploadedFile as MulterFile } from './app-me.service.js';
 import {
+  AppBlockedUserDto,
   AppBudgetDto,
   AppChangePasswordDto,
   AppDeviceTokenDto,
@@ -45,6 +48,7 @@ import {
   AppNotificationsQueryDto,
   AppSessionRowDto,
   AppTestPushDto,
+  AppBlockUserDto,
   CreateBudgetItemDto,
   CreateFavouriteDto,
   DeleteAppMeDto,
@@ -80,6 +84,7 @@ export class AppMeController {
     private readonly me: AppMeService,
     private readonly favourites: AppFavouritesService,
     private readonly budget: AppBudgetService,
+    private readonly blocks: AppBlocksService,
   ) {}
 
   // ── profile ─────────────────────────────────────────────────
@@ -336,6 +341,42 @@ export class AppMeController {
   @ApiErrorResponses('NOTIFICATION_NOT_FOUND')
   async deleteNotification(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('NOTIFICATION_NOT_FOUND')) id: string): Promise<void> {
     await this.me.deleteNotification(auth, id);
+  }
+
+  // ── blocked users (store guideline 1.2) ─────────────────────
+
+  @Get('blocks')
+  @ApiOperation({ summary: 'Users I blocked', description: 'Profile · Blocked users, newest first. Unblock with `DELETE /app/me/blocks/{userId}`.' })
+  @ApiPaginatedResponse(AppBlockedUserDto)
+  @ApiErrorResponses('VALIDATION_FAILED')
+  async listBlocks(@CurrentUser() auth: AuthUser, @Query() query: PaginationQueryDto) {
+    return this.blocks.list(auth, query);
+  }
+
+  @Post('blocks')
+  @ApiOperation({
+    summary: 'Block a user',
+    description:
+      'From a chat, a provider profile or a review. Idempotent. Once either of two users blocked the other: no message ' +
+      'either way (`POST …/messages` and starting a chat answer 403 `USER_BLOCKED`), no new booking request between ' +
+      'them (`POST /app/bookings` answers 403 `USER_BLOCKED`), and their direct chat shows `blockedByMe` / `blockedMe` ' +
+      'with `canWrite: false`. Bookings made before keep going (status changes, invoices, check-in, disputes). Reviews ' +
+      'stay public (report them instead). Eventor support cannot be blocked.',
+  })
+  @ApiDataResponse(AppBlockedUserDto, { status: 201 })
+  @ApiErrorResponses('VALIDATION_FAILED', 'USER_NOT_FOUND', 'BLOCK_TARGET_INVALID')
+  async block(@CurrentUser() auth: AuthUser, @Body() dto: AppBlockUserDto) {
+    return { data: await this.blocks.block(auth, dto.userId) };
+  }
+
+  @Delete('blocks/:userId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Unblock a user', description: 'Chat and booking requests work again (unless the other user blocked you too).' })
+  @ApiParam({ name: 'userId', format: 'uuid' })
+  @ApiResponse({ status: 204, description: 'Unblocked.' })
+  @ApiErrorResponses('BLOCK_NOT_FOUND')
+  async unblock(@CurrentUser() auth: AuthUser, @Param('userId', uuidParam('BLOCK_NOT_FOUND')) userId: string): Promise<void> {
+    await this.blocks.unblock(auth, userId);
   }
 
   // ── favourites (screen 17) ──────────────────────────────────

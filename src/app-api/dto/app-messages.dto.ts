@@ -184,7 +184,9 @@ export class AppConversationRowDto {
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) lastMessageAt: string | null;
   @ApiProperty({ example: 2 }) unreadCount: number;
   @ApiProperty({ type: AppChatBookingDto, nullable: true }) booking: AppChatBookingDto | null;
-  @ApiProperty({ example: true, description: 'You may write here (open chat, account not blocked).' }) canWrite: boolean;
+  @ApiProperty({ example: true, description: 'You may write here: open chat, account not blocked by Eventor, and neither of you blocked the other.' }) canWrite: boolean;
+  @ApiProperty({ example: false, description: 'You blocked the other person of this direct chat (`POST /app/me/blocks`): show "You blocked this user" and an Unblock button.' }) blockedByMe: boolean;
+  @ApiProperty({ example: false, description: 'The other person blocked you: show "You can’t reply to this conversation". Always false in support and dispute chats.' }) blockedMe: boolean;
 }
 
 export class AppConversationDetailDto extends AppConversationRowDto {

@@ -32,6 +32,14 @@ describe('settings registry', () => {
     }
   });
 
+  it('keeps the line breaks of long texts and refuses an empty legal page', () => {
+    expect(validateSettingValue('legal_terms_en', '  ## Title\r\n\r\nLine one\r\n- bullet  ')).toEqual({ ok: true, value: '## Title\n\nLine one\n- bullet' });
+    expect(codes('legal_privacy_ar', '   ')).toEqual(['values.legal_privacy_ar:IS_NOT_EMPTY']);
+    expect(codes('legal_terms_ar', 'x'.repeat(60_001))).toEqual(['values.legal_terms_ar:MAX_LENGTH']);
+    expect(codes('store_url_ios', 'not a url')).toEqual(['values.store_url_ios:IS_URL']);
+    expect(validateSettingValue('store_url_android', '')).toEqual({ ok: true, value: '' });
+  });
+
   it('rejects unknown keys and nulls', () => {
     expect(codes('nope', 1)).toEqual(['values.nope:SETTING_UNKNOWN']);
     expect(codes('photo_quality', null)).toEqual(['values.photo_quality:REQUIRED']);

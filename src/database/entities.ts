@@ -54,6 +54,7 @@ import { UserDocument } from '../verification/entities/user-document.entity.js';
 import { ProviderProfile } from '../users/entities/provider-profile.entity.js';
 import { ProviderWilaya } from '../users/entities/provider-wilaya.entity.js';
 import { UserNote } from '../users/entities/user-note.entity.js';
+import { UserBlock } from '../users/entities/user-block.entity.js';
 import { User } from '../users/entities/user.entity.js';
 
 /**
@@ -75,6 +76,7 @@ export const entities: NonNullable<DataSourceOptions['entities']> = [
   LoginAttempt,
   AdminInvitation,
   UserNote,
+  UserBlock,
   NotificationPreference,
   // 2. files & provider verification
   StoredFile,

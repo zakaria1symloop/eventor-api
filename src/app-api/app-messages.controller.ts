@@ -108,7 +108,7 @@ export class AppMessagesController {
       'the existing one. `bookingId` attaches the context card, and must be a booking the two of you share.',
   })
   @ApiDataResponse(AppConversationDetailDto, { status: 201 })
-  @ApiErrorResponses('VALIDATION_FAILED', 'USER_NOT_FOUND', 'RECIPIENT_INVALID', 'BOOKING_NOT_FOUND', 'NOT_OWNER', 'CONVERSATION_CLOSED', 'CONVERSATION_READ_ONLY')
+  @ApiErrorResponses('VALIDATION_FAILED', 'USER_NOT_FOUND', 'RECIPIENT_INVALID', 'USER_BLOCKED', 'BOOKING_NOT_FOUND', 'NOT_OWNER', 'CONVERSATION_CLOSED', 'CONVERSATION_READ_ONLY')
   async start(@CurrentUser() auth: AuthUser, @Body() dto: AppStartConversationDto, @ReqLang() lang: Lang) {
     return { data: await this.messages.start(auth, dto, lang) };
   }
@@ -151,6 +151,7 @@ export class AppMessagesController {
     'VALIDATION_FAILED',
     'CONVERSATION_NOT_FOUND',
     'NOT_A_PARTICIPANT',
+    'USER_BLOCKED',
     'CONVERSATION_CLOSED',
     'CONVERSATION_READ_ONLY',
     'FILE_TOO_LARGE',

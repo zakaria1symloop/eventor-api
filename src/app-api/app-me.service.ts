@@ -290,6 +290,11 @@ export class AppMeService {
     if (!(await this.passwords.verify(user.passwordHash, password))) {
       throw AppException.of('CURRENT_PASSWORD_INVALID');
     }
+    await this.deleteVerifiedAccount(auth, user);
+  }
+
+  /** The deletion itself, once the password was checked (here, or by the public web page). */
+  async deleteVerifiedAccount(auth: AuthUser, user: User): Promise<void> {
     // Delegated to the admin path's service, so the two routes never drift apart.
     await this.accounts.removeSelf(auth, user);
   }

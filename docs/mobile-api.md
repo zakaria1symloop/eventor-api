@@ -640,10 +640,11 @@ const socket = io(`${API_URL}/app`, {
 | Event | Payload | When |
 | --- | --- | --- |
 | `message:new` | an app message, **already masked for you** | somebody writes in one of your chats |
-| `conversation:updated` | `{ conversationId, reason }` | a message, a read, a chat created or closed |
+| `conversation:updated` | `{ conversationId, reason }` | a message, a read, a chat created or closed, or a block / unblock between the two people (`reason: "blocked" \| "unblocked"`) |
 | `booking:updated` | `{ bookingId, reference, status }` | any booking of yours moves |
 | `notification:new` | the row `GET /app/me/notifications` returns | a notification is written for you |
 | `availability:updated` | `{ providerId, serviceId, date, reason, bookingId }` | your calendar changed (provider): a block added or removed, or a booking moved (`date: null`, reload the month) |
+| `service:updated` | `{ serviceId, reason }` | one of your services changed on another device or by an admin (provider); `reason`: `edited`, `published`, `unpublished`, `hidden`, `shown`, `deleted` |
 
 Client → server, both acknowledged:
 
@@ -684,6 +685,16 @@ on uploads. 429 carries `Retry-After`. Back off — do not hammer `refresh` in a
 loop when it fails.
 
 ## 16. Changelog
+
+### 2026-10-18 — answers to the mobile follow-up (items 10–17)
+
+- **Reviews carry `authorId`** (the reviewer's user id) on `GET /app/services/{id}/reviews`, `GET /app/providers/{id}/reviews`, the provider's `recentReviews` and `GET /app/provider/reviews`: "Block" on a review sends it to `POST /app/me/blocks`.
+- **Blocking announces itself:** blocking or unblocking sends `conversation:updated { conversationId, reason: "blocked" | "unblocked" }` to both people of their direct chat. The blocked person gets no notification, push or system message.
+- **Provider packs:** the provider detail gains `packsCount` (its `packs` stay capped at 6); `GET /app/packs?providerId=` lists them all, with the same total.
+- **`service:updated { serviceId, reason }`** on the `/app` socket to the provider. `reason` is one of `edited`, `published`, `unpublished`, `hidden`, `shown`, `deleted`. Every `/app` event is now listed in the mobile Swagger header too.
+- **Web deletion without a password:** `POST /app/auth/delete-account/code { email }` (always 202) emails a 6-digit code. `POST /app/auth/delete-account` then accepts `{ email, code }` instead of `{ email, password }`. This covers accounts that never set a password, forgotten passwords and blocked accounts.
+- **Deleting an account** (app, web or admin) now also unregisters its phones at once, and revokes its sessions as before: `GET /app/me` answers 401 and the refresh token is refused.
+- **Privacy Policy:** says who runs Eventor, from the invoice issuer in Settings · Commission, and that sent messages stay in the other person's chat.
 
 ### 2026-10-15 — store requirements: legal pages, blocking users, web account deletion
 

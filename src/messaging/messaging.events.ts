@@ -24,7 +24,7 @@ export interface MessageUpdatedEvent {
 
 export interface ConversationUpdatedEvent {
   conversationId: string;
-  reason: 'created' | 'message' | 'read' | 'closed' | 'reopened' | 'moderated' | 'participant_joined';
+  reason: 'created' | 'message' | 'read' | 'closed' | 'reopened' | 'moderated' | 'participant_joined' | 'blocked' | 'unblocked';
 }
 
 export interface SupportMessageEmailedEvent {

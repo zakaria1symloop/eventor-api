@@ -2,7 +2,8 @@
  * Draft Terms of Use and Privacy Policy (15 Oct 2026), served until an admin
  * replaces them in Settings · Legal with SYMLOOP's final text. Simple markdown:
  * `## ` headings, `- ` bullets, blank lines between paragraphs, `**bold**`.
- * `{deleteAccountUrl}` and `{supportContact}` are filled in when the page is served.
+ * `{deleteAccountUrl}`, `{supportContact}` and `{operator}` (the invoice issuer of
+ * Settings · Commission) are filled in when the page is served.
  */
 
 export const LEGAL_DRAFT_DATE = '2026-10-15';
@@ -45,6 +46,7 @@ We do not sell your personal data and we do not use it for third-party advertisi
 - Account data is kept while your account is open.
 - When you delete your account, your sessions and devices are removed at once and your email address and phone number are released at once; your name and photo are replaced with "Deleted user" after 30 days.
 - Bookings, invoices and reviews are kept after the deletion, shown as "Deleted user": invoices are accounting records kept for the period the law requires, and reviews are part of the provider's history.
+- Messages you sent stay in the conversations of the people you wrote to, shown as "Deleted user".
 - Technical logs are kept for a limited time, for security.
 
 ## 5. Your rights
@@ -60,6 +62,8 @@ Passwords are stored as secure hashes, connections are encrypted (HTTPS), provid
 Eventor is meant for people aged 18 and over. We do not knowingly collect data from children.
 
 ## 8. Contact
+
+Eventor is run by: {operator}.
 
 For any question about this policy or your data, contact Eventor: {supportContact}.
 
@@ -106,6 +110,7 @@ Eventor («Eventor» أو «نحن») منصة تربط العملاء الذي�
 - تُحفظ بيانات الحساب طالما بقي حسابك مفتوحًا.
 - عند حذف حسابك تُحذف جلساتك وأجهزتك فورًا ويُحرَّر بريدك الإلكتروني ورقم هاتفك فورًا، ويُستبدل اسمك وصورتك بعبارة «مستخدم محذوف» بعد 30 يومًا.
 - تبقى الحجوزات والفواتير والتقييمات بعد الحذف باسم «مستخدم محذوف»: فالفواتير سجلات محاسبية تُحفظ المدة التي يفرضها القانون، والتقييمات جزء من سجل مقدم الخدمة.
+- تبقى الرسائل التي أرسلتها في محادثات الأشخاص الذين راسلتهم، باسم «مستخدم محذوف».
 - تُحفظ السجلات التقنية لمدة محدودة لأغراض الأمان.
 
 ## 5. حقوقك
@@ -121,6 +126,8 @@ Eventor («Eventor» أو «نحن») منصة تربط العملاء الذي�
 Eventor موجهة للأشخاص البالغين 18 سنة فما فوق. لا نجمع عن قصد أي بيانات خاصة بالأطفال.
 
 ## 8. التواصل
+
+يدير Eventor: {operator}.
 
 لأي سؤال حول هذه السياسة أو بياناتك، تواصل مع Eventor: {supportContact}.
 

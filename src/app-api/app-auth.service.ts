@@ -112,6 +112,7 @@ export class AppAuthService {
       }),
     );
     this.events.emitAfterCommit<AppCodeSentEvent>(afterCommit, APP_AUTH_EVENTS.codeSent, {
+      purpose: input.purpose,
       email,
       name: input.user.fullName,
       code,
@@ -342,8 +343,20 @@ export class AppAuthService {
    * `DELETE /app/me` does. Blocked and unverified accounts may delete too, since
    * they cannot sign in to the app; admin accounts cannot.
    */
-  async deleteFromWeb(email: string, password: string): Promise<void> {
-    const user = await this.checkCredentials(email, password);
+  async deleteFromWeb(email: string, secret: { password?: string; code?: string }): Promise<void> {
+    let user: User;
+    if (secret.code) {
+      const checked = await this.checkCode(VerificationCodePurpose.AccountDeletion, email, secret.code, new Date());
+      const consumed = await this.dataSource.query('UPDATE verification_codes SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL', [new Date(), checked.id]);
+      if (Number(consumed?.affectedRows ?? 0) !== 1) throw AppException.of('CODE_INVALID');
+      const found = await this.dataSource.getRepository(User).findOneBy({ id: checked.userId });
+      if (!found) throw AppException.of('CODE_INVALID');
+      user = found;
+    } else if (secret.password) {
+      user = await this.checkCredentials(email, secret.password);
+    } else {
+      throw new AppException(400, 'VALIDATION_FAILED', [{ field: 'password', code: 'REQUIRED', message: 'Send the password or the emailed code' }]);
+    }
     if (user.role === UserRole.Admin) throw AppException.of('ROLE_NOT_ALLOWED_IN_APP');
     await this.me.deleteVerifiedAccount(
       { id: user.id, role: user.role, audience: SessionAudience.App, sessionId: null, language: user.language },
@@ -422,6 +435,23 @@ export class AppAuthService {
           { actorId: userId, actorRole: null, action: 'app.logout', objectType: 'session', objectId: id, level: AuditLevel.Info },
           em,
         );
+      }
+    });
+  }
+
+  /**
+   * The web deletion page's other way in: a 6-digit code by email, for accounts
+   * without a password (invited and never finished), a forgotten one, or blocked.
+   * Always 202, like `forgotPassword`: it never says whether the address has an account.
+   */
+  async requestDeletionCode(email: string, lang: Lang): Promise<void> {
+    const user = await this.dataSource.getRepository(User).findOneBy({ email });
+    if (!user || user.role === UserRole.Admin) return;
+    await runInTransaction(this.dataSource, async (em, afterCommit) => {
+      try {
+        await this.issueCode(em, afterCommit, { user, purpose: VerificationCodePurpose.AccountDeletion, lang: resolveLanguage(undefined, user.language) ?? lang }, new Date());
+      } catch (error) {
+        if (!(error instanceof AppException) || error.code !== 'CODE_RESEND_TOO_SOON') throw error;
       }
     });
   }

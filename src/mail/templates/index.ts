@@ -29,6 +29,31 @@ export const MAIL_TEMPLATES = {
           [`Hello ${data.name},`, `Your verification code is: ${data.code}`, `The code expires in ${data.minutes} minutes.`],
         ),
 
+  'account-deletion-code': (lang: Lang, data: { name: string; code: string; minutes: number }) =>
+    lang === 'ar'
+      ? layout(
+          lang,
+          'رمز حذف حسابك',
+          [
+            `مرحبًا ${escapeHtml(data.name)}،`,
+            'طُلب حذف حسابك في Eventor من صفحة الحذف على الويب. رمز التأكيد هو:',
+            `<strong style="font-size:22px;letter-spacing:4px">${escapeHtml(data.code)}</strong>`,
+            `ينتهي صلاحية الرمز خلال ${data.minutes} دقيقة. إن لم تطلب ذلك فتجاهل هذه الرسالة: لن يُحذف أي شيء.`,
+          ],
+          [`مرحبًا ${data.name}،`, `رمز حذف حسابك في Eventor: ${data.code}`, `ينتهي خلال ${data.minutes} دقيقة. إن لم تطلب ذلك فتجاهل هذه الرسالة.`],
+        )
+      : layout(
+          lang,
+          'Code to delete your account',
+          [
+            `Hello ${escapeHtml(data.name)},`,
+            'Someone asked to delete your Eventor account on the web deletion page. The confirmation code is:',
+            `<strong style="font-size:22px;letter-spacing:4px">${escapeHtml(data.code)}</strong>`,
+            `The code expires in ${data.minutes} minutes. If you did not ask for this, ignore this email: nothing will be deleted.`,
+          ],
+          [`Hello ${data.name},`, `Code to delete your Eventor account: ${data.code}`, `It expires in ${data.minutes} minutes. If you did not ask for this, ignore this email.`],
+        ),
+
   'password-reset': (lang: Lang, data: { name: string; url: string; minutes: number }) =>
     lang === 'ar'
       ? layout(

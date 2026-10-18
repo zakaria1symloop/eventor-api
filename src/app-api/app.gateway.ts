@@ -10,7 +10,7 @@ import { SessionAudience } from '../common/enums/auth.enums.js';
 import { UserRole, UserStatus } from '../common/enums/user.enums.js';
 import { BOOKING_EVENTS, type BookingEvent, type BookingStatusChangedEvent } from '../bookings/bookings.events.js';
 import { MESSAGING_EVENTS, type ConversationUpdatedEvent, type MessageCreatedEvent } from '../messaging/messaging.events.js';
-import { AVAILABILITY_EVENTS, type AvailabilityChangedEvent } from '../services/services.events.js';
+import { AVAILABILITY_EVENTS, SERVICE_EVENTS, type AvailabilityChangedEvent, type ServiceEvent } from '../services/services.events.js';
 import { NOTIFICATION_EVENTS, type UserNotificationCreatedEvent } from '../notifications/notifications.service.js';
 import { User } from '../users/entities/user.entity.js';
 import { socketToken } from '../messaging/messaging.gateway.js';
@@ -177,6 +177,41 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection {
     }
   }
 
+  /** A service of this provider changed (on another device, or by an admin): their screens reload it. */
+  private serviceChanged(event: ServiceEvent, reason: 'edited' | 'published' | 'unpublished' | 'hidden' | 'shown' | 'deleted'): void {
+    this.server?.to(appUserRoom(event.providerId)).emit('service:updated', { serviceId: event.serviceId, reason });
+  }
+
+  @OnEvent(SERVICE_EVENTS.updated)
+  onServiceEdited(event: ServiceEvent): void {
+    this.serviceChanged(event, 'edited');
+  }
+
+  @OnEvent(SERVICE_EVENTS.published)
+  onServicePublished(event: ServiceEvent): void {
+    this.serviceChanged(event, 'published');
+  }
+
+  @OnEvent(SERVICE_EVENTS.unpublished)
+  onServiceUnpublished(event: ServiceEvent): void {
+    this.serviceChanged(event, 'unpublished');
+  }
+
+  @OnEvent(SERVICE_EVENTS.hidden)
+  onServiceHidden(event: ServiceEvent): void {
+    this.serviceChanged(event, 'hidden');
+  }
+
+  @OnEvent(SERVICE_EVENTS.shown)
+  onServiceShown(event: ServiceEvent): void {
+    this.serviceChanged(event, 'shown');
+  }
+
+  @OnEvent(SERVICE_EVENTS.deleted)
+  onServiceDeleted(event: ServiceEvent): void {
+    this.serviceChanged(event, 'deleted');
+  }
+
   /** The provider's own calendar, when a manual block is added or removed (by them or by an admin). */
   @OnEvent(AVAILABILITY_EVENTS.changed)
   onAvailability(event: AvailabilityChangedEvent): void {
@@ -191,6 +226,7 @@ export const APP_SOCKET_EVENTS = {
   conversationUpdated: 'conversation:updated',
   bookingUpdated: 'booking:updated',
   availabilityUpdated: 'availability:updated',
+  serviceUpdated: 'service:updated',
   notificationNew: 'notification:new',
 } as const;
 

@@ -27,6 +27,14 @@ describe('LegalController', () => {
     expect(res.data.updatedAt).toBe(edited.toISOString());
   });
 
+  it('names who runs Eventor from the invoice issuer details', async () => {
+    const plain = await controller({ legal_privacy_en: PRIVACY_EN }).get('privacy', 'en');
+    expect(plain.data.body).toContain('Eventor is run by: Eventor.');
+    const settings = { getMany: vi.fn(async () => ({ legal_privacy_en: PRIVACY_EN, support_email: '', support_phone: '', invoice_issuer: { name: 'SYMLOOP SARL', address: 'Alger', email: 'contact@symloop.com', phone: '', nif: '', rc: '' } })) };
+    const full = await new LegalController({ query: async () => [] } as any, { ADMIN_URL: 'https://admin.eventor.dz' } as any, settings as any).get('privacy', 'en');
+    expect(full.data.body).toContain('Eventor is run by: SYMLOOP SARL, Alger, contact@symloop.com.');
+  });
+
   it('answers 404 for any other page', async () => {
     await expect(controller({}).get('cookies', 'en')).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });

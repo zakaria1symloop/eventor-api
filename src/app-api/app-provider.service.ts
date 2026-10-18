@@ -383,7 +383,7 @@ export class AppProviderService {
     const [[count], rows] = await Promise.all([
       em.query(`SELECT COUNT(*) AS n FROM reviews r WHERE ${where}`, [auth.id]),
       em.query(
-        `SELECT r.id, r.rating, r.comment, r.redacted_comment, r.status, r.had_dispute, r.created_at,
+        `SELECT r.id, r.rating, r.comment, r.redacted_comment, r.status, r.had_dispute, r.created_at, r.author_id,
                 au.full_name AS author_name, au.avatar_file_id AS author_avatar,
                 s.id AS service_id, s.title_en, s.title_ar, b.reference,
                 rr.id AS reply_id, rr.body AS reply_body, rr.status AS reply_status, rr.created_at AS replied_at
@@ -399,6 +399,7 @@ export class AppProviderService {
     const data = (rows as any[]).map(
       (r): AppProviderReviewDto => ({
         id: r.id,
+        authorId: r.author_id,
         rating: Number(r.rating),
         comment: r.status === ReviewStatus.Redacted ? (r.redacted_comment ?? '') : r.comment,
         authorName: reviewerName(r.author_name),

@@ -7,6 +7,8 @@ export const APP_AUTH_EVENTS = {
 
 /** Codes travel in the payload only to build the email; never log payloads. */
 export interface AppCodeSentEvent {
+  /** Picks the email wording (deletion codes say what they do). */
+  purpose?: string;
   email: string;
   name: string;
   code: string;

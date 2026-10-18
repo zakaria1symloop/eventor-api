@@ -390,7 +390,7 @@ export class AppCatalogService {
    */
   private async reviewRows(em: EntityManager, where: string, params: unknown[], limit: number, offset: number, _lang: Lang): Promise<AppReviewDto[]> {
     const rows = await em.query(
-      `SELECT r.id, r.rating, r.comment, r.redacted_comment, r.status, r.created_at,
+      `SELECT r.id, r.rating, r.comment, r.redacted_comment, r.status, r.created_at, r.author_id,
               au.full_name AS author_name, au.avatar_file_id AS author_avatar,
               rr.body AS reply_body, rr.created_at AS reply_at
        FROM reviews r
@@ -402,6 +402,7 @@ export class AppCatalogService {
     );
     return rows.map((row: any) => ({
       id: row.id,
+      authorId: row.author_id,
       authorName: reviewerName(row.author_name),
       authorAvatarUrl: row.author_avatar ? this.files.signedUrl(row.author_avatar, { variant: FileVariantKind.Thumb }) : null,
       rating: Number(row.rating),
@@ -453,7 +454,7 @@ export class AppCatalogService {
     );
     if (!row) throw AppException.of('PROVIDER_NOT_FOUND');
 
-    const [wilayas, serviceRows, [servicesCount], buckets, reviews, packs] = await Promise.all([
+    const [wilayas, serviceRows, [servicesCount], buckets, reviews, packs, [packsCount]] = await Promise.all([
       em.query(
         'SELECT w.code, w.name, w.name_ar FROM provider_wilayas pw JOIN wilayas w ON w.code = pw.wilaya_code AND w.is_open = 1 WHERE pw.provider_profile_id = ? ORDER BY w.code',
         [row.profile_id],
@@ -467,6 +468,7 @@ export class AppCatalogService {
       em.query("SELECT rating, COUNT(*) AS n FROM reviews WHERE provider_id = ? AND status IN ('published', 'redacted') AND deleted_at IS NULL GROUP BY rating", [id]),
       this.reviewRows(em, 'r.provider_id = ?', [id], EMBEDDED_REVIEWS, 0, lang),
       this.packRows(em, 'p.provider_id = ?', [id], 6, 0, 'p.bookings_count DESC, p.id DESC', lang, viewer?.id ?? null),
+      em.query(`SELECT COUNT(*) AS n FROM packs p JOIN users u ON u.id = p.provider_id WHERE p.provider_id = ? AND ${PACK_VISIBLE_SQL}`, [id]),
     ]);
 
     const summary = this.providerSummary(lang, row);
@@ -501,6 +503,7 @@ export class AppCatalogService {
       servicesCount: Number(servicesCount.n),
       services: await this.toServiceCards(em, serviceRows, lang, viewer?.id ?? null),
       packs,
+      packsCount: Number(packsCount.n),
       ratingBreakdown: ratingBreakdown(buckets.map((b: any) => ({ rating: Number(b.rating), n: Number(b.n) }))),
       recentReviews: reviews,
       memberSince: new Date(row.member_since).toISOString(),

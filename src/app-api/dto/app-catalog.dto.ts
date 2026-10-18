@@ -108,6 +108,7 @@ export class AppRatingBucketDto {
 
 export class AppReviewDto {
   @ApiProperty({ format: 'uuid' }) id: string;
+  @ApiProperty({ format: 'uuid', description: 'The reviewer’s user id: send it to `POST /app/me/blocks` to block them.' }) authorId: string;
   @ApiProperty({ example: 'Yasmine K.', description: 'The author’s first name plus an initial — never the full name, email or phone.' })
   authorName: string;
   @ApiProperty({ type: String, nullable: true }) authorAvatarUrl: string | null;
@@ -217,7 +218,8 @@ export class AppProviderDetailDto extends AppProviderSummaryDto {
   @ApiProperty({ type: [AppProviderCheckDto], description: '"What we checked".' }) checks: AppProviderCheckDto[];
   @ApiProperty({ example: 5 }) servicesCount: number;
   @ApiProperty({ type: [AppServiceCardDto] }) services: AppServiceCardDto[];
-  @ApiProperty({ type: [AppPackCardDto] }) packs: AppPackCardDto[];
+  @ApiProperty({ type: [AppPackCardDto], description: 'At most 6, most booked first; `packsCount` is the total.' }) packs: AppPackCardDto[];
+  @ApiProperty({ example: 8, description: 'All visible packs of the provider: "See all" opens `GET /app/packs?providerId=` (same count as its `meta.total`).' }) packsCount: number;
   @ApiProperty({ type: [AppRatingBucketDto] }) ratingBreakdown: AppRatingBucketDto[];
   @ApiProperty({ type: [AppReviewDto] }) recentReviews: AppReviewDto[];
   @ApiProperty({ format: 'date-time', description: 'Account creation ("on Eventor since").' }) memberSince: string;

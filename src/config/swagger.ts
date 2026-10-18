@@ -123,9 +123,16 @@ const MOBILE_SOCKET_CONTRACT =
   'the socket automatically joins the caller\'s own room — no subscription needed for your own events.\n\n' +
   'Server → client events:\n' +
   '- `message:new` — an `AppMessageDto`, already masked **for you**.\n' +
-  '- `conversation:updated` — `{ conversationId, reason }` (`message`, `read`, `created`, `closed`, …): refresh screen 14.\n' +
+  '- `conversation:updated` — `{ conversationId, reason }` (`message`, `read`, `created`, `closed`, `reopened`, `moderated`, ' +
+  '`participant_joined`, `blocked`, `unblocked`): refresh screen 14, and the open chat (`blocked` / `unblocked` reach both ' +
+  'people of the direct chat, so the composer turns read-only or back).\n' +
   '- `booking:updated` — `{ bookingId, reference, status }` whenever a booking of yours moves (created, accepted, declined, cancelled, completed, rescheduled, price changed); `status` is always the booking’s current status.\n' +
-  '- `notification:new` — the same row `GET /app/me/notifications` returns (`AppNotificationDto`).\n\n' +
+  '- `notification:new` — the same row `GET /app/me/notifications` returns (`AppNotificationDto`).\n' +
+  '- `availability:updated` (providers) — `{ providerId, serviceId, date, reason, bookingId }`: a block added or removed ' +
+  'by you or an admin (`reason: "blocked" | "unblocked"`, `date` = that day), or a booking holding or freeing days ' +
+  '(`reason: "booking"`, `date: null`: reload the visible month).\n' +
+  '- `service:updated` (providers) — `{ serviceId, reason }` with `reason` one of `edited`, `published`, `unpublished`, ' +
+  '`hidden`, `shown`, `deleted`: one of your services changed on another device or by an admin.\n\n' +
   'Client → server (acknowledged): `conversation:join` / `conversation:leave` `{ conversationId }` answering ' +
   '`{ ok: true, room }` or `{ ok: false, code: "NOT_A_PARTICIPANT" }`. Joining scopes nothing security-wise — it only lets ' +
   'screen 15 listen to a single conversation. Treat the socket as an optimisation, never as the source of truth.';

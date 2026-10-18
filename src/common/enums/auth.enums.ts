@@ -8,4 +8,6 @@ export enum VerificationCodePurpose {
   PasswordReset = 'password_reset',
   EmailChange = 'email_change',
   FormSubmission = 'form_submission',
+  /** The public account deletion page (no password, or a forgotten one). */
+  AccountDeletion = 'account_deletion',
 }

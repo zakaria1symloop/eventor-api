@@ -37258,7 +37258,7 @@
     },
     "/api/v1/app/auth/delete-account": {
       "post": {
-        "description": "Public route behind the \"Delete my account\" web page (`deleteAccountUrl` in `/app/config`, required by Google Play). The email and password of a client or provider account, then the same deletion as `DELETE /app/me`: 409 `ACCOUNT_HAS_ACTIVE_ITEMS` while an upcoming booking or an open dispute remains. Same lockout as sign-in. Blocked and unverified accounts can delete too.",
+        "description": "Public route behind the \"Delete my account\" web page (`deleteAccountUrl` in `/app/config`, required by Google Play). The email and either the password or a code from `POST /app/auth/delete-account/code`, then the same deletion as `DELETE /app/me`: 409 `ACCOUNT_HAS_ACTIVE_ITEMS` while an upcoming booking or an open dispute remains. Same lockout as sign-in. Blocked and unverified accounts can delete too.",
         "operationId": "AppAuthController_deleteAccount",
         "parameters": [
           {
@@ -37280,7 +37280,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AppLoginDto"
+                "$ref": "#/components/schemas/AppDeleteAccountDto"
               }
             }
           }
@@ -37385,6 +37385,42 @@
               }
             }
           },
+          "422": {
+            "description": "`CODE_INVALID`: The verification code is incorrect.<br>`CODE_EXPIRED`: The verification code has expired. Ask for a new one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "CODE_INVALID": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "CODE_INVALID",
+                      "message": "The verification code is incorrect.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "CODE_EXPIRED": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "CODE_EXPIRED",
+                      "message": "The verification code has expired. Ask for a new one.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "429": {
             "description": "`ACCOUNT_LOCKED`: Too many failed attempts. Try again in {retryAfterSeconds} seconds.<br>`RATE_LIMITED`: Too many requests. Please try again later.",
             "content": {
@@ -37423,6 +37459,96 @@
           }
         },
         "summary": "Delete an account from the web",
+        "tags": [
+          "app-auth"
+        ],
+        "x-public": true,
+        "security": []
+      }
+    },
+    "/api/v1/app/auth/delete-account/code": {
+      "post": {
+        "description": "Public route behind the web deletion page, for accounts without a password, a forgotten one, or a blocked account. **Always 202**, whether or not the address has an account. Emails a 6-digit code valid 15 min (one per 60 s); then send it as `code` to `POST /app/auth/delete-account`.",
+        "operationId": "AppAuthController_deletionCode",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppForgotPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted (says nothing about whether the account exists)."
+          },
+          "400": {
+            "description": "`VALIDATION_FAILED`: Some fields are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "value": {
+                      "statusCode": 400,
+                      "error": "Bad Request",
+                      "code": "VALIDATION_FAILED",
+                      "message": "Some fields are invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`RATE_LIMITED`: Too many requests. Please try again later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "RATE_LIMITED": {
+                    "value": {
+                      "statusCode": 429,
+                      "error": "Too Many Requests",
+                      "code": "RATE_LIMITED",
+                      "message": "Too many requests. Please try again later.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Email a code to delete an account from the web",
         "tags": [
           "app-auth"
         ],
@@ -77172,6 +77298,42 @@
           "password"
         ]
       },
+      "AppDeleteAccountDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "amina.benali@email.com"
+          },
+          "password": {
+            "type": "string",
+            "example": "Sunflower42x",
+            "description": "Send this or `code`."
+          },
+          "code": {
+            "type": "string",
+            "example": "284917",
+            "description": "The 6-digit code emailed by `POST /app/auth/delete-account/code` (valid 15 min, 5 tries)."
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "AppForgotPasswordDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "amina.benali@email.com"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
       "AppRefreshDto": {
         "type": "object",
         "properties": {
@@ -77193,19 +77355,6 @@
             "description": "The refresh token to revoke. When absent, the bearer token’s session is revoked."
           }
         }
-      },
-      "AppForgotPasswordDto": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "example": "amina.benali@email.com"
-          }
-        },
-        "required": [
-          "email"
-        ]
       },
       "AppVerifyResetCodeDto": {
         "type": "object",
@@ -79107,6 +79256,11 @@
             "type": "string",
             "format": "uuid"
           },
+          "authorId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The reviewer’s user id: send it to `POST /app/me/blocks` to block them."
+          },
           "authorName": {
             "type": "string",
             "example": "Yasmine K.",
@@ -79148,6 +79302,7 @@
         },
         "required": [
           "id",
+          "authorId",
           "authorName",
           "authorAvatarUrl",
           "rating",
@@ -79634,10 +79789,16 @@
             }
           },
           "packs": {
+            "description": "At most 6, most booked first; `packsCount` is the total.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AppPackCardDto"
             }
+          },
+          "packsCount": {
+            "type": "number",
+            "example": 8,
+            "description": "All visible packs of the provider: \"See all\" opens `GET /app/packs?providerId=` (same count as its `meta.total`)."
           },
           "ratingBreakdown": {
             "type": "array",
@@ -79679,6 +79840,7 @@
           "servicesCount",
           "services",
           "packs",
+          "packsCount",
           "ratingBreakdown",
           "recentReviews",
           "memberSince"
@@ -82107,6 +82269,11 @@
             "type": "string",
             "format": "uuid"
           },
+          "authorId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The reviewer’s user id: send it to `POST /app/me/blocks` to block them."
+          },
           "rating": {
             "type": "number",
             "example": 5
@@ -82169,6 +82336,7 @@
         },
         "required": [
           "id",
+          "authorId",
           "rating",
           "comment",
           "authorName",

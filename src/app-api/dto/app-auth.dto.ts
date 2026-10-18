@@ -175,6 +175,27 @@ export class AppLogoutDto {
   refreshToken?: string;
 }
 
+/** The web deletion page: the password, or the code from `POST /app/auth/delete-account/code`. */
+export class AppDeleteAccountDto {
+  @ApiProperty({ format: 'email', example: 'amina.benali@email.com' })
+  @Transform(normaliseEmail)
+  @IsEmail()
+  @MaxLength(190)
+  email: string;
+
+  @ApiPropertyOptional({ example: 'Sunflower42x', description: 'Send this or `code`.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  password?: string;
+
+  @ApiPropertyOptional({ example: '284917', description: 'The 6-digit code emailed by `POST /app/auth/delete-account/code` (valid 15 min, 5 tries).' })
+  @IsOptional()
+  @Transform(trim)
+  @Matches(/^\d{6}$/, { message: 'code must be 6 digits' })
+  code?: string;
+}
+
 export class AppForgotPasswordDto {
   @ApiProperty({ format: 'email', example: 'amina.benali@email.com' })
   @Transform(normaliseEmail)

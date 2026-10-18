@@ -12,7 +12,7 @@ export class AppMailListener {
   async onCodeSent(event: AppCodeSentEvent): Promise<void> {
     await this.mail.enqueue({
       to: event.email,
-      template: 'verification-code',
+      template: event.purpose === 'account_deletion' ? 'account-deletion-code' : 'verification-code',
       lang: event.lang,
       data: { name: event.name, code: event.code, minutes: event.minutes },
     });

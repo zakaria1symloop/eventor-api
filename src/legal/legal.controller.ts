@@ -56,14 +56,17 @@ export class LegalController {
   async get(@Param('doc') doc: string, @ReqLang() lang: Lang) {
     if (!(LEGAL_DOCS as readonly string[]).includes(doc)) throw AppException.of('NOT_FOUND');
     const key = `legal_${doc}_${lang}` as 'legal_terms_en';
-    const values = await this.settings.getMany([key, 'support_email', 'support_phone'] as const);
+    const values = await this.settings.getMany([key, 'support_email', 'support_phone', 'invoice_issuer'] as const);
     const [row] = await this.dataSource.query('SELECT updated_at FROM settings WHERE `key` = ?', [key]);
     const contact = [values.support_email, values.support_phone].filter((v) => v && v.trim() !== '').join(' · ');
     const supportContact =
       contact || (lang === 'ar' ? 'عبر مراسلة دعم Eventor داخل التطبيق' : 'by sending a message to Eventor support in the app');
+    const issuer = values.invoice_issuer;
+    const operator = [issuer?.name || 'Eventor', issuer?.address, issuer?.email, issuer?.phone].filter((v) => v && v.trim() !== '').join(', ');
     const body = String(values[key] ?? '')
       .replaceAll('{deleteAccountUrl}', legalPageUrl(this.env.ADMIN_URL, lang, 'delete-account'))
-      .replaceAll('{supportContact}', supportContact);
+      .replaceAll('{supportContact}', supportContact)
+      .replaceAll('{operator}', operator);
     const data: PublicLegalDto = {
       doc: doc as LegalDoc,
       lang,

@@ -302,6 +302,8 @@ export class UserAccountsService implements OnModuleInit {
     const cancelledBookings = await this.cancelPendingBookings(em, afterCommit, user, 'cancel', 'account_deleted', auth.id);
     const sessionsRevoked = await this.sessions.revokeAllForUser(user.id, em);
     await em.query('UPDATE conversation_participants SET can_write = 0 WHERE user_id = ?', [user.id]);
+    // The phones stop being registered at once (privacy policy §4).
+    await em.query('UPDATE device_tokens SET deleted_at = ? WHERE user_id = ? AND deleted_at IS NULL', [new Date(), user.id]);
     await em.getRepository(User).update(user.id, releasedContactFields(user.id));
     await em.getRepository(User).softDelete(user.id);
     const anonymiseAfter = new Date(Date.now() + ANONYMISE_AFTER_DAYS * 86_400_000);

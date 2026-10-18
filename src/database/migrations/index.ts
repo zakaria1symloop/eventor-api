@@ -12,6 +12,7 @@ import { OneBookingPerDay1791360000000 } from './1791360000000-OneBookingPerDay.
 import { AllowSimultaneous1791380000000 } from './1791380000000-AllowSimultaneous.js';
 import { UserBlocks1791500000000 } from './1791500000000-UserBlocks.js';
 import { LegalSettings1791500000001 } from './1791500000001-LegalSettings.js';
+import { AccountDeletionCode1791500000002 } from './1791500000002-AccountDeletionCode.js';
 
 /**
  * Ordered migration registry, explicit for the same reason as the entity
@@ -32,4 +33,5 @@ export const migrations: NonNullable<DataSourceOptions['migrations']> = [
   AllowSimultaneous1791380000000,
   UserBlocks1791500000000,
   LegalSettings1791500000001,
+  AccountDeletionCode1791500000002,
 ];

@@ -218,6 +218,7 @@ export class AppProviderHomeDto {
 
 export class AppProviderReviewDto {
   @ApiProperty({ format: 'uuid' }) id: string;
+  @ApiProperty({ format: 'uuid', description: 'The reviewer’s user id: send it to `POST /app/me/blocks` to block them.' }) authorId: string;
   @ApiProperty({ example: 5 }) rating: number;
   @ApiProperty({ example: 'Wonderful team.', description: 'The redacted text when an admin redacted it.' }) comment: string;
   @ApiProperty({ example: 'Yasmine K.', description: 'Never a full name (mobile-api §7).' }) authorName: string;

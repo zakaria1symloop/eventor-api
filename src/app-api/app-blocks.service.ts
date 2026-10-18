@@ -4,9 +4,11 @@ import type { DataSource } from 'typeorm';
 import type { AuthUser } from '../auth/auth.types.js';
 import { UserRole } from '../common/enums/user.enums.js';
 import { AppException } from '../common/errors/app.exception.js';
+import { DomainEvents } from '../common/events/domain-events.js';
 import { paginate, type Paginated } from '../common/pagination/paginated.js';
 import type { PaginationQueryDto } from '../common/pagination/pagination-query.dto.js';
 import { FilesService } from '../files/files.service.js';
+import { MESSAGING_EVENTS, type ConversationUpdatedEvent } from '../messaging/messaging.events.js';
 import { avatarUrl } from './app-refs.js';
 import type { AppBlockedUserDto } from './dto/app-me.dto.js';
 
@@ -39,7 +41,20 @@ export class AppBlocksService {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly files: FilesService,
+    private readonly events: DomainEvents,
   ) {}
+
+  /** Both sides get `conversation:updated` for their direct chat, so an open chat turns read-only (or back) at once. */
+  private async announce(a: string, b: string, reason: 'blocked' | 'unblocked'): Promise<void> {
+    const rows: { id: string }[] = await this.dataSource.query(
+      `SELECT c.id FROM conversations c
+         JOIN conversation_participants pa ON pa.conversation_id = c.id AND pa.user_id = ?
+         JOIN conversation_participants pb ON pb.conversation_id = c.id AND pb.user_id = ?
+        WHERE c.kind = 'direct' AND c.deleted_at IS NULL`,
+      [a, b],
+    );
+    for (const { id } of rows) await this.events.emit<ConversationUpdatedEvent>(MESSAGING_EVENTS.conversationUpdated, { conversationId: id, reason });
+  }
 
   private toDto(r: any): AppBlockedUserDto {
     return {
@@ -60,12 +75,13 @@ export class AppBlocksService {
     const [target] = await this.dataSource.query('SELECT id, role FROM users WHERE id = ? AND deleted_at IS NULL', [userId]);
     if (!target) throw AppException.of('USER_NOT_FOUND');
     if (target.id === auth.id || target.role === UserRole.Admin) throw AppException.of('BLOCK_TARGET_INVALID', { userId });
-    await this.dataSource.query('INSERT IGNORE INTO user_blocks (id, created_at, blocker_id, blocked_id) VALUES (?, ?, ?, ?)', [
+    const inserted = await this.dataSource.query('INSERT IGNORE INTO user_blocks (id, created_at, blocker_id, blocked_id) VALUES (?, ?, ?, ?)', [
       crypto.randomUUID(),
       new Date(),
       auth.id,
       userId,
     ]);
+    if (inserted.affectedRows) await this.announce(auth.id, userId, 'blocked');
     const [row] = await this.dataSource.query(`${this.selectSql} WHERE b.blocker_id = ? AND b.blocked_id = ?`, [auth.id, userId]);
     return this.toDto(row);
   }
@@ -73,6 +89,7 @@ export class AppBlocksService {
   async unblock(auth: AuthUser, userId: string): Promise<void> {
     const result = await this.dataSource.query('DELETE FROM user_blocks WHERE blocker_id = ? AND blocked_id = ?', [auth.id, userId]);
     if (!result.affectedRows) throw AppException.of('BLOCK_NOT_FOUND');
+    await this.announce(auth.id, userId, 'unblocked');
   }
 
   async list(auth: AuthUser, query: PaginationQueryDto): Promise<Paginated<AppBlockedUserDto>> {

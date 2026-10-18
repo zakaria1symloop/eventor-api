@@ -12,6 +12,7 @@ import { AppAuthService } from './app-auth.service.js';
 import {
   AppCodeSentDto,
   AppForgotPasswordDto,
+  AppDeleteAccountDto,
   AppLoginDto,
   AppLogoutDto,
   AppRefreshDto,
@@ -127,14 +128,29 @@ export class AppAuthController {
     summary: 'Delete an account from the web',
     description:
       'Public route behind the "Delete my account" web page (`deleteAccountUrl` in `/app/config`, required by Google Play). ' +
-      'The email and password of a client or provider account, then the same deletion as `DELETE /app/me`: 409 ' +
+      'The email and either the password or a code from `POST /app/auth/delete-account/code`, then the same deletion as `DELETE /app/me`: 409 ' +
       '`ACCOUNT_HAS_ACTIVE_ITEMS` while an upcoming booking or an open dispute remains. Same lockout as sign-in. Blocked ' +
       'and unverified accounts can delete too.',
   })
   @ApiResponse({ status: 204, description: 'Account deleted.' })
-  @ApiErrorResponses('VALIDATION_FAILED', 'INVALID_CREDENTIALS', 'ACCOUNT_LOCKED', 'ACCOUNT_HAS_ACTIVE_ITEMS', 'ROLE_NOT_ALLOWED_IN_APP', 'RATE_LIMITED')
-  async deleteAccount(@Body() dto: AppLoginDto): Promise<void> {
-    await this.auth.deleteFromWeb(dto.email, dto.password);
+  @ApiErrorResponses('VALIDATION_FAILED', 'INVALID_CREDENTIALS', 'ACCOUNT_LOCKED', 'CODE_INVALID', 'CODE_EXPIRED', 'ACCOUNT_HAS_ACTIVE_ITEMS', 'ROLE_NOT_ALLOWED_IN_APP', 'RATE_LIMITED')
+  async deleteAccount(@Body() dto: AppDeleteAccountDto): Promise<void> {
+    await this.auth.deleteFromWeb(dto.email, { password: dto.password, code: dto.code });
+  }
+
+  @Post('delete-account/code')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary: 'Email a code to delete an account from the web',
+    description:
+      'Public route behind the web deletion page, for accounts without a password, a forgotten one, or a blocked account. ' +
+      '**Always 202**, whether or not the address has an account. Emails a 6-digit code valid 15 min (one per 60 s); then ' +
+      'send it as `code` to `POST /app/auth/delete-account`.',
+  })
+  @ApiResponse({ status: 202, description: 'Accepted (says nothing about whether the account exists).' })
+  @ApiErrorResponses('VALIDATION_FAILED', 'RATE_LIMITED')
+  async deletionCode(@Body() dto: AppForgotPasswordDto, @ReqLang() lang: Lang): Promise<void> {
+    await this.auth.requestDeletionCode(dto.email, lang);
   }
 
   @Post('refresh')

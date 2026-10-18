@@ -19,6 +19,7 @@ function db(pairs: [string, string][], users: Record<string, { id: string; role:
       if (sql.startsWith('SELECT id, role FROM users')) return users[params[0] as string] ? [users[params[0] as string]] : [];
       if (sql.startsWith('DELETE FROM user_blocks')) return { affectedRows: pairs.some(([a, b]) => a === params[0] && b === params[1]) ? 1 : 0 };
       if (sql.startsWith('INSERT IGNORE INTO user_blocks')) return { affectedRows: 1 };
+      if (sql.startsWith('SELECT c.id FROM conversations c')) return [{ id: 'chat-1' }];
       return [{ user_id: params[1], created_at: new Date('2026-10-15T10:00:00Z'), full_name: 'Amina', role: 'client', avatar_file_id: null, business_name: null }];
     }),
   };
@@ -40,7 +41,8 @@ describe('blockSets / assertNotBlocked', () => {
 });
 
 describe('AppBlocksService', () => {
-  const service = (fake: ReturnType<typeof db>) => new AppBlocksService(fake as any, { signedUrl: () => 'url' } as any);
+  const events = { emit: vi.fn(async () => undefined) };
+  const service = (fake: ReturnType<typeof db>) => new AppBlocksService(fake as any, { signedUrl: () => 'url' } as any, events as any);
 
   it('blocks a client or provider and answers the blocked user', async () => {
     const fake = db([], { u1: { id: 'u1', role: 'provider' } });
@@ -53,6 +55,16 @@ describe('AppBlocksService', () => {
     await expect(service(fake).block(auth, ME)).rejects.toMatchObject({ code: 'BLOCK_TARGET_INVALID' });
     await expect(service(fake).block(auth, 'admin')).rejects.toMatchObject({ code: 'BLOCK_TARGET_INVALID' });
     await expect(service(fake).block(auth, 'nobody')).rejects.toMatchObject({ code: 'USER_NOT_FOUND' });
+  });
+
+  it('tells both sides of their direct chat, on block and on unblock', async () => {
+    events.emit.mockClear();
+    await service(db([], { u1: { id: 'u1', role: 'provider' } })).block(auth, 'u1');
+    await service(db([[ME, 'u1']])).unblock(auth, 'u1');
+    expect(events.emit.mock.calls).toEqual([
+      ['conversation.updated', { conversationId: 'chat-1', reason: 'blocked' }],
+      ['conversation.updated', { conversationId: 'chat-1', reason: 'unblocked' }],
+    ]);
   });
 
   it('unblocks only an existing block', async () => {

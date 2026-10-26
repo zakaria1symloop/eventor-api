@@ -686,6 +686,13 @@ loop when it fails.
 
 ## 16. Changelog
 
+### 2026-10-26 — featured services on the home screen
+
+- `GET /app/home` gains **`featuredServices`**: the services admins picked with "Feature on home" in the dashboard. At most 12, in the admins' order, the same list for every user. Empty when none is featured: hide the section.
+- Every service card (search, home, provider profile, favourites) gains **`isFeatured`**, for a "Featured" badge.
+- `GET /app/services?featured=true` lists only the featured services (the rail's "See all"); with the default sort they come in the admins' order.
+- Already true before, now documented: with the default sort (relevance), search results show featured services first.
+
 ### 2026-10-18 — answers to the mobile follow-up (items 10–17)
 
 - **Reviews carry `authorId`** (the reviewer's user id) on `GET /app/services/{id}/reviews`, `GET /app/providers/{id}/reviews`, the provider's `recentReviews` and `GET /app/provider/reviews`: "Block" on a review sends it to `POST /app/me/blocks`.

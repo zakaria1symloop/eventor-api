@@ -70,6 +70,7 @@ export class AppServiceCardDto {
   @ApiProperty({ example: '4.80' }) avgRating: string;
   @ApiProperty({ example: 32 }) ratingCount: number;
   @ApiProperty({ example: 12 }) bookingsCount: number;
+  @ApiProperty({ example: false, description: 'An admin featured it (dashboard "Feature on home"): show a "Featured" badge.' }) isFeatured: boolean;
   @ApiProperty({ type: String, nullable: true }) coverUrl: string | null;
   @ApiProperty({ type: [AppWilayaRefDto], description: 'Open wilayas the service covers.' }) wilayas: AppWilayaRefDto[];
   @ApiProperty({ type: AppProviderSummaryDto }) provider: AppProviderSummaryDto;
@@ -314,6 +315,10 @@ export class AppServicesQueryDto extends PaginationQueryDto {
   @IsOptional() @IsEnum(EventType)
   eventType?: EventType;
 
+  @ApiPropertyOptional({ description: 'Only the featured services (the home "Featured" rail\'s "See all"); with the default sort they come in the admins\' order.' })
+  @IsOptional() @Transform(toBoolean) @IsBoolean()
+  featured?: boolean;
+
   @ApiPropertyOptional({ description: 'Only services I marked as favourite (needs a token).' })
   @IsOptional() @Transform(toBoolean) @IsBoolean()
   favourite?: boolean;
@@ -399,6 +404,13 @@ export class AppHomeDto {
   @ApiProperty({ type: [AppCategoryDto] }) categories: AppCategoryDto[];
   @ApiProperty({ type: [AppHomeBookingDto], description: 'The next 2 bookings ("Your bookings").' }) upcomingBookings: AppHomeBookingDto[];
   @ApiProperty({ type: AppHomeBudgetDto }) budget: AppHomeBudgetDto;
+  @ApiProperty({
+    type: [AppServiceCardDto],
+    description:
+      '"Featured": the services admins picked with "Feature on home" (at most 12), in their order, the same for every user. ' +
+      'Empty when none is featured: hide the section.',
+  })
+  featuredServices: AppServiceCardDto[];
   @ApiProperty({ type: [AppPackCardDto], description: '"Ready Packs".' }) packs: AppPackCardDto[];
   @ApiProperty({ type: [AppServiceCardDto], description: '"Providers near you": services in my wilaya, best rated first.' })
   nearbyServices: AppServiceCardDto[];

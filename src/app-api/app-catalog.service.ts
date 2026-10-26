@@ -1,3 +1,4 @@
+import { MAX_FEATURED_SERVICES } from '../services/services.policy.js';
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource, EntityManager } from 'typeorm';
@@ -54,7 +55,7 @@ import type {
 import type { AppWilayaRefDto } from './dto/app-me.dto.js';
 
 /** Columns every service card needs, from the `services s` / `users u` / `provider_profiles pp` joins. */
-const SERVICE_CARD_COLUMNS = `s.id, s.title_en, s.title_ar, s.base_price, s.price_type, s.avg_rating, s.rating_count, s.bookings_count,
+const SERVICE_CARD_COLUMNS = `s.id, s.title_en, s.title_ar, s.base_price, s.price_type, s.avg_rating, s.rating_count, s.bookings_count, s.is_featured,
   s.category_id, c.slug AS cat_slug, c.name_en AS cat_name_en, c.name_ar AS cat_name_ar, c.icon AS cat_icon,
   u.id AS provider_id, u.avatar_file_id AS provider_avatar, u.verification_status AS provider_verification, u.full_name AS provider_full_name,
   pp.business_name, pp.avg_rating AS pp_rating, pp.rating_count AS pp_rating_count, pp.completed_bookings_count,
@@ -190,6 +191,7 @@ export class AppCatalogService {
       avgRating: String(row.avg_rating),
       ratingCount: Number(row.rating_count),
       bookingsCount: Number(row.bookings_count),
+      isFeatured: Number(row.is_featured) === 1,
       coverUrl: row.cover_file_id ? this.files.signedUrl(row.cover_file_id, { variant: FileVariantKind.Medium }) : null,
       wilayas,
       provider: this.providerSummary(lang, row),
@@ -226,6 +228,7 @@ export class AppCatalogService {
       where.push('s.provider_id = ?');
       params.push(query.providerId);
     }
+    if (query.featured) where.push('s.is_featured = 1');
     if (query.wilaya?.length) {
       where.push('EXISTS (SELECT 1 FROM service_wilayas sw JOIN wilayas w ON w.code = sw.wilaya_code AND w.is_open = 1 WHERE sw.service_id = s.id AND sw.wilaya_code IN (?))');
       params.push(query.wilaya);
@@ -862,7 +865,7 @@ export class AppCatalogService {
     if (!user) throw AppException.of('USER_NOT_FOUND');
 
     const wilaya = user.wilaya_code ? [user.wilaya_code] : [];
-    const [categories, upcoming, budget, packs, nearby, [unreadNotifications], [unreadConversations]] = await Promise.all([
+    const [categories, upcoming, budget, packs, nearby, [unreadNotifications], [unreadConversations], featured] = await Promise.all([
       this.categories(lang),
       em.query(
         `SELECT b.id, b.reference, b.event_date, b.start_time, b.status,
@@ -904,6 +907,8 @@ export class AppCatalogService {
            AND (cp.last_read_at IS NULL OR m.created_at > cp.last_read_at))`,
         [auth.id],
       ),
+      // The dashboard's "Feature on home" picks (max 12), in the admins' order, the same for everyone.
+      this.services({ page: 1, limit: MAX_FEATURED_SERVICES, featured: true } as AppServicesQueryDto, lang, auth),
     ]);
 
     return {
@@ -926,6 +931,7 @@ export class AppCatalogService {
         coverUrl: row.cover_file_id ? this.files.signedUrl(row.cover_file_id, { variant: FileVariantKind.Thumb }) : null,
       })),
       budget,
+      featuredServices: featured.data,
       packs,
       nearbyServices: nearby.data,
     };

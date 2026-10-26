@@ -44812,6 +44812,15 @@
             }
           },
           {
+            "name": "featured",
+            "required": false,
+            "in": "query",
+            "description": "Only the featured services (the home \"Featured\" rail's \"See all\"); with the default sort they come in the admins' order.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "favourite",
             "required": false,
             "in": "query",
@@ -78739,6 +78748,119 @@
           "acceptingBookings"
         ]
       },
+      "AppServiceCardDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "example": "Wedding photo & video coverage",
+            "description": "In the caller’s language."
+          },
+          "titleEn": {
+            "type": "string",
+            "example": "Wedding photo & video coverage"
+          },
+          "titleAr": {
+            "type": "string",
+            "example": "تغطية تصوير الأعراس"
+          },
+          "category": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AppCategoryRefDto"
+              }
+            ]
+          },
+          "basePrice": {
+            "type": "string",
+            "example": "45000.00",
+            "description": "DZD, 2 decimals."
+          },
+          "priceType": {
+            "type": "string",
+            "enum": [
+              "per_event",
+              "per_hour",
+              "per_person",
+              "per_day",
+              "on_quote"
+            ],
+            "example": "per_day"
+          },
+          "priceTypeLabel": {
+            "type": "string",
+            "example": "per day",
+            "description": "Price type in the caller’s language."
+          },
+          "avgRating": {
+            "type": "string",
+            "example": "4.80"
+          },
+          "ratingCount": {
+            "type": "number",
+            "example": 32
+          },
+          "bookingsCount": {
+            "type": "number",
+            "example": 12
+          },
+          "isFeatured": {
+            "type": "boolean",
+            "example": false,
+            "description": "An admin featured it (dashboard \"Feature on home\"): show a \"Featured\" badge."
+          },
+          "coverUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "wilayas": {
+            "description": "Open wilayas the service covers.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppWilayaRefDto"
+            }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/AppProviderSummaryDto"
+          },
+          "isFavourite": {
+            "type": "boolean",
+            "example": false,
+            "description": "Always false for anonymous callers."
+          },
+          "favouriteId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The caller’s favourite row over this service (null when not saved, or anonymous). Un-save with `DELETE /app/me/favourites/{favouriteId}` — or by target with `DELETE /app/me/favourites?serviceId=`."
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "titleEn",
+          "titleAr",
+          "category",
+          "basePrice",
+          "priceType",
+          "priceTypeLabel",
+          "avgRating",
+          "ratingCount",
+          "bookingsCount",
+          "isFeatured",
+          "coverUrl",
+          "wilayas",
+          "provider",
+          "isFavourite",
+          "favouriteId"
+        ]
+      },
       "AppPackCardDto": {
         "type": "object",
         "properties": {
@@ -78865,113 +78987,6 @@
           "favouriteId"
         ]
       },
-      "AppServiceCardDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "title": {
-            "type": "string",
-            "example": "Wedding photo & video coverage",
-            "description": "In the caller’s language."
-          },
-          "titleEn": {
-            "type": "string",
-            "example": "Wedding photo & video coverage"
-          },
-          "titleAr": {
-            "type": "string",
-            "example": "تغطية تصوير الأعراس"
-          },
-          "category": {
-            "nullable": true,
-            "type": "object",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AppCategoryRefDto"
-              }
-            ]
-          },
-          "basePrice": {
-            "type": "string",
-            "example": "45000.00",
-            "description": "DZD, 2 decimals."
-          },
-          "priceType": {
-            "type": "string",
-            "enum": [
-              "per_event",
-              "per_hour",
-              "per_person",
-              "per_day",
-              "on_quote"
-            ],
-            "example": "per_day"
-          },
-          "priceTypeLabel": {
-            "type": "string",
-            "example": "per day",
-            "description": "Price type in the caller’s language."
-          },
-          "avgRating": {
-            "type": "string",
-            "example": "4.80"
-          },
-          "ratingCount": {
-            "type": "number",
-            "example": 32
-          },
-          "bookingsCount": {
-            "type": "number",
-            "example": 12
-          },
-          "coverUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "wilayas": {
-            "description": "Open wilayas the service covers.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AppWilayaRefDto"
-            }
-          },
-          "provider": {
-            "$ref": "#/components/schemas/AppProviderSummaryDto"
-          },
-          "isFavourite": {
-            "type": "boolean",
-            "example": false,
-            "description": "Always false for anonymous callers."
-          },
-          "favouriteId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true,
-            "description": "The caller’s favourite row over this service (null when not saved, or anonymous). Un-save with `DELETE /app/me/favourites/{favouriteId}` — or by target with `DELETE /app/me/favourites?serviceId=`."
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "titleEn",
-          "titleAr",
-          "category",
-          "basePrice",
-          "priceType",
-          "priceTypeLabel",
-          "avgRating",
-          "ratingCount",
-          "bookingsCount",
-          "coverUrl",
-          "wilayas",
-          "provider",
-          "isFavourite",
-          "favouriteId"
-        ]
-      },
       "AppHomeDto": {
         "type": "object",
         "properties": {
@@ -79017,6 +79032,13 @@
           "budget": {
             "$ref": "#/components/schemas/AppHomeBudgetDto"
           },
+          "featuredServices": {
+            "description": "\"Featured\": the services admins picked with \"Feature on home\" (at most 12), in their order, the same for every user. Empty when none is featured: hide the section.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppServiceCardDto"
+            }
+          },
           "packs": {
             "description": "\"Ready Packs\".",
             "type": "array",
@@ -79041,6 +79063,7 @@
           "categories",
           "upcomingBookings",
           "budget",
+          "featuredServices",
           "packs",
           "nearbyServices"
         ]
@@ -79375,6 +79398,11 @@
             "type": "number",
             "example": 12
           },
+          "isFeatured": {
+            "type": "boolean",
+            "example": false,
+            "description": "An admin featured it (dashboard \"Feature on home\"): show a \"Featured\" badge."
+          },
           "coverUrl": {
             "type": "string",
             "nullable": true
@@ -79530,6 +79558,7 @@
           "avgRating",
           "ratingCount",
           "bookingsCount",
+          "isFeatured",
           "coverUrl",
           "wilayas",
           "provider",

@@ -689,7 +689,7 @@ loop when it fails.
 ### 2026-10-26 — featured services on the home screen
 
 - `GET /app/home` gains **`featuredServices`**: the services admins picked with "Feature on home" in the dashboard. At most 12, in the admins' order, the same list for every user. Empty when none is featured: hide the section.
-- Every service card (search, home, provider profile, favourites) gains **`isFeatured`**, for a "Featured" badge.
+- Every service card (search, home rails, provider profile) and the service detail gain **`isFeatured`**, for a "Featured" badge.
 - `GET /app/services?featured=true` lists only the featured services (the rail's "See all"); with the default sort they come in the admins' order.
 - Already true before, now documented: with the default sort (relevance), search results show featured services first.
 

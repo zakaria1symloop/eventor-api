@@ -77829,6 +77829,10 @@
           "refreshToken": {
             "type": "string",
             "description": "The refresh token to revoke. When absent, the bearer token’s session is revoked."
+          },
+          "deviceToken": {
+            "type": "string",
+            "description": "BUG-N2: this phone’s push token (the one sent to `POST /app/me/device-tokens`). It is removed from the account signing out, so that account gets no more pushes here and the next account to sign in on the phone can register it."
           }
         }
       },

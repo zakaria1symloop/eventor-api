@@ -1020,7 +1020,6 @@ export class BookingsService {
     let providerId: string;
     let lines: LineInput[];
     let feeKey: 'platform_fee_percent' | 'pack_fee_percent';
-    let label: string;
     if (dto.serviceId) {
       const [service] = await em.query(
         `SELECT s.id, s.provider_id, s.title_en, s.base_price, s.price_type, s.deleted_at, ${SERVICE_VISIBLE_SQL} AS visible
@@ -1032,7 +1031,6 @@ export class BookingsService {
       if (Number(service.visible) !== 1)
         throw AppException.of('SERVICE_UNAVAILABLE_FOR_BOOKING');
       providerId = service.provider_id;
-      label = service.title_en;
       feeKey = 'platform_fee_percent';
       lines = [
         {
@@ -1078,7 +1076,6 @@ export class BookingsService {
       if (!pack || pack.deleted_at) throw AppException.of('PACK_NOT_FOUND');
       if (Number(pack.visible) !== 1) throw AppException.of('PACK_UNAVAILABLE');
       providerId = pack.provider_id;
-      label = pack.name_en;
       feeKey = 'pack_fee_percent';
       const items: any[] = await em.query(
         'SELECT s.id AS service_id, s.title_en, s.base_price FROM pack_items pi JOIN services s ON s.id = pi.service_id WHERE pi.pack_id = ? ORDER BY pi.position',

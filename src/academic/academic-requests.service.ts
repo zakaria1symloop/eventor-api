@@ -15,7 +15,7 @@ import { AuditLevel, AuditSource } from '../common/enums/admin.enums.js';
 import { VerificationCodePurpose } from '../common/enums/auth.enums.js';
 import { BookingStatus } from '../common/enums/booking.enums.js';
 import { EventType } from '../common/enums/catalog.enums.js';
-import { Language, PartyRole, UserRole, UserStatus, VerificationStatus } from '../common/enums/user.enums.js';
+import { Language, UserRole, UserStatus, VerificationStatus } from '../common/enums/user.enums.js';
 import { AppException } from '../common/errors/app.exception.js';
 import { DomainEvents } from '../common/events/domain-events.js';
 import type { Lang } from '../common/i18n/language.js';

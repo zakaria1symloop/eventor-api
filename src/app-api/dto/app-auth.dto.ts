@@ -173,6 +173,16 @@ export class AppLogoutDto {
   @IsString()
   @MaxLength(200)
   refreshToken?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'BUG-N2: this phone’s push token (the one sent to `POST /app/me/device-tokens`). It is removed from the account signing out, so ' +
+      'that account gets no more pushes here and the next account to sign in on the phone can register it.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  deviceToken?: string;
 }
 
 /** The web deletion page: the password, or the code from `POST /app/auth/delete-account/code`. */

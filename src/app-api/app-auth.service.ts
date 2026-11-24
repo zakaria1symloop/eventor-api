@@ -405,7 +405,7 @@ export class AppAuthService {
   }
 
   /** Revokes the session of the presented refresh token, or of the bearer token. Always succeeds. */
-  async logout(rawRefreshToken: unknown, bearer: string | undefined): Promise<void> {
+  async logout(rawRefreshToken: unknown, bearer: string | undefined, deviceToken?: string): Promise<void> {
     let sessionId: string | null = null;
     let userId: string | null = null;
     const fromToken = await this.sessions.findByRefreshToken(rawRefreshToken);
@@ -424,6 +424,10 @@ export class AppAuthService {
     if (!sessionId) return;
     const id = sessionId;
     await runInTransaction(this.dataSource, async (em) => {
+      // BUG-N2: this phone stops receiving this account's pushes (only a token of this account is touched).
+      if (deviceToken && userId) {
+        await em.query('UPDATE device_tokens SET deleted_at = ? WHERE token = ? AND user_id = ? AND deleted_at IS NULL', [new Date(), deviceToken, userId]);
+      }
       if (await this.sessions.revoke(id, em)) {
         await this.audit.log(
           { actorId: userId, actorRole: null, action: 'app.logout', objectType: 'session', objectId: id, level: AuditLevel.Info },

@@ -6,7 +6,6 @@ import {
   CancelledBy,
 } from '../../common/enums/booking.enums.js';
 import { EventType } from '../../common/enums/catalog.enums.js';
-import { PartyRole } from '../../common/enums/user.enums.js';
 import { AbstractEntity } from '../../database/abstract.entity.js';
 import { money, uuidRef, wilayaRef } from '../../database/columns.js';
 import { AcademicRequest } from '../../academic/entities/academic-request.entity.js';

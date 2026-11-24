@@ -182,7 +182,7 @@ export class AppAuthController {
   @ApiResponse({ status: 204, description: 'Signed out.' })
   @ApiErrorResponses('RATE_LIMITED')
   async logout(@Body() dto: AppLogoutDto, @Req() req: Request): Promise<void> {
-    await this.auth.logout(dto.refreshToken, req.headers.authorization);
+    await this.auth.logout(dto.refreshToken, req.headers.authorization, dto.deviceToken);
   }
 
   @Post('forgot')

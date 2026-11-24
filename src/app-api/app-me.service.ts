@@ -454,26 +454,22 @@ export class AppMeService {
 
   // ── device tokens ───────────────────────────────────────────
 
-  /** Idempotent: re-registering the same token moves it to this account. */
+  /**
+   * Idempotent: re-registering the same token moves it to this account. One atomic upsert on the unique
+   * `token` (BUG-N2): two registrations in flight together (sign-in + onTokenRefresh, or an account switch on a
+   * shared phone) can no longer both insert and hit the unique index as a 500. The last account wins.
+   */
   async registerDeviceToken(auth: AuthUser, dto: RegisterDeviceTokenDto): Promise<AppDeviceTokenDto> {
-    return runInTransaction(this.dataSource, async (em) => {
-      const repository = em.getRepository(DeviceToken);
-      const existing = await repository.findOne({ where: { token: dto.token }, withDeleted: true });
-      if (existing) {
-        await repository.update(existing.id, {
-          userId: auth.id,
-          platform: dto.platform,
-          lastSeenAt: new Date(),
-          deletedAt: null,
-        });
-        const row = await repository.findOneByOrFail({ id: existing.id });
-        return { id: row.id, token: row.token, platform: row.platform, lastSeenAt: iso(row.lastSeenAt) };
-      }
-      const row = await repository.save(
-        repository.create({ userId: auth.id, token: dto.token, platform: dto.platform, lastSeenAt: new Date() }),
-      );
-      return { id: row.id, token: row.token, platform: row.platform, lastSeenAt: iso(row.lastSeenAt) };
-    });
+    const now = new Date();
+    await this.dataSource.query(
+      `INSERT INTO device_tokens (id, created_at, updated_at, user_id, token, platform, last_seen_at, deleted_at)
+       VALUES (UUID(), ?, ?, ?, ?, ?, ?, NULL)
+       ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), platform = VALUES(platform), last_seen_at = VALUES(last_seen_at),
+                               updated_at = VALUES(updated_at), deleted_at = NULL`,
+      [now, now, auth.id, dto.token, dto.platform, now],
+    );
+    const row = await this.dataSource.getRepository(DeviceToken).findOneByOrFail({ token: dto.token });
+    return { id: row.id, token: row.token, platform: row.platform, lastSeenAt: iso(row.lastSeenAt) };
   }
 
   async removeDeviceToken(auth: AuthUser, token: string): Promise<void> {

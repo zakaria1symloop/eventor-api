@@ -343,6 +343,34 @@ describe('App me (e2e)', () => {
     });
   });
 
+  describe('device tokens: account switch on one phone (BUG-N2, N-33)', () => {
+    it('never answers 500 when the same token is registered at the same moment, and the last account owns it', async () => {
+      const token = `fcm-switch-${uid()}`;
+      const first = await loginAs(t, UserRole.Client);
+      const second = await loginAs(t, UserRole.Client);
+      const register = (who: LoggedIn) => request(t.http).post(`${BASE}/device-tokens`).set(who.headers).send({ token, platform: DevicePlatform.Android });
+
+      // The app registers on sign-in and on onTokenRefresh: two calls in flight together.
+      const together = await Promise.all([register(first), register(first), register(second)]);
+      expect(together.map((r) => r.status).every((s) => s === 200 || s === 201)).toBe(true);
+      expect(await t.dataSource.query('SELECT id FROM device_tokens WHERE token = ? AND deleted_at IS NULL', [token])).toHaveLength(1);
+
+      // Sign out on that phone, then the other account signs in: it gets the token.
+      await request(t.http).post('/api/v1/app/auth/logout').set(first.headers).send({ deviceToken: token }).expect(204);
+      await register(second);
+      const [row] = await t.dataSource.query('SELECT user_id FROM device_tokens WHERE token = ? AND deleted_at IS NULL', [token]);
+      expect(row.user_id).toBe(second.user.id);
+    });
+
+    it('sign-out with the phone’s token stops pushes to that account on that phone', async () => {
+      const token = `fcm-logout-${uid()}`;
+      const me = await loginAs(t, UserRole.Client);
+      await request(t.http).post(`${BASE}/device-tokens`).set(me.headers).send({ token, platform: DevicePlatform.Android }).expect(201);
+      await request(t.http).post('/api/v1/app/auth/logout').set(me.headers).send({ deviceToken: token }).expect(204);
+      expect(await t.dataSource.query('SELECT id FROM device_tokens WHERE token = ? AND deleted_at IS NULL', [token])).toHaveLength(0);
+    });
+  });
+
   describe('device tokens', () => {
     it('registers a token, is idempotent, and moves it between accounts', async () => {
       const token = `fcm-${uid(8)}`;

@@ -124,14 +124,14 @@ export class AdminBookingsController {
     summary: 'Change the booking status',
     description:
       'pending → accepted | declined | cancelled; accepted → cancelled | completed; completed → `reopen` (accepted). Other moves: 409 BOOKING_INVALID_TRANSITION. `reason` is required except ' +
-      'for accepted, `note` always. Admins may complete before the event date (flagged `earlyCompletion` in the audit). Effects: accept re-checks the date (409 DATE_UNAVAILABLE) and the hours already taken by accepted bookings (409 SLOT_UNAVAILABLE), ' +
+      'for accepted, `note` always. Admins may complete before the event date (flagged `earlyCompletion` in the audit). Effects: accept re-checks the date (409 DATE_UNAVAILABLE; other accepted bookings on the same hours do not count), ' +
       'availability `booked`, invoice issued (INV-YYYY-NNNN, issuer from `invoice_issuer`, PDF render job) and contact details unmasked in chat; decline / cancel release availability ' +
       '(cancel voids the invoice); complete sets `completed_at` and counters; reopen reverts them and withdraws the review request when no review exists. ' +
       'Status change row, audit and `booking.<status>` event; emails to client / provider when `notify`. Used by BKG-04.',
   })
   @ApiParam(ID)
   @ApiDataResponse(BookingDetailDto)
-  @ApiErrorResponses('VALIDATION_FAILED', 'BOOKING_NOT_FOUND', 'BOOKING_INVALID_TRANSITION', 'DATE_UNAVAILABLE', 'SLOT_UNAVAILABLE')
+  @ApiErrorResponses('VALIDATION_FAILED', 'BOOKING_NOT_FOUND', 'BOOKING_INVALID_TRANSITION', 'DATE_UNAVAILABLE')
   async changeStatus(@CurrentUser() auth: AuthUser, @Param('id') id: string, @Body() dto: ChangeStatusDto) {
     return { data: await this.bookings.changeStatus(auth, await this.bookings.resolveId(id), dto) };
   }

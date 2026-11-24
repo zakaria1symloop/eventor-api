@@ -66,7 +66,7 @@ describe('appBookingActions', () => {
     expect(appBookingActions('provider', state({ status: BookingStatus.Pending, canAccept: true }))).toContain('accept');
   });
 
-  it('drops Accept, but keeps Decline, once the slot is taken (BUG-M2)', () => {
+  it('drops Accept, but keeps Decline, once a block or the daily limit covers the date', () => {
     const actions = appBookingActions('provider', state({ status: BookingStatus.Pending, canAccept: false }));
     expect(actions).not.toContain('accept');
     expect(actions).toEqual(expect.arrayContaining(['decline', 'cancel', 'reschedule', 'message']));

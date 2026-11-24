@@ -13582,7 +13582,7 @@
     },
     "/api/v1/admin/bookings/{id}/status": {
       "post": {
-        "description": "pending → accepted | declined | cancelled; accepted → cancelled | completed; completed → `reopen` (accepted). Other moves: 409 BOOKING_INVALID_TRANSITION. `reason` is required except for accepted, `note` always. Admins may complete before the event date (flagged `earlyCompletion` in the audit). Effects: accept re-checks the date (409 DATE_UNAVAILABLE) and the hours already taken by accepted bookings (409 SLOT_UNAVAILABLE), availability `booked`, invoice issued (INV-YYYY-NNNN, issuer from `invoice_issuer`, PDF render job) and contact details unmasked in chat; decline / cancel release availability (cancel voids the invoice); complete sets `completed_at` and counters; reopen reverts them and withdraws the review request when no review exists. Status change row, audit and `booking.<status>` event; emails to client / provider when `notify`. Used by BKG-04.",
+        "description": "pending → accepted | declined | cancelled; accepted → cancelled | completed; completed → `reopen` (accepted). Other moves: 409 BOOKING_INVALID_TRANSITION. `reason` is required except for accepted, `note` always. Admins may complete before the event date (flagged `earlyCompletion` in the audit). Effects: accept re-checks the date (409 DATE_UNAVAILABLE; other accepted bookings on the same hours do not count), availability `booked`, invoice issued (INV-YYYY-NNNN, issuer from `invoice_issuer`, PDF render job) and contact details unmasked in chat; decline / cancel release availability (cancel voids the invoice); complete sets `completed_at` and counters; reopen reverts them and withdraws the review request when no review exists. Status change row, audit and `booking.<status>` event; emails to client / provider when `notify`. Used by BKG-04.",
         "operationId": "AdminBookingsController_changeStatus",
         "parameters": [
           {
@@ -13759,7 +13759,7 @@
             }
           },
           "409": {
-            "description": "`BOOKING_INVALID_TRANSITION`: A booking cannot move from \"{from}\" to \"{to}\".<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`SLOT_UNAVAILABLE`: These hours are already booked on {date}. Choose other times.",
+            "description": "`BOOKING_INVALID_TRANSITION`: A booking cannot move from \"{from}\" to \"{to}\".<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13784,18 +13784,6 @@
                       "error": "Conflict",
                       "code": "DATE_UNAVAILABLE",
                       "message": "The provider is not available on {date}.",
-                      "details": null,
-                      "path": "/api/v1/…",
-                      "timestamp": "2026-09-15T10:00:00.000Z",
-                      "requestId": "req_9f2a71c0"
-                    }
-                  },
-                  "SLOT_UNAVAILABLE": {
-                    "value": {
-                      "statusCode": 409,
-                      "error": "Conflict",
-                      "code": "SLOT_UNAVAILABLE",
-                      "message": "These hours are already booked on {date}. Choose other times.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -50487,7 +50475,7 @@
     },
     "/api/v1/app/provider/bookings/{id}/accept": {
       "post": {
-        "description": "The **Accept** button on screen 21 (status-rules §5). The date is re-checked under a row lock, the hold becomes a booking, Eventor issues the invoice and contact details become visible in the chat. Only a **verified and active** provider can accept (422 `PROVIDER_NOT_VERIFIED`). 409 `DATE_UNAVAILABLE` when a block or the daily limit now covers the date; 409 `SLOT_UNAVAILABLE` (`details: { date, startTime, endTime }`) when accepted bookings already fill those hours (`concurrentClients`, every item of a pack). The request then stays pending and `accept` is missing from its `allowedActions`.",
+        "description": "The **Accept** button on screen 21 (status-rules §5). The date is re-checked under a row lock, the hold becomes a booking, Eventor issues the invoice and contact details become visible in the chat. Only a **verified and active** provider can accept (422 `PROVIDER_NOT_VERIFIED`). 409 `DATE_UNAVAILABLE` when a block or the daily limit now covers the date; the request then stays pending and `accept` is missing from its `allowedActions`. Other accepted bookings on the same hours do not stop an acceptance: the provider may take several clients in the same time frame (product decision, 24 Nov 2026).",
         "operationId": "AppProviderController_accept",
         "parameters": [
           {
@@ -50638,7 +50626,7 @@
             }
           },
           "409": {
-            "description": "`BOOKING_INVALID_TRANSITION`: A booking cannot move from \"{from}\" to \"{to}\".<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`SLOT_UNAVAILABLE`: These hours are already booked on {date}. Choose other times.<br>`BOOKING_EXPIRED`: This request expired: it was not answered in time.",
+            "description": "`BOOKING_INVALID_TRANSITION`: A booking cannot move from \"{from}\" to \"{to}\".<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`BOOKING_EXPIRED`: This request expired: it was not answered in time.",
             "content": {
               "application/json": {
                 "schema": {
@@ -50663,18 +50651,6 @@
                       "error": "Conflict",
                       "code": "DATE_UNAVAILABLE",
                       "message": "The provider is not available on {date}.",
-                      "details": null,
-                      "path": "/api/v1/…",
-                      "timestamp": "2026-09-15T10:00:00.000Z",
-                      "requestId": "req_9f2a71c0"
-                    }
-                  },
-                  "SLOT_UNAVAILABLE": {
-                    "value": {
-                      "statusCode": 409,
-                      "error": "Conflict",
-                      "code": "SLOT_UNAVAILABLE",
-                      "message": "These hours are already booked on {date}. Choose other times.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",

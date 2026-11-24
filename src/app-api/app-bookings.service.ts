@@ -563,7 +563,7 @@ export class AppBookingsService {
     const window = await this.reviewWindowFor(r);
     const em = this.dataSource.manager;
     const expired = await this.bookings.isRequestExpired({ status: r.status, createdAt: new Date(r.created_at), eventDate: dateOnly(r.event_date), startTime: hhmm(r.start_time) });
-    // Same check as the accept endpoint, without locks (BUG-M2).
+    // Same check as the accept endpoint (blocks, daily limit), without locks.
     const canAccept =
       party !== 'provider' || r.status !== BookingStatus.Pending || expired
         ? true

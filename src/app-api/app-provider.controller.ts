@@ -139,13 +139,13 @@ export class AppProviderController {
       'The **Accept** button on screen 21 (status-rules §5). The date is re-checked under a row lock, the hold becomes ' +
       'a booking, Eventor issues the invoice and contact details become visible in the chat. Only a **verified and ' +
       'active** provider can accept (422 `PROVIDER_NOT_VERIFIED`). 409 `DATE_UNAVAILABLE` when a block or the daily ' +
-      'limit now covers the date; 409 `SLOT_UNAVAILABLE` (`details: { date, startTime, endTime }`) when accepted ' +
-      'bookings already fill those hours (`concurrentClients`, every item of a pack). The request then stays pending ' +
-      'and `accept` is missing from its `allowedActions`.',
+      'limit now covers the date; the request then stays pending and `accept` is missing from its `allowedActions`. ' +
+      'Other accepted bookings on the same hours do not stop an acceptance: the provider may take several clients in ' +
+      'the same time frame (product decision, 24 Nov 2026).',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiDataResponse(AppBookingDetailDto)
-  @ApiErrorResponses('BOOKING_NOT_FOUND', 'NOT_OWNER', 'BOOKING_INVALID_TRANSITION', 'DATE_UNAVAILABLE', 'SLOT_UNAVAILABLE', 'PROVIDER_NOT_VERIFIED', 'BOOKING_EXPIRED')
+  @ApiErrorResponses('BOOKING_NOT_FOUND', 'NOT_OWNER', 'BOOKING_INVALID_TRANSITION', 'DATE_UNAVAILABLE', 'PROVIDER_NOT_VERIFIED', 'BOOKING_EXPIRED')
   async accept(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('BOOKING_NOT_FOUND')) id: string, @ReqLang() lang: Lang) {
     return { data: await this.bookings.changeStatus(auth, id, 'provider', 'accepted', null, lang) };
   }

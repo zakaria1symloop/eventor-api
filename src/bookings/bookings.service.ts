@@ -880,7 +880,7 @@ export class BookingsService {
    * True when `concurrent_clients` bookings in `statuses` already overlap the
    * hours on `date` for this service, booked directly or through a pack that
    * contains it. A request (create, reschedule) counts pending and accepted
-   * bookings; an acceptance counts accepted ones only (`acceptObstacle`).
+   * bookings. Accepting a request does not re-check it (`acceptObstacle`).
    * null `concurrent_clients` ("Allow several clients at the same time") and
    * bookings without hours never fill a slot: the daily limit covers those.
    */
@@ -906,12 +906,16 @@ export class BookingsService {
   }
 
   /**
-   * Why a pending booking can no longer be accepted, or null (BUG-M2). Checked
-   * on every day of the booking, for the service or each item of the pack:
-   * - `DATE_UNAVAILABLE`: a manual block or the daily limit (`isAvailable`);
-   * - `SLOT_UNAVAILABLE`: `concurrent_clients` **accepted** bookings already
-   *   overlap its hours (other pending requests don't count: they are not
-   *   commitments yet).
+   * Why a pending booking can no longer be accepted, or null: a manual block or
+   * the daily limit now covers one of its days (`DATE_UNAVAILABLE`,
+   * `isAvailable`).
+   *
+   * Product decision (Symloop management, 24 Nov 2026): accepting does **not**
+   * re-check the hours already taken by other accepted bookings, so a provider
+   * may accept several clients in the same time frame. The per-service
+   * "clients at the same time" limit applies when a request is sent or moved
+   * (`scheduleObstacle`), not when it is accepted. The accept-time check of
+   * BUG-M2 is kept on the git tag `m2-accept-slot-check`.
    *
    * The accept transition throws it (409), and the app drops `accept` from
    * `allowedActions` with the same answer (`lock: false`), so the button and the
@@ -930,10 +934,7 @@ export class BookingsService {
       endTime: string | null;
     },
     options: { lock: boolean },
-  ): Promise<{ code: 'DATE_UNAVAILABLE' | 'SLOT_UNAVAILABLE'; details: Record<string, unknown> } | null> {
-    const services: { id: string; concurrent_clients: number | null }[] = booking.serviceId
-      ? await em.query('SELECT id, concurrent_clients FROM services WHERE id = ?', [booking.serviceId])
-      : await em.query('SELECT s.id, s.concurrent_clients FROM pack_items pi JOIN services s ON s.id = pi.service_id WHERE pi.pack_id = ?', [booking.packId]);
+  ): Promise<{ code: 'DATE_UNAVAILABLE'; details: Record<string, unknown> } | null> {
     for (const date of bookingDays(booking.eventDate, booking.endDate)) {
       const input = {
         providerId: booking.providerId,
@@ -946,11 +947,6 @@ export class BookingsService {
       };
       if (!(await this.isAvailable(em, input, { lock: options.lock }))) {
         return { code: 'DATE_UNAVAILABLE', details: { date } };
-      }
-      for (const service of services) {
-        if (await this.slotFull(em, service, { ...input, statuses: [BookingStatus.Accepted] })) {
-          return { code: 'SLOT_UNAVAILABLE', details: { date, startTime: booking.startTime, endTime: booking.endTime } };
-        }
       }
     }
     return null;
@@ -1379,7 +1375,7 @@ export class BookingsService {
     switch (action) {
       case 'accepted': {
         const days = bookingDays(dateOnly(booking.eventDate), booking.endDate ? dateOnly(booking.endDate) : null);
-        // Daily limit, blocks and the hours already taken by accepted bookings (BUG-M2).
+        // Daily limit and blocks only: other accepted bookings on the same hours do not stop it (product decision, 24 Nov 2026).
         const obstacle = await this.acceptObstacle(
           em,
           {

@@ -79,9 +79,10 @@ export interface AppBookingState {
   /** `reviewWindow(...).open` for this booking. */
   reviewWindowOpen: boolean;
   /**
-   * The provider can still accept this pending request: false once a block, the
-   * daily limit or accepted bookings on the same hours fill the slot
-   * (`BookingsService.acceptObstacle`, BUG-M2). Omitted = true.
+   * The provider can still accept this pending request: false once a block or
+   * the daily limit covers its date (`BookingsService.acceptObstacle`). Other
+   * accepted bookings on the same hours do not count (product decision, 24 Nov
+   * 2026). Omitted = true.
    */
   canAccept?: boolean;
   /**
@@ -119,7 +120,7 @@ export function appBookingActions(party: 'client' | 'provider', state: AppBookin
   } else if (state.status === BookingStatus.Pending) {
     actions.push('cancel', 'reschedule');
     if (party === 'provider') {
-      // The accept endpoint answers 409 SLOT_UNAVAILABLE / DATE_UNAVAILABLE in that case.
+      // The accept endpoint answers 409 DATE_UNAVAILABLE in that case.
       if (state.canAccept !== false) actions.push('accept');
       actions.push('decline');
     }

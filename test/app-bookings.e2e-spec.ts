@@ -362,7 +362,7 @@ describe('App bookings (e2e)', () => {
         expect((await book(fourth, { serviceId: service.id, eventDate: '2027-07-18' })).status).toBe(201);
       });
 
-      describe('one client per time slot (BUG-M2, acceptance M-08 / M-09)', () => {
+      describe('requests for the same time slot (acceptance M-08 / M-09)', () => {
         const PROVIDER = '/api/v1/app/provider/bookings';
         const time = (hhmm: string) => `${hhmm}:00`;
 
@@ -379,38 +379,26 @@ describe('App bookings (e2e)', () => {
           expect(Number(row.n)).toBe(1);
         });
 
-        it('refuses to accept a second overlapping request and drops `accept` from it (M-09)', async () => {
+        it('lets the provider accept several overlapping requests in the same time frame (product decision, 24 Nov 2026; M-09)', async () => {
           const service = await bookableService({ maxEventsPerDay: null, concurrentClients: 1 });
-          // Two pending requests on the same hours, as left by the race above on live (EVT-000147 / 148).
+          // Two pending requests on the same hours (e.g. EVT-000147 / 148 on live).
           const base = { providerId: provider.user.id, serviceId: service.id, status: BookingStatus.Pending, eventDate: '2027-08-04', startTime: time('18:00'), endTime: time('20:00') };
           const first = await makeBooking(db(), { ...base, clientId: client.user.id });
           const second = await makeBooking(db(), { ...base, clientId: otherClient.user.id });
-          // Same day, other hours: still acceptable.
-          const later = await makeBooking(db(), { ...base, clientId: otherClient.user.id, startTime: time('20:00'), endTime: time('23:00') });
-
-          const before = await request(t.http).get(`${PROVIDER}/${second.id}`).set(provider.headers);
-          expect(before.body.data.allowedActions).toContain('accept');
 
           expect((await request(t.http).post(`${PROVIDER}/${first.id}/accept`).set(provider.headers)).status).toBe(200);
 
-          const refused = await request(t.http).post(`${PROVIDER}/${second.id}/accept`).set(provider.headers);
-          expectError(refused, 409, 'SLOT_UNAVAILABLE');
-          expect(refused.body.details).toMatchObject({ date: '2027-08-04', startTime: '18:00', endTime: '20:00' });
-          const [row] = await db().query('SELECT status FROM bookings WHERE id = ?', [second.id]);
-          expect(row.status).toBe(BookingStatus.Pending);
-
+          // The first one being accepted does not hide or refuse Accept on the second.
           const detail = await request(t.http).get(`${PROVIDER}/${second.id}`).set(provider.headers);
-          expect(detail.body.data.allowedActions).not.toContain('accept');
-          expect(detail.body.data.allowedActions).toContain('decline');
+          expect(detail.body.data.allowedActions).toEqual(expect.arrayContaining(['accept', 'decline']));
           const list = await request(t.http).get(`${PROVIDER}?tab=requests&limit=100`).set(provider.headers);
-          const card = list.body.data.find((b: { id: string }) => b.id === second.id);
-          expect(card.allowedActions).not.toContain('accept');
+          expect(list.body.data.find((b: { id: string }) => b.id === second.id).allowedActions).toContain('accept');
 
-          // Touching hours (20:00 → 23:00 after 18:00 → 20:00) don't overlap.
-          expect((await request(t.http).post(`${PROVIDER}/${later.id}/accept`).set(provider.headers)).status).toBe(200);
-          // Once the accepted one is cancelled, the second can be accepted again.
-          expect((await request(t.http).post(`${PROVIDER}/${first.id}/cancel`).set(provider.headers).send({ reason: 'Moved' })).status).toBe(200);
-          expect((await request(t.http).post(`${PROVIDER}/${second.id}/accept`).set(provider.headers)).status).toBe(200);
+          const accepted = await request(t.http).post(`${PROVIDER}/${second.id}/accept`).set(provider.headers);
+          expect(accepted.status).toBe(200);
+          expect(accepted.body.data.status).toBe(BookingStatus.Accepted);
+          const rows = await db().query("SELECT kind FROM availability_blocks WHERE booking_id IN (?) AND deleted_at IS NULL", [[first.id, second.id]]);
+          expect(rows.map((r: { kind: string }) => r.kind)).toEqual(['booked', 'booked']);
         });
 
         it('stops accept, decline and reschedule on an expired request once booking_auto_expire is on (BUG-F1)', async () => {
@@ -458,7 +446,7 @@ describe('App bookings (e2e)', () => {
           for (const r of results.filter((r) => r.status === 409)) expectError(r, 409, 'SLOT_UNAVAILABLE');
         });
 
-        it('accepts only one of two overlapping requests accepted at the same moment', async () => {
+        it('accepts both of two overlapping requests accepted at the same moment, with no server error', async () => {
           const service = await bookableService({ maxEventsPerDay: null, concurrentClients: 1 });
           const base = { providerId: provider.user.id, serviceId: service.id, status: BookingStatus.Pending, eventDate: '2027-08-08', startTime: time('18:00'), endTime: time('20:00') };
           const first = await makeBooking(db(), { ...base, clientId: client.user.id });
@@ -466,10 +454,9 @@ describe('App bookings (e2e)', () => {
 
           const results = await Promise.all([first, second].map((b) => request(t.http).post(`${PROVIDER}/${b.id}/accept`).set(provider.headers)));
 
-          expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
-          expectError(results.find((r) => r.status === 409)!, 409, 'SLOT_UNAVAILABLE');
+          expect(results.map((r) => r.status)).toEqual([200, 200]);
           const rows = await db().query('SELECT status FROM bookings WHERE id IN (?)', [[first.id, second.id]]);
-          expect(rows.map((r: { status: string }) => r.status).sort()).toEqual(['accepted', 'pending']);
+          expect(rows.map((r: { status: string }) => r.status)).toEqual(['accepted', 'accepted']);
         });
 
         it('applies the same rule to a pack that contains the service, and to the admin status change', async () => {
@@ -479,14 +466,27 @@ describe('App bookings (e2e)', () => {
           const base = { providerId: provider.user.id, status: BookingStatus.Pending, eventDate: '2027-08-05', startTime: time('18:00'), endTime: time('20:00') };
           const single = await makeBooking(db(), { ...base, serviceId: service.id, clientId: client.user.id });
           const packed = await makeBooking(db(), { ...base, packId: pack.id, serviceId: null, clientId: otherClient.user.id, startTime: time('19:00'), endTime: time('21:00') });
+          const third = await makeBooking(db(), { ...base, serviceId: service.id, clientId: otherClient.user.id });
 
           expect((await request(t.http).post(`${PROVIDER}/${packed.id}/accept`).set(provider.headers)).status).toBe(200);
-          expectError(await request(t.http).post(`${PROVIDER}/${single.id}/accept`).set(provider.headers), 409, 'SLOT_UNAVAILABLE');
+          expect((await request(t.http).post(`${PROVIDER}/${single.id}/accept`).set(provider.headers)).status).toBe(200);
 
           // The dashboard goes through the same transition.
           const admin = await loginAs(t, UserRole.Admin);
-          const res = await request(t.http).post(`/api/v1/admin/bookings/${single.id}/status`).set(admin.headers).send({ status: 'accepted', note: 'QA M-09', notify: false });
-          expectError(res, 409, 'SLOT_UNAVAILABLE');
+          const res = await request(t.http).post(`/api/v1/admin/bookings/${third.id}/status`).set(admin.headers).send({ status: 'accepted', note: 'QA M-09', notify: false });
+          expect(res.status).toBe(200);
+          expect(res.body.data.status).toBe(BookingStatus.Accepted);
+        });
+
+        it('still refuses an acceptance on a blocked date, and hides Accept (409 DATE_UNAVAILABLE)', async () => {
+          const service = await bookableService({ maxEventsPerDay: null, concurrentClients: 1 });
+          const pending = await makeBooking(db(), { providerId: provider.user.id, serviceId: service.id, clientId: client.user.id, status: BookingStatus.Pending, eventDate: '2027-08-11', startTime: time('18:00'), endTime: time('20:00') });
+          await db().query(
+            "INSERT INTO availability_blocks (id, created_at, updated_at, provider_id, service_id, date, start_time, end_time, kind, booking_id, note, source) VALUES (UUID(), NOW(6), NOW(6), ?, NULL, '2027-08-11', NULL, NULL, 'blocked', NULL, 'Closed', 'provider')",
+            [provider.user.id],
+          );
+          expect((await request(t.http).get(`${PROVIDER}/${pending.id}`).set(provider.headers)).body.data.allowedActions).not.toContain('accept');
+          expectError(await request(t.http).post(`${PROVIDER}/${pending.id}/accept`).set(provider.headers), 409, 'DATE_UNAVAILABLE');
         });
       });
 

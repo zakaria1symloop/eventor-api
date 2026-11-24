@@ -588,6 +588,23 @@ describe('App auth (e2e)', () => {
       expect(code.consumedAt).not.toBeNull();
     });
 
+    it('checks the link for the web page without using it (BUG-L4, L-15 / C-18)', async () => {
+      const { user, token, codeId } = await invitedAccount();
+      await db().getRepository(User).update(user.id, { fullName: 'Amel Haddad' });
+
+      const ok = await request(t.http).post(`${BASE}/set-password/check`).send({ token }).expect(200);
+      expect(ok.body.data).toEqual({ firstName: 'Amel', emailHint: `${user.email[0]}***@${user.email.split('@')[1]}`, expiresAt: expect.any(String) });
+      // Checking does not consume the link: the page then submits it.
+      expect((await db().getRepository(VerificationCode).findOneByOrFail({ id: codeId })).consumedAt).toBeNull();
+      await request(t.http).post(`${BASE}/set-password`).send({ token, password: PASSWORD }).expect(200);
+
+      expectError(await request(t.http).post(`${BASE}/set-password/check`).send({ token }), 400, 'RESET_TOKEN_INVALID');
+      expectError(await request(t.http).post(`${BASE}/set-password/check`).send({ token: 'nope' }), 400, 'RESET_TOKEN_INVALID');
+      const expired = await invitedAccount();
+      await db().getRepository(VerificationCode).update(expired.codeId, { expiresAt: new Date(Date.now() - 1000) });
+      expectError(await request(t.http).post(`${BASE}/set-password/check`).send({ token: expired.token }), 410, 'RESET_TOKEN_EXPIRED');
+    });
+
     it('400 RESET_TOKEN_INVALID when the token is reused, malformed or already consumed', async () => {
       const { token } = await invitedAccount();
       await request(t.http).post(`${BASE}/set-password`).send({ token, password: PASSWORD });

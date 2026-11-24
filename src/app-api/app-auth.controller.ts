@@ -21,6 +21,8 @@ import {
   AppResendCodeDto,
   AppResetPasswordDto,
   AppSessionDto,
+  AppSetPasswordCheckDto,
+  AppSetPasswordCheckResultDto,
   AppSetPasswordDto,
   AppVerifyEmailDto,
   AppVerifyResetCodeDto,
@@ -238,5 +240,22 @@ export class AppAuthController {
   @ApiErrorResponses('VALIDATION_FAILED', 'RESET_TOKEN_INVALID', 'RESET_TOKEN_EXPIRED', 'PASSWORD_WEAK', 'ACCOUNT_BLOCKED', 'ROLE_NOT_ALLOWED_IN_APP', 'RATE_LIMITED')
   async setPassword(@Body() dto: AppSetPasswordDto, @ReqLang() lang: Lang) {
     return { data: await this.auth.setPassword(dto.token, dto.password, lang) };
+  }
+
+  @Post('set-password/check')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Check an emailed set-password link before showing the form',
+    description:
+      'Public route (BUG-L4), for the web page at `${APP_PUBLIC_URL}/set-password?token=…`: the same checks as ' +
+      '`POST /app/auth/set-password`, without using the link. 200 with a first name and a masked email to greet the person; ' +
+      '`RESET_TOKEN_INVALID` (unknown, already used or altered: "This link is not valid"), `RESET_TOKEN_EXPIRED` ("This link has ' +
+      'expired, ask Eventor for a new one"), `ACCOUNT_BLOCKED` (details as at sign-in). The token goes in the body, not the URL, so it ' +
+      'stays out of access logs.',
+  })
+  @ApiDataResponse(AppSetPasswordCheckResultDto)
+  @ApiErrorResponses('VALIDATION_FAILED', 'RESET_TOKEN_INVALID', 'RESET_TOKEN_EXPIRED', 'ACCOUNT_BLOCKED', 'ROLE_NOT_ALLOWED_IN_APP', 'RATE_LIMITED')
+  async checkSetPassword(@Body() dto: AppSetPasswordCheckDto, @ReqLang() lang: Lang) {
+    return { data: await this.auth.checkPasswordLink(dto.token, lang) };
   }
 }

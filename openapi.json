@@ -38374,6 +38374,183 @@
         "security": []
       }
     },
+    "/api/v1/app/auth/set-password/check": {
+      "post": {
+        "description": "Public route (BUG-L4), for the web page at `${APP_PUBLIC_URL}/set-password?token=…`: the same checks as `POST /app/auth/set-password`, without using the link. 200 with a first name and a masked email to greet the person; `RESET_TOKEN_INVALID` (unknown, already used or altered: \"This link is not valid\"), `RESET_TOKEN_EXPIRED` (\"This link has expired, ask Eventor for a new one\"), `ACCOUNT_BLOCKED` (details as at sign-in). The token goes in the body, not the URL, so it stays out of access logs.",
+        "operationId": "AppAuthController_checkSetPassword",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ],
+              "default": "en"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppSetPasswordCheckDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppSetPasswordCheckResultDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`VALIDATION_FAILED`: Some fields are invalid.<br>`RESET_TOKEN_INVALID`: This password reset link is invalid or has already been used.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "value": {
+                      "statusCode": 400,
+                      "error": "Bad Request",
+                      "code": "VALIDATION_FAILED",
+                      "message": "Some fields are invalid.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "RESET_TOKEN_INVALID": {
+                    "value": {
+                      "statusCode": 400,
+                      "error": "Bad Request",
+                      "code": "RESET_TOKEN_INVALID",
+                      "message": "This password reset link is invalid or has already been used.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.<br>`ROLE_NOT_ALLOWED_IN_APP`: Only client and provider accounts can use the app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "ACCOUNT_BLOCKED": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "ACCOUNT_BLOCKED",
+                      "message": "Eventor has suspended this account, so it cannot be used for now.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "ROLE_NOT_ALLOWED_IN_APP": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "ROLE_NOT_ALLOWED_IN_APP",
+                      "message": "Only client and provider accounts can use the app.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`RESET_TOKEN_EXPIRED`: This password reset link has expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "RESET_TOKEN_EXPIRED": {
+                    "value": {
+                      "statusCode": 410,
+                      "error": "Gone",
+                      "code": "RESET_TOKEN_EXPIRED",
+                      "message": "This password reset link has expired.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`RATE_LIMITED`: Too many requests. Please try again later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "RATE_LIMITED": {
+                    "value": {
+                      "statusCode": 429,
+                      "error": "Too Many Requests",
+                      "code": "RATE_LIMITED",
+                      "message": "Too many requests. Please try again later.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Check an emailed set-password link before showing the form",
+        "tags": [
+          "app-auth"
+        ],
+        "x-public": true,
+        "security": []
+      }
+    },
     "/api/v1/app/me": {
       "get": {
         "description": "Screen 21a Home · Provider · Pending and the Profile tab. Carries `verificationStatus`, the provider profile when the account is one, and the two unread counters the tab bar badges.",
@@ -77667,6 +77844,43 @@
         "required": [
           "token",
           "password"
+        ]
+      },
+      "AppSetPasswordCheckResultDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "example": "Amel",
+            "description": "First name, to greet the person on the page."
+          },
+          "emailHint": {
+            "type": "string",
+            "example": "a***@gmail.com",
+            "description": "Masked email of the account the password is for."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the link stops working."
+          }
+        },
+        "required": [
+          "firstName",
+          "emailHint",
+          "expiresAt"
+        ]
+      },
+      "AppSetPasswordCheckDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The `token` query parameter of the emailed link."
+          }
+        },
+        "required": [
+          "token"
         ]
       },
       "UpdateAppMeDto": {

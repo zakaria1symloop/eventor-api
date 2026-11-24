@@ -34,6 +34,35 @@ reviews (and messages in MSG-01).
    "3 open · 1 on the account"), opening the list with `aboutUserId={id}`.
 3. Keep the existing reviews "reported" counter as it is.
 
+## BUG-L4 — the emailed `/set-password` page is a 404 (L-15, C-18)
+
+A user created from the dashboard gets `${APP_PUBLIC_URL}/set-password?token=…`
+(valid 7 days, single use). On the live host that URL goes to the dashboard,
+which redirects to `/en/set-password` and has no such page.
+
+**API (ready):**
+- `POST /api/v1/app/auth/set-password/check` `{ token }` (public): checks the link
+  without using it. 200 → `{ firstName, emailHint, expiresAt }`. Errors:
+  `RESET_TOKEN_INVALID` 400 (unknown, already used or altered), `RESET_TOKEN_EXPIRED`
+  410, `ACCOUNT_BLOCKED` 403 (same `details` as the app: `reasonLabel`, `message`…).
+- `POST /api/v1/app/auth/set-password` `{ token, password }` (public, existing):
+  sets the password, marks the email verified. Same errors plus `PASSWORD_WEAK`
+  (`details.minLength`). It answers an app session (tokens): the page must **not**
+  keep or store them.
+- Send `Accept-Language: en|ar` so error messages come back in the page's language.
+
+**Dashboard to do — a public page (no dashboard login):**
+1. Route: `/set-password` and `/{en,ar}/set-password`, keeping `?token=`. Keep the
+   path exactly `/set-password`: the Android app claims that path (#12).
+2. On load: call `…/set-password/check`. Valid → "Hello {firstName}, choose a password
+   for {emailHint}". Invalid → "This link is not valid or was already used". Expired →
+   "This link has expired, ask Eventor for a new one". Blocked → the blocked message.
+3. Form: password + confirmation. Rules shown and checked before sending, identical to the
+   app: **at least 10 characters, with at least one letter and one digit** (max 128).
+4. Submit → `…/set-password`. Success → "Your password is set. Open the Eventor app and
+   sign in with {email}", with the store links (`/app/config` → `storeUrls`) when set.
+5. Bilingual EN / AR, RTL for Arabic, no dashboard navigation.
+
 ## BUG-F6 / BUG-M1 — admin availability blocks (F-32, M-22, L-12, L-20)
 
 **API (ready):** each item of `GET /admin/providers/{id}/availability` has a new

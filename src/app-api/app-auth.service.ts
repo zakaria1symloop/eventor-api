@@ -33,6 +33,7 @@ import {
   type AppRegisterDto,
   type AppRegisterResultDto,
   type AppSessionDto,
+  type AppSetPasswordCheckResultDto,
 } from './dto/app-auth.dto.js';
 import { AppMeService } from './app-me.service.js';
 
@@ -507,23 +508,45 @@ export class AppAuthService {
   }
 
   /** The link an admin-created account receives: `${APP_PUBLIC_URL}/set-password?token=…`. */
-  async setPassword(rawToken: string, password: string, lang: Lang): Promise<AppSessionDto> {
+  /**
+   * The emailed password link (single use, a keyed `PasswordReset` token) and its account, or the error the page
+   * shows: RESET_TOKEN_INVALID (unknown, used or tampered), RESET_TOKEN_EXPIRED, ACCOUNT_BLOCKED, ROLE_NOT_ALLOWED_IN_APP.
+   * `lock` takes both rows FOR UPDATE (the redeem); the check reads only.
+   */
+  private async passwordLink(em: EntityManager, rawToken: string, lang: Lang, lock: boolean): Promise<{ code: VerificationCode; user: User }> {
     const parsed = parseKeyedToken(rawToken);
     if (!parsed) throw AppException.of('RESET_TOKEN_INVALID');
+    const code = await em.getRepository(VerificationCode).findOne({
+      where: { id: parsed.id, purpose: VerificationCodePurpose.PasswordReset },
+      ...(lock ? { lock: { mode: 'pessimistic_write' as const } } : {}),
+    });
+    if (!code || code.consumedAt || !code.userId || code.codeHash.startsWith(CODE_MARKER) || !tokenMatchesHash(parsed.token, code.codeHash)) {
+      throw AppException.of('RESET_TOKEN_INVALID');
+    }
+    if (code.expiresAt.getTime() <= Date.now()) throw AppException.of('RESET_TOKEN_EXPIRED');
+    const user = await em.getRepository(User).findOne({ where: { id: code.userId }, ...(lock ? { lock: { mode: 'pessimistic_write' as const } } : {}) });
+    if (!user) throw AppException.of('RESET_TOKEN_INVALID');
+    this.assertAppAccount(user, lang);
+    return { code, user };
+  }
+
+  /** BUG-L4: what the set-password web page shows before the form; same checks as the redeem, nothing written. */
+  async checkPasswordLink(rawToken: string, lang: Lang): Promise<AppSetPasswordCheckResultDto> {
+    const { code, user } = await this.passwordLink(this.dataSource.manager, rawToken, lang, false);
+    const [local = '', domain = ''] = (user.email ?? '').split('@');
+    return {
+      firstName: (user.fullName ?? '').trim().split(/\s+/)[0] ?? '',
+      emailHint: `${local.slice(0, 1)}***@${domain}`,
+      expiresAt: code.expiresAt.toISOString(),
+    };
+  }
+
+  async setPassword(rawToken: string, password: string, lang: Lang): Promise<AppSessionDto> {
+    if (!parseKeyedToken(rawToken)) throw AppException.of('RESET_TOKEN_INVALID');
     assertPasswordStrong(password);
 
     return runInTransaction(this.dataSource, async (em) => {
-      const code = await em.getRepository(VerificationCode).findOne({
-        where: { id: parsed.id, purpose: VerificationCodePurpose.PasswordReset },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!code || code.consumedAt || !code.userId || code.codeHash.startsWith(CODE_MARKER) || !tokenMatchesHash(parsed.token, code.codeHash)) {
-        throw AppException.of('RESET_TOKEN_INVALID');
-      }
-      if (code.expiresAt.getTime() <= Date.now()) throw AppException.of('RESET_TOKEN_EXPIRED');
-      const user = await em.getRepository(User).findOne({ where: { id: code.userId }, lock: { mode: 'pessimistic_write' } });
-      if (!user) throw AppException.of('RESET_TOKEN_INVALID');
-      this.assertAppAccount(user, lang);
+      const { code, user } = await this.passwordLink(em, rawToken, lang, true);
 
       await em.getRepository(User).update(user.id, {
         passwordHash: await this.passwords.hash(password),

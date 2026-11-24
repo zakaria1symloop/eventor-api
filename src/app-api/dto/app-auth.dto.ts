@@ -283,3 +283,18 @@ export class AppCodeSentDto {
 }
 
 export { UserRole };
+
+/** BUG-L4: the web page behind `${APP_PUBLIC_URL}/set-password?token=…` checks the link before showing the form. */
+export class AppSetPasswordCheckDto {
+  @ApiProperty({ description: 'The `token` query parameter of the emailed link.' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  token: string;
+}
+
+export class AppSetPasswordCheckResultDto {
+  @ApiProperty({ example: 'Amel', description: 'First name, to greet the person on the page.' }) firstName: string;
+  @ApiProperty({ example: 'a***@gmail.com', description: 'Masked email of the account the password is for.' }) emailHint: string;
+  @ApiProperty({ format: 'date-time', description: 'When the link stops working.' }) expiresAt: string;
+}

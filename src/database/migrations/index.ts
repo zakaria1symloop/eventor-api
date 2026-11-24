@@ -19,6 +19,7 @@ import { AvailabilityBlockSource1791800000000 } from './1791800000000-Availabili
 import { SystemMessageEvents1791900000000 } from './1791900000000-SystemMessageEvents.js';
 import { CancelledBySystem1792000000000 } from './1792000000000-CancelledBySystem.js';
 import { BookingLineLabelAr1792100000000 } from './1792100000000-BookingLineLabelAr.js';
+import { CancelledByBackfill1792200000000 } from './1792200000000-CancelledByBackfill.js';
 
 /**
  * Ordered migration registry, explicit for the same reason as the entity
@@ -46,4 +47,5 @@ export const migrations: NonNullable<DataSourceOptions['migrations']> = [
   SystemMessageEvents1791900000000,
   CancelledBySystem1792000000000,
   BookingLineLabelAr1792100000000,
+  CancelledByBackfill1792200000000,
 ];

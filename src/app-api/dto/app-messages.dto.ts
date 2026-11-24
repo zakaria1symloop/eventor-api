@@ -177,6 +177,11 @@ export class AppMessageDto {
   @ApiProperty({ example: false, description: 'Contact details were hidden in this message (status-rules §10).' }) masked: boolean;
   @ApiProperty({ example: false, description: 'An admin removed this message: `body` is already replaced with `[removed by Eventor]` — render it as a removed bubble, do not match on the text.' })
   removed: boolean;
+  @ApiProperty({
+    example: false,
+    description: 'BUG-G4: only true on a `message:updated` socket event for a message an admin deleted (`body` is empty): drop the bubble. Lists never contain deleted messages.',
+  })
+  deleted: boolean;
   @ApiProperty({ type: String, nullable: true, description: 'Signed URL of the image, for an `attachment` message.' }) imageUrl: string | null;
   @ApiProperty({ type: String, nullable: true, description: 'Full-size signed URL of the image.' }) imageLargeUrl: string | null;
   @ApiProperty({

@@ -282,7 +282,9 @@ export class AppMessagesService {
    * `body` until the pair share an accepted booking (status-rules §10).
    */
   private toMessage(m: any, meId: string, unmasked: boolean, lang: Lang = 'en'): AppMessageDto {
-    const hidden = m.status === MessageStatus.Hidden;
+    // A deleted message only ever reaches the app through `message:updated` (lists leave it out, BUG-G4).
+    const deleted = m.status === MessageStatus.Deleted;
+    const hidden = m.status === MessageStatus.Hidden || deleted;
     const masked = !unmasked && m.body_masked !== null;
     // BUG-G2: a booking system message is rendered in the reader's language from its structured part.
     const system = m.kind === MessageKind.System ? readSystemPart(m) : null;
@@ -292,9 +294,10 @@ export class AppMessagesService {
       kind: m.kind as MessageKind,
       senderId: m.sender_id ?? null,
       mine: m.sender_id === meId,
-      body: hidden ? '[removed by Eventor]' : system ? renderSystemMessage(system.event, system.data, lang) : masked ? m.body_masked : (m.body ?? ''),
+      body: deleted ? '' : hidden ? '[removed by Eventor]' : system ? renderSystemMessage(system.event, system.data, lang) : masked ? m.body_masked : (m.body ?? ''),
       masked,
       removed: hidden,
+      deleted,
       imageUrl: m.file_id && !hidden ? this.files.signedUrl(m.file_id, { variant: FileVariantKind.Medium }) : null,
       imageLargeUrl: m.file_id && !hidden ? this.files.signedUrl(m.file_id) : null,
       system: system && !hidden ? { event: system.event, bookingId: system.data.bookingId, bookingRef: system.data.bookingRef, params: system.data.params } : null,

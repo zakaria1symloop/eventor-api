@@ -83277,6 +83277,11 @@
             "example": false,
             "description": "An admin removed this message: `body` is already replaced with `[removed by Eventor]` — render it as a removed bubble, do not match on the text."
           },
+          "deleted": {
+            "type": "boolean",
+            "example": false,
+            "description": "BUG-G4: only true on a `message:updated` socket event for a message an admin deleted (`body` is empty): drop the bubble. Lists never contain deleted messages."
+          },
           "imageUrl": {
             "type": "string",
             "nullable": true,
@@ -83311,6 +83316,7 @@
           "body",
           "masked",
           "removed",
+          "deleted",
           "imageUrl",
           "imageLargeUrl",
           "system",

@@ -393,6 +393,25 @@ describe('App messages (e2e)', () => {
       await expect(updated).resolves.toMatchObject({ conversationId: id });
     });
 
+    it('pushes message:updated when a moderator hides, restores or deletes a message (BUG-G4, G-11 / M-15)', async () => {
+      const socket = await connect(client.token);
+      const id = await chat('Pay me on WhatsApp');
+      const [{ id: messageId }] = await t.dataSource.query('SELECT id FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1', [id]);
+      const next = () => new Promise<any>((resolve) => socket.once('message:updated', resolve));
+
+      let update = next();
+      await request(t.http).post(`/api/v1/admin/messages/${messageId}/hide`).set(admin.headers).send({ reason: 'Contact outside' }).expect(200);
+      expect(await update).toMatchObject({ id: messageId, conversationId: id, removed: true, deleted: false, body: '[removed by Eventor]' });
+
+      update = next();
+      await request(t.http).post(`/api/v1/admin/messages/${messageId}/unhide`).set(admin.headers).send({}).expect(200);
+      expect(await update).toMatchObject({ id: messageId, removed: false, deleted: false });
+
+      update = next();
+      await request(t.http).delete(`/api/v1/admin/messages/${messageId}`).set(admin.headers).send({ reason: 'Spam' });
+      expect(await update).toMatchObject({ id: messageId, removed: true, deleted: true, body: '' });
+    });
+
     it('refuses to join a conversation I am not part of', async () => {
       const socket = await connect(stranger.token);
       const id = await chat();

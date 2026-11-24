@@ -10,7 +10,7 @@ import { TokenService } from '../auth/token.service.js';
 import { SessionAudience } from '../common/enums/auth.enums.js';
 import { UserRole, UserStatus } from '../common/enums/user.enums.js';
 import { BOOKING_EVENTS, type BookingEvent, type BookingStatusChangedEvent } from '../bookings/bookings.events.js';
-import { MESSAGING_EVENTS, type ConversationUpdatedEvent, type MessageCreatedEvent } from '../messaging/messaging.events.js';
+import { MESSAGING_EVENTS, type ConversationUpdatedEvent, type MessageCreatedEvent, type MessageUpdatedEvent } from '../messaging/messaging.events.js';
 import { AVAILABILITY_EVENTS, SERVICE_EVENTS, type AvailabilityChangedEvent, type ServiceEvent } from '../services/services.events.js';
 import { NOTIFICATION_EVENTS, type UserNotificationCreatedEvent } from '../notifications/notifications.service.js';
 import { User } from '../users/entities/user.entity.js';
@@ -42,6 +42,8 @@ interface SocketData {
  *
  * Server events:
  * - `message:new` — an app message, already masked for **you** (screen 15).
+ * - `message:updated` — the same shape, when a moderator hid, restored or deleted a message: replace the bubble
+ *   (`removed`), or drop it when `deleted` is true (BUG-G4).
  * - `conversation:updated` — `{ conversationId, reason }`, refresh screen 14.
  * - `booking:updated` — `{ bookingId, reference, status }` for both parties; `status` is always the current one.
  * - `notification:new` — the same row `GET /app/me/notifications` returns.
@@ -139,6 +141,18 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection {
       this.server.to(appUserRoom(userId)).emit('message:new', payload.message(userId));
       this.server.to(appUserRoom(userId)).emit('conversation:updated', { conversationId: event.conversationId, reason: 'message' });
     }
+  }
+
+  /**
+   * BUG-G4: a moderator hid, restored or deleted a message: every participant's open chat replaces (or drops,
+   * `deleted: true`) that bubble. Same shape as `message:new`, rendered per participant.
+   */
+  @OnEvent(MESSAGING_EVENTS.messageUpdated)
+  async onMessageUpdated(event: MessageUpdatedEvent): Promise<void> {
+    if (!this.server) return;
+    const payload = await this.messages.socketMessage(event.conversationId, event.message.id);
+    if (!payload) return;
+    for (const userId of payload.recipients) this.server.to(appUserRoom(userId)).emit('message:updated', payload.message(userId));
   }
 
   @OnEvent(MESSAGING_EVENTS.conversationUpdated)

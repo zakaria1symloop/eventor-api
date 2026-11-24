@@ -567,10 +567,10 @@ export class AppProviderController {
 
   @Delete('availability/blocks/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Unblock a day', description: 'Only a block **you** added: a booked or held day is not removable (409 `AVAILABILITY_BLOCK_NOT_REMOVABLE`).' })
+  @ApiOperation({ summary: 'Unblock a day', description: 'Only a block **you** added: a booked or held day is not removable (409 `AVAILABILITY_BLOCK_NOT_REMOVABLE`), and a block Eventor added (`source: admin`) is not yours (403 `AVAILABILITY_BLOCKED_BY_EVENTOR`).' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 204, description: 'Removed.' })
-  @ApiErrorResponses('AVAILABILITY_BLOCK_NOT_FOUND', 'NOT_OWNER', 'AVAILABILITY_BLOCK_NOT_REMOVABLE')
+  @ApiErrorResponses('AVAILABILITY_BLOCK_NOT_FOUND', 'NOT_OWNER', 'AVAILABILITY_BLOCK_NOT_REMOVABLE', 'AVAILABILITY_BLOCKED_BY_EVENTOR')
   async unblock(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('AVAILABILITY_BLOCK_NOT_FOUND')) id: string) {
     await this.provider.removeBlock(auth, id);
   }

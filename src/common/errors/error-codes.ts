@@ -467,6 +467,11 @@ export const ERROR_CODES = {
     en: 'The availability block was not found.',
     ar: 'فترة عدم التوفر غير موجودة.',
   },
+  AVAILABILITY_BLOCKED_BY_EVENTOR: {
+    status: HttpStatus.FORBIDDEN,
+    en: 'Eventor blocked this time. Contact Eventor support to change it.',
+    ar: 'قامت Eventor بحجب هذا الوقت. تواصل مع دعم Eventor لتغييره.',
+  },
   AVAILABILITY_BLOCK_NOT_REMOVABLE: {
     status: HttpStatus.CONFLICT,
     en: 'Only manual blocks can be removed; this day is held or booked by a booking.',

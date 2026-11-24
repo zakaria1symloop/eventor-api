@@ -40,6 +40,12 @@ export enum AvailabilityKind {
   Booked = 'booked',
 }
 
+/** Who made a manual block (BUG-F6/M1): the provider in the app, or Eventor from the dashboard. */
+export enum AvailabilitySource {
+  Provider = 'provider',
+  Admin = 'admin',
+}
+
 export enum PackStatus {
   Draft = 'draft',
   Published = 'published',

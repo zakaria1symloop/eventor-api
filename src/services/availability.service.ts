@@ -4,7 +4,7 @@ import type { DataSource, EntityManager } from 'typeorm';
 import { AuditService } from '../audit/audit.service.js';
 import type { AuthUser } from '../auth/auth.types.js';
 import { AuditLevel } from '../common/enums/admin.enums.js';
-import { AvailabilityKind } from '../common/enums/catalog.enums.js';
+import { AvailabilityKind, AvailabilitySource } from '../common/enums/catalog.enums.js';
 import { UserRole } from '../common/enums/user.enums.js';
 import { AppException } from '../common/errors/app.exception.js';
 import { DomainEvents } from '../common/events/domain-events.js';
@@ -42,7 +42,11 @@ export class AvailabilityService {
     return user;
   }
 
-  async month(providerId: string, month: string): Promise<AvailabilityMonthDto> {
+  /**
+   * `viewer` (BUG-F6/M1): the dashboard (`admin`) sees every note and can remove every manual block; the provider app
+   * (`provider`) never gets the note of an Eventor block and cannot remove it.
+   */
+  async month(providerId: string, month: string, viewer: 'admin' | 'provider' = 'admin'): Promise<AvailabilityMonthDto> {
     const em = this.dataSource.manager;
     await this.provider(em, providerId);
     const [year, mon] = month.split('-').map(Number) as [number, number];
@@ -52,7 +56,7 @@ export class AvailabilityService {
 
     const [blocks, bookings, [capacity]] = await Promise.all([
       em.query(
-        `SELECT ab.id, ab.kind, ab.date, ab.start_time, ab.end_time, ab.note, s.id AS service_id, s.title_en, s.title_ar,
+        `SELECT ab.id, ab.kind, ab.date, ab.start_time, ab.end_time, ab.note, ab.source, s.id AS service_id, s.title_en, s.title_ar,
                 b.id AS booking_id, b.reference, b.status AS booking_status, cu.full_name AS client_name
          FROM availability_blocks ab
          LEFT JOIN services s ON s.id = ab.service_id
@@ -79,6 +83,8 @@ export class AvailabilityService {
     const push = (date: string, item: AvailabilityBlockDto) => byDay.set(date, [...(byDay.get(date) ?? []), item]);
     for (const b of blocks) {
       const date = dateOnly(b.date);
+      const source = (b.source ?? AvailabilitySource.Provider) as AvailabilitySource;
+      const hiddenFromProvider = viewer === 'provider' && source === AvailabilitySource.Admin;
       push(date, {
         id: b.id,
         kind: b.kind,
@@ -87,8 +93,9 @@ export class AvailabilityService {
         endTime: hhmm(b.end_time),
         service: b.service_id ? { id: b.service_id, titleEn: b.title_en, titleAr: b.title_ar } : null,
         booking: b.booking_id ? { id: b.booking_id, reference: b.reference, status: b.booking_status, clientName: b.client_name ?? null } : null,
-        note: b.note,
-        removable: b.kind === AvailabilityKind.Blocked,
+        note: hiddenFromProvider ? null : b.note,
+        source,
+        removable: b.kind === AvailabilityKind.Blocked && !hiddenFromProvider,
       });
     }
     for (const b of bookings) {
@@ -102,6 +109,7 @@ export class AvailabilityService {
         service: b.service_id ? { id: b.service_id, titleEn: b.title_en, titleAr: b.title_ar } : null,
         booking: { id: b.id, reference: b.reference, status: b.status, clientName: b.client_name ?? null },
         note: null,
+        source: AvailabilitySource.Provider,
         removable: false,
       });
     }
@@ -133,6 +141,8 @@ export class AvailabilityService {
         if (!service || service.providerId !== providerId) throw AppException.of('AVAILABILITY_SERVICE_INVALID', { serviceId: dto.serviceId });
       }
       const repository = em.getRepository(AvailabilityBlock);
+      // The dashboard blocks on Eventor's behalf; the app on the provider's (BUG-F6/M1).
+      const source = auth.role === UserRole.Admin ? AvailabilitySource.Admin : AvailabilitySource.Provider;
       const block = await repository.save(
         repository.create({
           providerId,
@@ -143,6 +153,7 @@ export class AvailabilityService {
           kind: AvailabilityKind.Blocked,
           bookingId: null,
           note: dto.note ?? null,
+          source,
         }),
       );
       await this.audit.log(
@@ -167,6 +178,7 @@ export class AvailabilityService {
         service: service ? { id: service.id, titleEn: service.titleEn, titleAr: service.titleAr } : null,
         booking: null,
         note: block.note,
+        source,
         removable: true,
       };
     });
@@ -177,6 +189,8 @@ export class AvailabilityService {
       const block = await em.getRepository(AvailabilityBlock).findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
       if (!block) throw AppException.of('AVAILABILITY_BLOCK_NOT_FOUND');
       if (block.kind !== AvailabilityKind.Blocked) throw AppException.of('AVAILABILITY_BLOCK_NOT_REMOVABLE', { kind: block.kind });
+      // BUG-F6/M1: only Eventor lifts an Eventor block.
+      if (block.source === AvailabilitySource.Admin && auth.role !== UserRole.Admin) throw AppException.of('AVAILABILITY_BLOCKED_BY_EVENTOR');
       await em.getRepository(AvailabilityBlock).softDelete(id);
       await this.audit.log(
         {

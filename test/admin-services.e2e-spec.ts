@@ -658,7 +658,7 @@ describe('Admin services & availability (e2e)', () => {
       expect(res.body.data.days[2]).toEqual({
         date: `${month}-03`,
         status: 'blocked',
-        items: [{ id: expect.any(String), kind: 'blocked', date: `${month}-03`, startTime: null, endTime: null, service: null, booking: null, note: 'Holiday', removable: true }],
+        items: [{ id: expect.any(String), kind: 'blocked', date: `${month}-03`, startTime: null, endTime: null, service: null, booking: null, note: 'Holiday', source: 'provider', removable: true }],
       });
       expect(res.body.data.days[19]).toMatchObject({ status: 'booked', items: [{ id: null, kind: 'booked', booking: { id: booking.id, status: 'accepted' }, removable: false }] });
       expect(res.body.data.days[0]).toEqual({ date: `${month}-01`, status: 'free', items: [] });
@@ -678,6 +678,7 @@ describe('Admin services & availability (e2e)', () => {
         service: { id: service.id, titleEn: service.titleEn, titleAr: service.titleAr },
         booking: null,
         note: 'Private event',
+        source: 'admin',
         removable: true,
       });
       expect(await audited('availability.blocked', res.body.data.id)).not.toBeNull();

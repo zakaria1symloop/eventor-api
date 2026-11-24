@@ -34,6 +34,19 @@ reviews (and messages in MSG-01).
    "3 open · 1 on the account"), opening the list with `aboutUserId={id}`.
 3. Keep the existing reviews "reported" counter as it is.
 
+## BUG-F6 / BUG-M1 — admin availability blocks (F-32, M-22, L-12, L-20)
+
+**API (ready):** each item of `GET /admin/providers/{id}/availability` has a new
+`source`: `provider` or `admin` (blocks created from the dashboard; older ones
+were backfilled from the audit log). The dashboard still sees the note and can
+remove any manual block. The provider app no longer gets the note of an `admin`
+block and cannot remove it.
+
+**Dashboard to do:** label the block by `source`: "Blocked by Eventor" for
+`admin`, "Blocked by provider" for `provider` (today every block says "Blocked by
+provider"). Optionally, mention in the create-block form that the note stays
+internal.
+
 ## BUG-M4 — block dialog wording (M-16, L-17)
 
 `POST /admin/users/{id}/block` with `bookings`:

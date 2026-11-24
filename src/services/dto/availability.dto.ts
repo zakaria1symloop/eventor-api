@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsDateString, IsOptional, IsString, IsUUID, Matches, MaxLength, ValidateIf } from 'class-validator';
 import { trimToNull } from '../../common/dto/transforms.js';
-import { AvailabilityKind } from '../../common/enums/catalog.enums.js';
+import { AvailabilityKind, AvailabilitySource } from '../../common/enums/catalog.enums.js';
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -64,8 +64,25 @@ export class AvailabilityBlockDto {
   @ApiProperty({ type: String, nullable: true, example: '23:00' }) endTime: string | null;
   @ApiProperty({ type: AvailabilityServiceRefDto, nullable: true }) service: AvailabilityServiceRefDto | null;
   @ApiProperty({ type: AvailabilityBookingRefDto, nullable: true }) booking: AvailabilityBookingRefDto | null;
-  @ApiProperty({ type: String, nullable: true }) note: string | null;
-  @ApiProperty({ example: true, description: 'Manual blocks only.' }) removable: boolean;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'The block\'s note. In the provider app (`/app/provider/availability`) an Eventor block (`source: admin`) always has `note: null`: the admin note is internal.',
+  })
+  note: string | null;
+  @ApiProperty({
+    enum: AvailabilitySource,
+    example: AvailabilitySource.Provider,
+    description:
+      'Who made a manual block (BUG-F6/M1): `provider` (from the app) or `admin` (Eventor, from the dashboard). Show an `admin` block as "Blocked by Eventor". ' +
+      'Holds and bookings carry `provider`; only `kind: blocked` makes the difference.',
+  })
+  source: AvailabilitySource;
+  @ApiProperty({
+    example: true,
+    description: 'Manual blocks only. In the provider app, false for an Eventor block (`DELETE` answers 403 `AVAILABILITY_BLOCKED_BY_EVENTOR`).',
+  })
+  removable: boolean;
 }
 
 export const DAY_STATUSES = ['free', 'partial', 'blocked', 'held', 'booked'] as const;

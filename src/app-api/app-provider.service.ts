@@ -287,7 +287,7 @@ export class AppProviderService {
   // ── availability ──────────────────────────────────────────────
 
   month(auth: AuthUser, month: string) {
-    return this.availability.month(auth.id, month);
+    return this.availability.month(auth.id, month, 'provider');
   }
 
   createBlock(auth: AuthUser, dto: { date: string; startTime?: string; endTime?: string; serviceId?: string; note?: string }) {

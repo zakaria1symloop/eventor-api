@@ -479,6 +479,32 @@ describe('App provider (e2e)', () => {
       expect(item.booking).toMatchObject({ reference: booking.reference, clientName });
     });
 
+    it('shows an Eventor block without its admin note, and the provider cannot remove it (BUG-F6/M1, F-32 / M-22)', async () => {
+      const admin = await loginAs(t, UserRole.Admin);
+      const adminBlock = await request(t.http)
+        .post(`/api/v1/admin/providers/${provider.user.id}/availability/blocks`)
+        .set(admin.headers)
+        .send({ date: '2027-05-20', note: 'Internal: provider under review' })
+        .expect(201);
+      expect(adminBlock.body.data).toMatchObject({ source: 'admin', note: 'Internal: provider under review', removable: true });
+      const own = await request(t.http).post(`${BASE}/availability/blocks`).set(provider.headers).send({ date: '2027-05-21', note: 'Family wedding' }).expect(201);
+      expect(own.body.data).toMatchObject({ source: 'provider', removable: true });
+
+      const itemOn = async (headers: Record<string, string>, url: string, date: string) =>
+        (await request(t.http).get(url).set(headers).expect(200)).body.data.days.find((d: { date: string }) => d.date === date).items[0];
+
+      // Provider app: no note, not removable, marked as Eventor's.
+      expect(await itemOn(provider.headers, `${BASE}/availability?month=2027-05`, '2027-05-20')).toMatchObject({ kind: 'blocked', source: 'admin', note: null, removable: false });
+      expect(await itemOn(provider.headers, `${BASE}/availability?month=2027-05`, '2027-05-21')).toMatchObject({ source: 'provider', note: 'Family wedding', removable: true });
+      expectError(await request(t.http).delete(`${BASE}/availability/blocks/${adminBlock.body.data.id}`).set(provider.headers), 403, 'AVAILABILITY_BLOCKED_BY_EVENTOR');
+
+      // Dashboard: the note and the remove action stay.
+      const dashboard = `/api/v1/admin/providers/${provider.user.id}/availability?month=2027-05`;
+      expect(await itemOn(admin.headers, dashboard, '2027-05-20')).toMatchObject({ source: 'admin', note: 'Internal: provider under review', removable: true });
+      await request(t.http).delete(`/api/v1/admin/availability-blocks/${adminBlock.body.data.id}`).set(admin.headers).expect(204);
+      await request(t.http).delete(`${BASE}/availability/blocks/${own.body.data.id}`).set(provider.headers).expect(204);
+    });
+
     it('refuses a past date, a bad month and another provider’s block', async () => {
       expectError(await request(t.http).post(`${BASE}/availability/blocks`).set(provider.headers).send({ date: '2020-01-01' }), 422, 'AVAILABILITY_DATE_PAST');
       expectError(await request(t.http).get(`${BASE}/availability?month=2027-13`).set(provider.headers), 400, 'VALIDATION_FAILED');

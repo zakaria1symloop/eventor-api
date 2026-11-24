@@ -1,5 +1,5 @@
 import { Column, Entity, Index, JoinColumn, ManyToOne, type Relation } from 'typeorm';
-import { AvailabilityKind } from '../../common/enums/catalog.enums.js';
+import { AvailabilityKind, AvailabilitySource } from '../../common/enums/catalog.enums.js';
 import { AbstractEntity } from '../../database/abstract.entity.js';
 import { uuidRef } from '../../database/columns.js';
 import { Booking } from '../../bookings/entities/booking.entity.js';
@@ -44,4 +44,8 @@ export class AvailabilityBlock extends AbstractEntity {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   note: string | null;
+
+  /** Who made a manual block (BUG-F6/M1). An admin block's note is never sent to the provider, who cannot remove it. */
+  @Column({ type: 'enum', enum: AvailabilitySource, default: AvailabilitySource.Provider })
+  source: AvailabilitySource;
 }

@@ -57830,7 +57830,7 @@
     },
     "/api/v1/app/provider/availability/blocks/{id}": {
       "delete": {
-        "description": "Only a block **you** added: a booked or held day is not removable (409 `AVAILABILITY_BLOCK_NOT_REMOVABLE`).",
+        "description": "Only a block **you** added: a booked or held day is not removable (409 `AVAILABILITY_BLOCK_NOT_REMOVABLE`), and a block Eventor added (`source: admin`) is not yours (403 `AVAILABILITY_BLOCKED_BY_EVENTOR`).",
         "operationId": "AppProviderController_unblock",
         "parameters": [
           {
@@ -57918,7 +57918,7 @@
             }
           },
           "403": {
-            "description": "`NOT_OWNER`: You do not own this item.",
+            "description": "`NOT_OWNER`: You do not own this item.<br>`AVAILABILITY_BLOCKED_BY_EVENTOR`: Eventor blocked this time. Contact Eventor support to change it.",
             "content": {
               "application/json": {
                 "schema": {
@@ -57931,6 +57931,18 @@
                       "error": "Forbidden",
                       "code": "NOT_OWNER",
                       "message": "You do not own this item.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "AVAILABILITY_BLOCKED_BY_EVENTOR": {
+                    "value": {
+                      "statusCode": 403,
+                      "error": "Forbidden",
+                      "code": "AVAILABILITY_BLOCKED_BY_EVENTOR",
+                      "message": "Eventor blocked this time. Contact Eventor support to change it.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -63282,6 +63294,7 @@
               "PHOTO_NOT_FOUND",
               "PHOTO_ORDER_INVALID",
               "AVAILABILITY_BLOCK_NOT_FOUND",
+              "AVAILABILITY_BLOCKED_BY_EVENTOR",
               "AVAILABILITY_BLOCK_NOT_REMOVABLE",
               "AVAILABILITY_DATE_PAST",
               "AVAILABILITY_SERVICE_INVALID",
@@ -72432,12 +72445,22 @@
           },
           "note": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "The block's note. In the provider app (`/app/provider/availability`) an Eventor block (`source: admin`) always has `note: null`: the admin note is internal."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "provider",
+              "admin"
+            ],
+            "example": "provider",
+            "description": "Who made a manual block (BUG-F6/M1): `provider` (from the app) or `admin` (Eventor, from the dashboard). Show an `admin` block as \"Blocked by Eventor\". Holds and bookings carry `provider`; only `kind: blocked` makes the difference."
           },
           "removable": {
             "type": "boolean",
             "example": true,
-            "description": "Manual blocks only."
+            "description": "Manual blocks only. In the provider app, false for an Eventor block (`DELETE` answers 403 `AVAILABILITY_BLOCKED_BY_EVENTOR`)."
           }
         },
         "required": [
@@ -72449,6 +72472,7 @@
           "service",
           "booking",
           "note",
+          "source",
           "removable"
         ]
       },

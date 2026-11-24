@@ -267,7 +267,9 @@ export class AppBookingTimelineEntryDto {
   @ApiProperty({
     enum: APP_BOOKING_TIMELINE_TYPES,
     example: 'accepted',
-    description: '`created`, the booking status the entry moved to, or one of the milestones `rescheduled` / `checked_in` / `dispute_opened`.',
+    description:
+      '`created`, the booking status the entry moved to, or one of the milestones `rescheduled` / `checked_in` / `dispute_opened` / `dispute_resolved` ' +
+      '(`reason` = the booking outcome) / `reopened` (BUG-H5: a completed booking set back to accepted by a dispute outcome or an admin — not an acceptance; `toStatus` is null).',
   })
   type: AppBookingTimelineType;
   @ApiProperty({ type: String, nullable: true, enum: BookingStatus }) toStatus: BookingStatus | null;

@@ -160,6 +160,10 @@ export const APP_BOOKING_TIMELINE_TYPES = [
   'rescheduled',
   'checked_in',
   'dispute_opened',
+  /** BUG-H5: a completed booking set back to accepted (a dispute outcome, or an admin) — never an acceptance. */
+  'reopened',
+  /** BUG-H5: the dispute was decided; `reason` is the booking outcome (`completed` | `cancelled` | `unchanged`). */
+  'dispute_resolved',
 ] as const;
 export type AppBookingTimelineType = (typeof APP_BOOKING_TIMELINE_TYPES)[number];
 

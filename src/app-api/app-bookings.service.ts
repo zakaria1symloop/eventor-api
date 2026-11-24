@@ -324,9 +324,9 @@ export class AppBookingsService {
       this.pendingReschedules(em, [id]),
       this.reviewIds(em, [id], auth.id),
       em.query('SELECT id, kind, label, quantity, unit_amount, amount FROM booking_lines WHERE booking_id = ? AND deleted_at IS NULL ORDER BY position, created_at', [id]),
-      em.query('SELECT sc.from_status, sc.to_status, sc.reason, sc.created_at, u.full_name, u.role FROM booking_status_changes sc LEFT JOIN users u ON u.id = sc.actor_id WHERE sc.booking_id = ? ORDER BY sc.created_at', [id]),
+      em.query(`SELECT sc.from_status, sc.to_status, sc.reason, sc.created_at, u.full_name, u.role FROM booking_status_changes sc LEFT JOIN users u ON u.id = sc.actor_id WHERE sc.booking_id = ? ORDER BY sc.created_at, FIELD(sc.to_status, 'pending', 'accepted', 'completed', 'declined', 'cancelled')`, [id]),
       this.invoices.summary(id, em),
-      em.query('SELECT id, reference, status, type, opened_by_id, created_at FROM disputes WHERE booking_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1', [id]),
+      em.query('SELECT id, reference, status, type, opened_by_id, created_at, booking_outcome, resolved_at FROM disputes WHERE booking_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1', [id]),
     ]);
     const allReschedules: any[] = await em.query(
       'SELECT br.*, u.role AS proposer_role FROM booking_reschedules br LEFT JOIN users u ON u.id = br.proposed_by_id WHERE br.booking_id = ? AND br.deleted_at IS NULL ORDER BY br.created_at DESC',
@@ -340,9 +340,11 @@ export class AppBookingsService {
       reviewId: reviews.get(id) ?? null,
     });
 
+    // BUG-H5: completed → accepted is a reopen (dispute outcome or admin), not an acceptance: its own type, no toStatus.
+    const reopen = (s: any) => s.from_status === BookingStatus.Completed && s.to_status === BookingStatus.Accepted;
     const timeline: AppBookingTimelineEntryDto[] = statusRows.map((s: any) => ({
-      type: (s.from_status === null ? 'created' : String(s.to_status)) as AppBookingTimelineEntryDto['type'],
-      toStatus: (s.to_status ?? null) as BookingStatus | null,
+      type: (s.from_status === null ? 'created' : reopen(s) ? 'reopened' : String(s.to_status)) as AppBookingTimelineEntryDto['type'],
+      toStatus: reopen(s) ? null : ((s.to_status ?? null) as BookingStatus | null),
       actorLabel: s.full_name ?? null,
       reason: s.reason ?? null,
       at: iso(s.created_at)!,
@@ -353,6 +355,9 @@ export class AppBookingsService {
     if (r.client_checked_in_at) timeline.push({ type: 'checked_in', toStatus: null, actorLabel: 'client', reason: null, at: iso(r.client_checked_in_at)! });
     if (r.provider_checked_in_at) timeline.push({ type: 'checked_in', toStatus: null, actorLabel: 'provider', reason: null, at: iso(r.provider_checked_in_at)! });
     if (dispute) timeline.push({ type: 'dispute_opened', toStatus: null, actorLabel: null, reason: null, at: iso(dispute.created_at)! });
+    if (dispute?.resolved_at) {
+      timeline.push({ type: 'dispute_resolved', toStatus: null, actorLabel: null, reason: dispute.booking_outcome ?? null, at: iso(dispute.resolved_at)! });
+    }
     timeline.sort((a, b) => a.at.localeCompare(b.at));
 
     const [commune] = r.commune_id ? await em.query('SELECT name, name_ar FROM communes WHERE id = ?', [r.commune_id]) : [null];

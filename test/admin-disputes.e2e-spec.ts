@@ -31,6 +31,7 @@ import {
   makeProvider,
   makeService,
   makeUser,
+  tokenFor,
   uid,
   type LoggedIn,
   type TestApp,
@@ -496,6 +497,17 @@ describe('Admin disputes (e2e)', () => {
         { from_status: 'completed', to_status: 'accepted' },
         { from_status: 'accepted', to_status: 'cancelled' },
       ]);
+
+      // BUG-H5 (H-13 / M-13 / L-32): the client's timeline never shows the reopen as "accepted", and keeps the dispute.
+      const me = await tokenFor(t, completed.client);
+      const detail = (await request(t.http).get(`/api/v1/app/bookings/${completed.booking.id}`).set(me.headers).expect(200)).body.data;
+      const types = detail.timeline.map((e: { type: string }) => e.type);
+      expect(types).not.toContain('accepted');
+      expect(types).toEqual(expect.arrayContaining(['dispute_opened', 'reopened', 'cancelled', 'dispute_resolved']));
+      expect(types.indexOf('reopened')).toBeLessThan(types.indexOf('cancelled'));
+      expect(detail.timeline.find((e: { type: string }) => e.type === 'reopened')).toMatchObject({ toStatus: null, reason: 'dispute_resolved' });
+      expect(detail.timeline.find((e: { type: string }) => e.type === 'dispute_resolved')).toMatchObject({ reason: 'cancelled' });
+      expect(detail.dispute).toMatchObject({ id: d2.id, status: 'resolved' });
     });
 
     it('unchanged keeps the booking status; completing a cancelled booking is refused', async () => {

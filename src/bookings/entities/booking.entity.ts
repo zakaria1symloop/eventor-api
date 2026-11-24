@@ -3,6 +3,7 @@ import {
   BookingDisputeStatus,
   BookingSource,
   BookingStatus,
+  CancelledBy,
 } from '../../common/enums/booking.enums.js';
 import { EventType } from '../../common/enums/catalog.enums.js';
 import { PartyRole } from '../../common/enums/user.enums.js';
@@ -136,8 +137,9 @@ export class Booking extends AbstractEntity {
   @Column({ type: 'varchar', length: 60, nullable: true })
   declineReason: string | null;
 
-  @Column({ type: 'enum', enum: PartyRole, nullable: true })
-  cancelledBy: PartyRole | null;
+  /** BUG-H4/M3: client, provider, admin or system (no person). */
+  @Column({ type: 'enum', enum: CancelledBy, nullable: true })
+  cancelledBy: CancelledBy | null;
 
   @Column({ type: 'varchar', length: 60, nullable: true })
   cancelReason: string | null;

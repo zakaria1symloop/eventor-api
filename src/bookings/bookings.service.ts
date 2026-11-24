@@ -10,6 +10,7 @@ import {
   BookingLineKind,
   BookingSource,
   BookingStatus,
+  CancelledBy,
   RescheduleStatus,
 } from '../common/enums/booking.enums.js';
 import {
@@ -56,6 +57,7 @@ import {
   bookingDays,
   bookingRange,
   canTransition,
+  cancelledByOf,
   EXPIRED_REASON,
   isExpired,
   type ExpiryCause,
@@ -153,7 +155,8 @@ export interface TransitionOptions {
   reason: string | null;
   note: string | null;
   notify: boolean;
-  cancelledBy?: PartyRole;
+  /** Who cancelled; omitted = derived from `actorId` (`cancelledByOf`, BUG-H4/M3). */
+  cancelledBy?: CancelledBy;
   /** Party whose account action caused a cancellation (not notified). */
   causedByUserId?: string | null;
   /** Skip the availability re-check on accept (jobs never accept). */
@@ -1338,7 +1341,8 @@ export class BookingsService {
         reason: dto.reason ?? null,
         note: dto.note,
         notify: dto.notify,
-        cancelledBy: dto.cancelledBy ?? PartyRole.Admin,
+        // The dashboard may say on whose behalf it cancels; otherwise it is the admin's own cancellation.
+        cancelledBy: dto.cancelledBy ? (dto.cancelledBy as string as CancelledBy) : CancelledBy.Admin,
       });
     }, BOOKING_ISOLATION);
     return this.get(id);
@@ -1408,7 +1412,7 @@ export class BookingsService {
         await this.releaseAvailability(em, booking.id, now);
         break;
       case 'cancelled': {
-        update.cancelledBy = options.cancelledBy ?? PartyRole.Admin;
+        update.cancelledBy = options.cancelledBy ?? cancelledByOf(booking, options.actorId);
         update.cancelReason = options.reason;
         await this.releaseAvailability(em, booking.id, now);
         changes.voidedInvoices = await this.invoices.voidAll(em, booking.id);
@@ -1455,9 +1459,8 @@ export class BookingsService {
       await this.postBookingMessage(em, afterCommit, booking, 'booking_declined', { actor: this.actorOf(booking, options.actorId), reason: options.reason });
     }
     if (action === 'cancelled') {
-      const by = update.cancelledBy ?? PartyRole.Admin;
       await this.postBookingMessage(em, afterCommit, booking, 'booking_cancelled', {
-        actor: by === PartyRole.Client ? 'client' : by === PartyRole.Provider ? 'provider' : 'admin',
+        actor: update.cancelledBy ?? CancelledBy.Admin,
         reason: options.reason,
       });
     }
@@ -1495,7 +1498,7 @@ export class BookingsService {
         BOOKING_EVENTS.cancelled,
         {
           ...base,
-          cancelledBy: update.cancelledBy as PartyRole,
+          cancelledBy: update.cancelledBy ?? CancelledBy.Admin,
           reason: options.reason ?? '',
           causedByUserId: options.causedByUserId ?? null,
         },
@@ -1598,7 +1601,7 @@ export class BookingsService {
         reason: input.reason,
         note: null,
         notify: true,
-        cancelledBy: PartyRole.Admin,
+        // Who did it: the admin, or the provider deleting their own service, or the user deleting their account (BUG-H4/M3).
         causedByUserId: input.causedByUserId,
       });
     }

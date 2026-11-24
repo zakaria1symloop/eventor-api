@@ -16,7 +16,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { trim, trimToNull } from '../../common/dto/transforms.js';
-import { BookingDisputeStatus, BookingLineKind, BookingStatus, RescheduleStatus } from '../../common/enums/booking.enums.js';
+import { BookingDisputeStatus, BookingLineKind, BookingStatus, CancelledBy, RescheduleStatus } from '../../common/enums/booking.enums.js';
 import { EventType } from '../../common/enums/catalog.enums.js';
 import { DisputeStatus, DisputeType } from '../../common/enums/moderation.enums.js';
 import { PartyRole } from '../../common/enums/user.enums.js';
@@ -275,6 +275,7 @@ export class AppBookingTimelineEntryDto {
   @ApiProperty({ type: String, nullable: true, enum: BookingStatus }) toStatus: BookingStatus | null;
   @ApiProperty({ type: String, nullable: true, example: 'Yasmine K.' }) actorLabel: string | null;
   @ApiProperty({ type: String, nullable: true }) reason: string | null;
+  @ApiProperty({ type: String, nullable: true, description: 'BUG-H4/M3: `reason` to display, in the request language; never a raw code.' }) reasonLabel: string | null;
   @ApiProperty({ format: 'date-time' }) at: string;
 }
 
@@ -370,9 +371,21 @@ export class AppBookingDetailDto extends AppBookingCardDto {
   @ApiProperty({ example: '8.00', description: 'Informational: Eventor takes no money, payment is cash.' }) feePercent: string;
   @ApiProperty({ type: String, nullable: true, description: 'The service’s cancellation policy text, shown but never enforced (status-rules §3).' })
   cancellationPolicy: string | null;
-  @ApiProperty({ type: String, nullable: true }) cancelReason: string | null;
-  @ApiProperty({ type: String, nullable: true, enum: PartyRole }) cancelledBy: PartyRole | null;
+  @ApiProperty({ type: String, nullable: true, description: 'The stored code (e.g. `account_blocked`) or the words the client / provider typed.' }) cancelReason: string | null;
+  @ApiProperty({ type: String, nullable: true, example: 'The account was suspended by Eventor', description: 'BUG-H4/M3: `cancelReason` to display, in the request language; never a raw code.' })
+  cancelReasonLabel: string | null;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    enum: CancelledBy,
+    description:
+      'BUG-H4/M3: who cancelled. `client` / `provider` = that party; `admin` = Eventor (dashboard, account block, dispute outcome); `system` = nobody (a job). ' +
+      'Show "Eventor cancelled this booking" for `admin` and `system`, never the provider.',
+  })
+  cancelledBy: CancelledBy | null;
   @ApiProperty({ type: String, nullable: true }) declineReason: string | null;
+  @ApiProperty({ type: String, nullable: true, example: 'No reply in time', description: 'BUG-H4/M3: `declineReason` to display, in the request language.' })
+  declineReasonLabel: string | null;
   @ApiProperty({ type: AppProviderSummaryDto, nullable: true, description: 'The provider card screen 12 draws; null on a pack whose provider was deleted.' })
   provider: AppProviderSummaryDto | null;
   @ApiProperty({ type: [AppBookingTimelineEntryDto] }) timeline: AppBookingTimelineEntryDto[];

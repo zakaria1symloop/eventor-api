@@ -1,4 +1,4 @@
-import { BookingDisputeStatus, BookingLineKind, BookingStatus } from '../common/enums/booking.enums.js';
+import { BookingDisputeStatus, BookingLineKind, BookingStatus, CancelledBy } from '../common/enums/booking.enums.js';
 import { AppException } from '../common/errors/app.exception.js';
 import { PriceType } from '../common/enums/catalog.enums.js';
 
@@ -349,4 +349,53 @@ export function isDueForAutoComplete(
 ): boolean {
   if (booking.status !== BookingStatus.Accepted || booking.disputeStatus === BookingDisputeStatus.Open) return false;
   return eventEndUtc(booking.eventDate, booking.endTime).getTime() + disputeWindowHours * HOUR <= now.getTime();
+}
+
+/**
+ * BUG-H4 / BUG-M3: who a cancellation is attributed to, from the person who did
+ * it. The booking's client or provider is that party; any other person is an
+ * admin (dashboard, block, dispute outcome); nobody (a job, an emailed link) is
+ * the system. The app then says "The client / The provider / Eventor cancelled".
+ */
+export function cancelledByOf(booking: { clientId: string; providerId: string }, actorId: string | null | undefined): CancelledBy {
+  if (!actorId) return CancelledBy.System;
+  if (actorId === booking.clientId) return CancelledBy.Client;
+  if (actorId === booking.providerId) return CancelledBy.Provider;
+  return CancelledBy.Admin;
+}
+
+/** BUG-H4 / BUG-M3: the reason codes the backend and the dashboard write, in both languages. */
+const REASON_LABELS: Record<string, { en: string; ar: string }> = {
+  account_blocked: { en: 'The account was suspended by Eventor', ar: 'تم إيقاف الحساب من طرف Eventor' },
+  account_deleted: { en: 'The account was deleted', ar: 'تم حذف الحساب' },
+  service_deleted: { en: 'The service was removed', ar: 'تمت إزالة الخدمة' },
+  pack_deleted: { en: 'The pack was removed', ar: 'تمت إزالة الباقة' },
+  dispute: { en: 'Decided in a dispute', ar: 'تقرر في نزاع' },
+  dispute_resolved: { en: 'Dispute resolved', ar: 'تمت تسوية النزاع' },
+  auto_completed: { en: 'Completed automatically after the event', ar: 'اكتمل تلقائيًا بعد المناسبة' },
+  expired: { en: 'No reply in time', ar: 'لم يتم الرد في الوقت المحدد' },
+  academic_request_cancelled: { en: 'The event request was cancelled', ar: 'تم إلغاء طلب المناسبة' },
+  provider_unavailable: { en: 'The provider is unavailable', ar: 'مقدم الخدمة غير متاح' },
+  client_request: { en: "At the client's request", ar: 'بطلب من العميل' },
+  duplicate: { en: 'Duplicate booking', ar: 'حجز مكرر' },
+  other: { en: 'Other reason', ar: 'سبب آخر' },
+  // Dispute outcomes (`dispute_resolved` timeline entries).
+  completed: { en: 'Booking completed', ar: 'اكتمل الحجز' },
+  cancelled: { en: 'Booking cancelled', ar: 'أُلغي الحجز' },
+  unchanged: { en: 'Booking unchanged', ar: 'بقي الحجز دون تغيير' },
+};
+
+/**
+ * The text to show next to a stored reason. A known code is translated; a
+ * person's own words (a cancellation reason typed in the app) are shown as
+ * typed; an unknown code becomes words ("venue_closed" → "Venue closed") so a
+ * raw code never reaches the screen.
+ */
+export function reasonLabel(reason: string | null | undefined, lang: 'en' | 'ar'): string | null {
+  if (!reason) return null;
+  const known = REASON_LABELS[reason.trim().toLowerCase()];
+  if (known) return known[lang];
+  if (!/^[a-z][a-z0-9_]*$/.test(reason)) return reason;
+  const words = reason.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }

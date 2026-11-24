@@ -87,6 +87,13 @@ block and cannot remove it.
 provider"). Optionally, mention in the create-block form that the note stays
 internal.
 
+## BUG-H4 / BUG-M3 — who cancelled (H-13, M-13, M-16, L-17, L-24)
+
+`cancelledBy` on bookings can now also be **`system`** (no person, e.g. a job); the
+typed client marks it `CancelledBy`. Show it as "Eventor (automatic)". A provider deleting
+their own service, or a user deleting their account, is now recorded as that party
+instead of `admin`. Older rows keep their stored value.
+
 ## BUG-M5 — deleted accounts shown as normal users (M-30, N-25)
 
 **API (ready):** booking rows and the booking detail have `client.deleted` and

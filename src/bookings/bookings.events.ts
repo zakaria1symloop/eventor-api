@@ -42,7 +42,7 @@ export interface BookingStatusChangedEvent extends BookingEvent {
 }
 
 export interface BookingCancelledEvent extends BookingEvent {
-  cancelledBy: 'client' | 'provider' | 'admin';
+  cancelledBy: 'client' | 'provider' | 'admin' | 'system';
   reason: string;
   /** Party whose account action caused it (block, delete): that party is not notified. */
   causedByUserId: string | null;

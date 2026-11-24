@@ -17,6 +17,7 @@ import { BookingAutoExpireSetting1791600000000 } from './1791600000000-BookingAu
 import { RescheduleTotals1791700000000 } from './1791700000000-RescheduleTotals.js';
 import { AvailabilityBlockSource1791800000000 } from './1791800000000-AvailabilityBlockSource.js';
 import { SystemMessageEvents1791900000000 } from './1791900000000-SystemMessageEvents.js';
+import { CancelledBySystem1792000000000 } from './1792000000000-CancelledBySystem.js';
 
 /**
  * Ordered migration registry, explicit for the same reason as the entity
@@ -42,4 +43,5 @@ export const migrations: NonNullable<DataSourceOptions['migrations']> = [
   RescheduleTotals1791700000000,
   AvailabilityBlockSource1791800000000,
   SystemMessageEvents1791900000000,
+  CancelledBySystem1792000000000,
 ];

@@ -68469,8 +68469,10 @@
             "enum": [
               "client",
               "provider",
-              "admin"
-            ]
+              "admin",
+              "system"
+            ],
+            "description": "BUG-H4/M3: `system` = nobody (a job or an emailed link)."
           },
           "cancelReason": {
             "type": "string",
@@ -81165,6 +81167,11 @@
             "type": "string",
             "nullable": true
           },
+          "reasonLabel": {
+            "type": "string",
+            "nullable": true,
+            "description": "BUG-H4/M3: `reason` to display, in the request language; never a raw code."
+          },
           "at": {
             "type": "string",
             "format": "date-time"
@@ -81175,6 +81182,7 @@
           "toStatus",
           "actorLabel",
           "reason",
+          "reasonLabel",
           "at"
         ]
       },
@@ -81562,7 +81570,14 @@
           },
           "cancelReason": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "The stored code (e.g. `account_blocked`) or the words the client / provider typed."
+          },
+          "cancelReasonLabel": {
+            "type": "string",
+            "nullable": true,
+            "example": "The account was suspended by Eventor",
+            "description": "BUG-H4/M3: `cancelReason` to display, in the request language; never a raw code."
           },
           "cancelledBy": {
             "type": "string",
@@ -81570,12 +81585,20 @@
             "enum": [
               "client",
               "provider",
-              "admin"
-            ]
+              "admin",
+              "system"
+            ],
+            "description": "BUG-H4/M3: who cancelled. `client` / `provider` = that party; `admin` = Eventor (dashboard, account block, dispute outcome); `system` = nobody (a job). Show \"Eventor cancelled this booking\" for `admin` and `system`, never the provider."
           },
           "declineReason": {
             "type": "string",
             "nullable": true
+          },
+          "declineReasonLabel": {
+            "type": "string",
+            "nullable": true,
+            "example": "No reply in time",
+            "description": "BUG-H4/M3: `declineReason` to display, in the request language."
           },
           "provider": {
             "nullable": true,
@@ -81679,8 +81702,10 @@
           "feePercent",
           "cancellationPolicy",
           "cancelReason",
+          "cancelReasonLabel",
           "cancelledBy",
           "declineReason",
+          "declineReasonLabel",
           "provider",
           "timeline",
           "reschedules",

@@ -12,6 +12,7 @@ import {
   computeLines,
   computeTotals,
   eventEndsAt,
+  reasonLabel,
   packLines,
   serviceQuantity,
   toCents,
@@ -342,7 +343,7 @@ export class AppBookingsService {
 
     // BUG-H5: completed → accepted is a reopen (dispute outcome or admin), not an acceptance: its own type, no toStatus.
     const reopen = (s: any) => s.from_status === BookingStatus.Completed && s.to_status === BookingStatus.Accepted;
-    const timeline: AppBookingTimelineEntryDto[] = statusRows.map((s: any) => ({
+    const timeline: Omit<AppBookingTimelineEntryDto, 'reasonLabel'>[] = statusRows.map((s: any) => ({
       type: (s.from_status === null ? 'created' : reopen(s) ? 'reopened' : String(s.to_status)) as AppBookingTimelineEntryDto['type'],
       toStatus: reopen(s) ? null : ((s.to_status ?? null) as BookingStatus | null),
       actorLabel: s.full_name ?? null,
@@ -376,10 +377,13 @@ export class AppBookingsService {
       feePercent: String(r.fee_percent),
       cancellationPolicy: pickTextOrNull(lang, r.cancellation_policy_en, r.cancellation_policy_ar),
       cancelReason: r.cancel_reason ?? null,
+      cancelReasonLabel: reasonLabel(r.cancel_reason, lang),
       cancelledBy: r.cancelled_by ?? null,
       declineReason: r.decline_reason ?? null,
+      declineReasonLabel: reasonLabel(r.decline_reason, lang),
       provider: this.providerCard(r),
-      timeline,
+      // BUG-H4/M3: every reason code comes with its label in the caller's language.
+      timeline: timeline.map((entry) => ({ ...entry, reasonLabel: reasonLabel(entry.reason, lang) })),
       reschedules: allReschedules.map((row): AppRescheduleRowDto => this.toReschedule(row, party)),
       invoice: invoice
         ? {

@@ -1,4 +1,5 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { CancelledBy } from '../common/enums/booking.enums.js';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource, EntityManager } from 'typeorm';
@@ -664,7 +665,7 @@ export class DisputesService implements OnModuleInit {
           reason: action === 'cancelled' ? 'dispute' : 'dispute_resolved',
           note: `Dispute ${dispute.reference}: ${dto.decisionNote}`.slice(0, 2000),
           notify: false,
-          cancelledBy: PartyRole.Admin,
+          cancelledBy: CancelledBy.Admin,
         });
       }
       const now = new Date();

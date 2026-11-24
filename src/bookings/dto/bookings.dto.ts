@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional, IntersectionType, OmitType } from '@nestjs/swagger';
+import { CancelledBy } from '../../common/enums/booking.enums.js';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -305,7 +306,7 @@ export class BookingDetailDto extends OmitType(BookingRowDto, ['client', 'provid
   @ApiProperty({ example: '4500.00' }) feeAmount: string;
   @ApiProperty({ example: '40500.00' }) providerAmount: string;
   @ApiProperty({ type: String, nullable: true }) declineReason: string | null;
-  @ApiProperty({ type: String, nullable: true, enum: PartyRole }) cancelledBy: PartyRole | null;
+  @ApiProperty({ type: String, nullable: true, enum: CancelledBy, description: 'BUG-H4/M3: `system` = nobody (a job or an emailed link).' }) cancelledBy: CancelledBy | null;
   @ApiProperty({ type: String, nullable: true }) cancelReason: string | null;
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) reminderSentAt: string | null;
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) completedAt: string | null;

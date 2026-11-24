@@ -1,4 +1,5 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { CancelledBy } from '../common/enums/booking.enums.js';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource, EntityManager } from 'typeorm';
@@ -468,7 +469,7 @@ export class AcademicRequestsService implements OnModuleInit {
       const providerIds: string[] = [];
       for (const { id: bookingId } of pending) {
         const booking = await em.getRepository(Booking).findOneOrFail({ where: { id: bookingId }, lock: { mode: 'pessimistic_write' } });
-        await this.bookings.applyTransition(em, afterCommit, booking, 'cancelled', { actorId: auth.id, reason: 'academic_request_cancelled', note: reason, notify: true, cancelledBy: PartyRole.Admin });
+        await this.bookings.applyTransition(em, afterCommit, booking, 'cancelled', { actorId: auth.id, reason: 'academic_request_cancelled', note: reason, notify: true, cancelledBy: CancelledBy.Admin });
         providerIds.push(booking.providerId);
       }
       await em.getRepository(AcademicRequest).update(id, { status: S.Cancelled, decidedById: auth.id, decidedAt: new Date(), rejectReason: reason });

@@ -1,4 +1,4 @@
-import { BookingDisputeStatus, BookingLineKind, BookingStatus } from '../common/enums/booking.enums.js';
+import { BookingDisputeStatus, BookingLineKind, BookingStatus, CancelledBy } from '../common/enums/booking.enums.js';
 import { PriceType } from '../common/enums/catalog.enums.js';
 import {
   addDays,
@@ -7,6 +7,7 @@ import {
   bookingDays,
   bookingRange,
   canTransition,
+  cancelledByOf,
   lastDay,
   computeFee,
   computeLines,
@@ -21,6 +22,7 @@ import {
   isNoReply,
   packLines,
   reminderRetryAfter,
+  reasonLabel,
   rescheduledLines,
   serviceQuantity,
   STATUS_ACTIONS,
@@ -283,5 +285,24 @@ describe('multi-day bookings (issues 3 #11)', () => {
     expect(serviceQuantity(PriceType.PerDay, { days: 3 })).toBe(3);
     expect(serviceQuantity(PriceType.PerDay, {})).toBe(1);
     expect(serviceQuantity(PriceType.PerEvent, { days: 3 })).toBe(1);
+  });
+});
+
+describe('who cancelled, and reason labels (BUG-H4 / BUG-M3)', () => {
+  const booking = { clientId: 'client-1', providerId: 'provider-1' };
+
+  it('attributes a cancellation to the party who did it, Eventor otherwise, and the system without a person', () => {
+    expect(cancelledByOf(booking, 'client-1')).toBe(CancelledBy.Client);
+    expect(cancelledByOf(booking, 'provider-1')).toBe(CancelledBy.Provider);
+    expect(cancelledByOf(booking, 'admin-9')).toBe(CancelledBy.Admin);
+    expect(cancelledByOf(booking, null)).toBe(CancelledBy.System);
+  });
+
+  it('translates known codes, keeps typed words, and never returns a raw code', () => {
+    expect(reasonLabel('account_blocked', 'en')).toBe('The account was suspended by Eventor');
+    expect(reasonLabel('dispute', 'ar')).toBe('تقرر في نزاع');
+    expect(reasonLabel('The venue changed our date.', 'ar')).toBe('The venue changed our date.');
+    expect(reasonLabel('venue_closed', 'en')).toBe('Venue closed');
+    expect(reasonLabel(null, 'en')).toBeNull();
   });
 });

@@ -508,6 +508,11 @@ describe('Admin disputes (e2e)', () => {
       expect(detail.timeline.find((e: { type: string }) => e.type === 'reopened')).toMatchObject({ toStatus: null, reason: 'dispute_resolved' });
       expect(detail.timeline.find((e: { type: string }) => e.type === 'dispute_resolved')).toMatchObject({ reason: 'cancelled' });
       expect(detail.dispute).toMatchObject({ id: d2.id, status: 'resolved' });
+      // BUG-H4 / M3: Eventor cancelled it (not the provider), with readable reasons.
+      expect(detail).toMatchObject({ cancelledBy: 'admin', cancelReason: 'dispute', cancelReasonLabel: 'Decided in a dispute' });
+      expect(detail.timeline.find((e: { type: string }) => e.type === 'dispute_resolved')).toMatchObject({ reasonLabel: 'Booking cancelled' });
+      const inArabic = (await request(t.http).get(`/api/v1/app/bookings/${completed.booking.id}`).set(me.headers).set('Accept-Language', 'ar').expect(200)).body.data;
+      expect(inArabic.cancelReasonLabel).toBe('تقرر في نزاع');
     });
 
     it('unchanged keeps the booking status; completing a cancelled booking is refused', async () => {

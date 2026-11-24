@@ -6,7 +6,7 @@ import { BookingJobsService } from '../src/bookings/booking-jobs.service.js';
 import { addDays } from '../src/bookings/bookings.policy.js';
 import { algiersToday } from '../src/bookings/bookings.service.js';
 import { Booking } from '../src/bookings/entities/booking.entity.js';
-import { BookingDisputeStatus, BookingStatus } from '../src/common/enums/booking.enums.js';
+import { BookingDisputeStatus, BookingStatus, CancelledBy } from '../src/common/enums/booking.enums.js';
 import { FilePurpose } from '../src/common/enums/file.enums.js';
 import { ConversationKind, ConversationStatus, ParticipantRole } from '../src/common/enums/messaging.enums.js';
 import { DisputeEvidenceKind, DisputeStatus, DisputeType } from '../src/common/enums/moderation.enums.js';
@@ -219,7 +219,7 @@ describe('Admin disputes (e2e)', () => {
       expect((await audited('dispute.opened', overridden.id))?.changes).toMatchObject({ windowOverridden: true });
 
       // Cancelled: within 7 days of the cancellation only.
-      const recent = await disputable({ eventDate: addDays(algiersToday(), 20), status: BookingStatus.Cancelled, cancelledBy: PartyRole.Provider });
+      const recent = await disputable({ eventDate: addDays(algiersToday(), 20), status: BookingStatus.Cancelled, cancelledBy: CancelledBy.Provider });
       await db().query("INSERT INTO booking_status_changes (id, created_at, booking_id, from_status, to_status, notified) VALUES (UUID(), ?, ?, 'accepted', 'cancelled', 1)", [new Date(Date.now() - 2 * DAY), recent.booking.id]);
       await openFor(recent, { type: 'cancellation_disagreement' });
       const stale = await disputable({ eventDate: addDays(algiersToday(), 20), status: BookingStatus.Cancelled });

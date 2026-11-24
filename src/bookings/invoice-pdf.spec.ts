@@ -23,9 +23,13 @@ describe('invoice PDF', () => {
       titleEn: 'Wedding photo & video coverage',
       titleAr: 'تغطية زفاف بالصورة والفيديو',
       eventDate: '2026-10-18',
+      // A multi-day booking with hours, and Arabic line labels (BUG-O2): the PDF prints all of them.
+      endDate: '2026-10-20',
+      startTime: '18:00',
+      endTime: '23:00',
       eventType: EventType.Wedding,
       lines: [
-        { kind: BookingLineKind.Service, label: 'Wedding photo & video coverage', quantity: 1, unitAmount: '120000.00', amount: '120000.00' },
+        { kind: BookingLineKind.Service, label: 'Wedding photo & video coverage', labelAr: 'تغطية زفاف بالصورة والفيديو', quantity: 1, unitAmount: '120000.00', amount: '120000.00' },
         { kind: BookingLineKind.Discount, label: 'Loyalty', quantity: 1, unitAmount: '5000.00', amount: '-5000.00' },
       ],
       subtotal: '120000.00',

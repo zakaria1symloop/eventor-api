@@ -180,14 +180,35 @@ export function rescheduledLines(
   booking: { serviceId: string | null; priceType: PriceType | null; startTime: string | null; endTime: string | null },
 ): LineInput[] | null {
   if (!booking.serviceId || booking.priceType !== PriceType.PerHour) return null;
-  const hours = serviceQuantity(PriceType.PerHour, { startTime: booking.startTime, endTime: booking.endTime });
+  return recount(lines, booking.serviceId, serviceQuantity(PriceType.PerHour, { startTime: booking.startTime, endTime: booking.endTime }));
+}
+
+/** The booked service's own line set to `quantity` at its unit price; null when it already has it. */
+function recount(lines: LineInput[], serviceId: string, quantity: number): LineInput[] | null {
   let changed = false;
   const next = lines.map((line) => {
-    if (line.kind !== BookingLineKind.Service || line.serviceId !== booking.serviceId || line.quantity === hours) return line;
+    if (line.kind !== BookingLineKind.Service || line.serviceId !== serviceId || line.quantity === quantity) return line;
     changed = true;
-    return { ...line, quantity: hours };
+    return { ...line, quantity };
   });
   return changed ? next : null;
+}
+
+/**
+ * An admin edited a booking's hours or guests (dashboard "Edit details"): a
+ * `per_hour` line is re-counted for the hours, a `per_person` line for the
+ * guests, at the unit price already on the booking (as for reschedules, BUG-E3).
+ * Clearing the guests leaves a per-person price as it is. Extras, discounts,
+ * per-day, packs and flat prices never change. Null when nothing changes.
+ */
+export function editedLines(
+  lines: LineInput[],
+  booking: { serviceId: string | null; priceType: PriceType | null; startTime: string | null; endTime: string | null; guests: number | null },
+): LineInput[] | null {
+  if (!booking.serviceId) return null;
+  if (booking.priceType === PriceType.PerHour) return rescheduledLines(lines, booking);
+  if (booking.priceType === PriceType.PerPerson && booking.guests !== null && booking.guests > 0) return recount(lines, booking.serviceId, booking.guests);
+  return null;
 }
 
 /** Pack lines: one per item at its base price, then a discount down to the pack price. */

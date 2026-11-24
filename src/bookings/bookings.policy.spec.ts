@@ -24,6 +24,7 @@ import {
   reminderRetryAfter,
   reasonLabel,
   rescheduledLines,
+  editedLines,
   serviceQuantity,
   STATUS_ACTIONS,
   targetStatus,
@@ -197,6 +198,20 @@ describe('rescheduledLines (BUG-E3: a per-hour price follows the new hours)', ()
   it('only touches the line of the booked service', () => {
     const other = [{ kind: BookingLineKind.Service, label: 'Other', quantity: 4, unitAmount: '6000.00', serviceId: 'svc-2' }];
     expect(rescheduledLines(other, { serviceId: SERVICE, priceType: PriceType.PerHour, startTime: '18:00', endTime: '23:00' })).toBeNull();
+  });
+});
+
+describe('editedLines (admin edits hours or guests)', () => {
+  const line = (quantity: number) => [{ kind: BookingLineKind.Service, label: 'X', quantity, unitAmount: '1000.00', serviceId: 's' }];
+  it('re-counts per-person lines for the guests and per-hour lines for the hours', () => {
+    expect(editedLines(line(10), { serviceId: 's', priceType: PriceType.PerPerson, startTime: null, endTime: null, guests: 12 })![0]!.quantity).toBe(12);
+    expect(editedLines(line(4), { serviceId: 's', priceType: PriceType.PerHour, startTime: '18:00', endTime: '23:00', guests: 50 })![0]!.quantity).toBe(5);
+  });
+  it('changes nothing for cleared guests, flat or per-day prices, or the same count', () => {
+    expect(editedLines(line(10), { serviceId: 's', priceType: PriceType.PerPerson, startTime: null, endTime: null, guests: null })).toBeNull();
+    expect(editedLines(line(1), { serviceId: 's', priceType: PriceType.PerEvent, startTime: '18:00', endTime: '23:00', guests: 300 })).toBeNull();
+    expect(editedLines(line(3), { serviceId: 's', priceType: PriceType.PerDay, startTime: null, endTime: null, guests: 300 })).toBeNull();
+    expect(editedLines(line(12), { serviceId: 's', priceType: PriceType.PerPerson, startTime: null, endTime: null, guests: 12 })).toBeNull();
   });
 });
 

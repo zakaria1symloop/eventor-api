@@ -624,6 +624,36 @@ describe('Admin bookings (e2e)', () => {
       expect((await versions()).at(-1)).toEqual({ version: 3, live: 1, type: 'engagement' });
     });
 
+    it('re-prices per-person and per-hour bookings when an admin edits the guests or the hours, at the agreed rate', async () => {
+      // Per person: 10 guests × 3 000, then 12 guests.
+      const perPerson = await bookable({ price: '3000.00', priceType: PriceType.PerPerson });
+      const { booking: a } = await createPending(perPerson, { guests: 10 });
+      await setStatus(a.id, { status: 'accepted' }).expect(200);
+      expect((await request(t.http).get(`${BASE}/${a.id}`).set(admin.headers)).body.data.total).toBe('30000.00');
+      await db().query('UPDATE services SET base_price = ? WHERE id = ?', ['9999.00', perPerson.service.id]);
+
+      const edited = (await request(t.http).patch(`${BASE}/${a.id}`).set(admin.headers).send({ guests: 12 }).expect(200)).body.data;
+
+      expect(edited).toMatchObject({ guests: 12, total: '36000.00' });
+      expect(edited.lines.find((l: { kind: string }) => l.kind === 'service')).toMatchObject({ quantity: 12, unitAmount: '3000.00' });
+      const [invoice] = await db().query('SELECT version, total FROM invoices WHERE booking_id = ? AND deleted_at IS NULL', [a.id]);
+      expect(invoice).toEqual({ version: 2, total: '36000.00' });
+      const notes = await db().query("SELECT user_id FROM notifications WHERE type = 'booking.price_changed' AND JSON_UNQUOTE(JSON_EXTRACT(data, '$.bookingId')) = ?", [a.id]);
+      expect(notes).toEqual([{ user_id: perPerson.client.id }]);
+      // Clearing the guests keeps the price.
+      expect((await request(t.http).patch(`${BASE}/${a.id}`).set(admin.headers).send({ guests: null }).expect(200)).body.data.total).toBe('36000.00');
+
+      // Per hour: 18:00–22:00 (4 h × 5 000), then 18:00–23:00.
+      const perHour = await bookable({ price: '5000.00', priceType: PriceType.PerHour });
+      const { booking: b } = await createPending(perHour, { startTime: '18:00', endTime: '22:00' });
+      const moved = (await request(t.http).patch(`${BASE}/${b.id}`).set(admin.headers).send({ endTime: '23:00' }).expect(200)).body.data;
+      expect(moved.total).toBe('25000.00');
+      // A flat price never moves.
+      const flat = await bookable({ price: '45000.00' });
+      const { booking: c } = await createPending(flat, { startTime: '18:00', endTime: '22:00' });
+      expect((await request(t.http).patch(`${BASE}/${c.id}`).set(admin.headers).send({ endTime: '23:00', guests: 300 }).expect(200)).body.data.total).toBe('45000.00');
+    });
+
     it('edits event details; eventDate → 422 USE_RESCHEDULE; commune checks; not editable when completed', async () => {
       const { booking } = await createPending();
       const commune = await makeCommune(db(), { wilayaCode: 16 });

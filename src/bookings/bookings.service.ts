@@ -72,6 +72,7 @@ import {
   reminderRetryAfter,
   REMINDER_INTERVAL_HOURS,
   rescheduledLines,
+  editedLines,
   checkInOutcome,
   checkInRefusal,
   serviceQuantity,
@@ -2203,15 +2204,35 @@ export class BookingsService {
     start: string | null,
     end: string | null,
   ): Promise<{ lines: ReturnType<typeof computeLines>; totals: ReturnType<typeof computeTotals> } | null> {
+    return this.recountedPrice(em, booking, (lines, priceType) =>
+      rescheduledLines(lines, { serviceId: booking.serviceId, priceType, startTime: start, endTime: end }),
+    );
+  }
+
+  /** An admin edit of the hours or guests: per-hour and per-person lines follow, at the agreed rate (`editedLines`). */
+  private async editedPrice(
+    em: EntityManager,
+    booking: Booking,
+    next: { startTime: string | null; endTime: string | null; guests: number | null },
+  ): Promise<{ lines: ReturnType<typeof computeLines>; totals: ReturnType<typeof computeTotals> } | null> {
+    return this.recountedPrice(em, booking, (lines, priceType) => editedLines(lines, { serviceId: booking.serviceId, priceType, ...next }));
+  }
+
+  /** The booking's stored lines through `recount`, with the service's price type; null when nothing changes. */
+  private async recountedPrice(
+    em: EntityManager,
+    booking: Booking,
+    recount: (lines: LineInput[], priceType: PriceType | null) => LineInput[] | null,
+  ): Promise<{ lines: ReturnType<typeof computeLines>; totals: ReturnType<typeof computeTotals> } | null> {
     if (!booking.serviceId) return null;
     const [service] = await em.query('SELECT price_type FROM services WHERE id = ?', [booking.serviceId]);
     const stored: any[] = await em.query(
       'SELECT kind, label, label_ar, quantity, unit_amount, service_id FROM booking_lines WHERE booking_id = ? ORDER BY position',
       [booking.id],
     );
-    const next = rescheduledLines(
+    const next = recount(
       stored.map((l) => ({ kind: l.kind, label: l.label, labelAr: l.label_ar ?? null, quantity: Number(l.quantity), unitAmount: String(l.unit_amount), serviceId: l.service_id })),
-      { serviceId: booking.serviceId, priceType: (service?.price_type ?? null) as PriceType | null, startTime: start, endTime: end },
+      (service?.price_type ?? null) as PriceType | null,
     );
     if (!next) return null;
     const lines = computeLines(next);
@@ -2346,8 +2367,21 @@ export class BookingsService {
           ],
         );
       }
-      // The invoice prints the event type and the hours (BUG-E5); guests and place it does not.
-      await this.reissueInvoice(em, afterCommit, booking, update.eventType !== undefined || update.startTime !== undefined || update.endTime !== undefined);
+      // New hours or guests: a per-hour / per-person price follows, at the rate agreed on the booking.
+      const price =
+        update.startTime !== undefined || update.endTime !== undefined || update.guests !== undefined
+          ? await this.editedPrice(em, booking, {
+              startTime: hhmm(update.startTime !== undefined ? update.startTime : booking.startTime),
+              endTime: hhmm(update.endTime !== undefined ? update.endTime : booking.endTime),
+              guests: update.guests !== undefined ? update.guests : booking.guests,
+            })
+          : null;
+      if (price) {
+        await this.replaceLines(em, booking, price.lines, price.totals, 'Booking details edited', auth.id);
+        changes.total = { from: String(booking.total), to: price.totals.total };
+      }
+      // The invoice prints the event type, the hours and the lines (BUG-E5); guests and place it does not.
+      await this.reissueInvoice(em, afterCommit, booking, update.eventType !== undefined || update.startTime !== undefined || update.endTime !== undefined || price !== null);
       await this.audit.log(
         {
           action: 'booking.updated',
@@ -2359,8 +2393,16 @@ export class BookingsService {
         },
         em,
       );
-      // Both apps reload the booking (`booking:updated`); nobody is notified.
+      // Both apps reload the booking (`booking:updated`); nobody is notified of the details.
       this.events.emitAfterCommit<BookingEvent>(afterCommit, BOOKING_EVENTS.updated, this.eventBase(booking, false));
+      // A changed price is told to the client, exactly as a manual price change is.
+      if (price) {
+        this.events.emitAfterCommit<BookingPriceChangedEvent>(afterCommit, BOOKING_EVENTS.priceChanged, {
+          ...this.eventBase(booking, true),
+          oldTotal: String(booking.total),
+          newTotal: price.totals.total,
+        });
+      }
     });
     return this.get(id);
   }

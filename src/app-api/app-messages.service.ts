@@ -85,7 +85,7 @@ export class AppMessagesService {
   private async people(em: EntityManager, conversationIds: string[]): Promise<Map<string, AppChatPersonDto[]>> {
     if (!conversationIds.length) return new Map();
     const rows: any[] = await em.query(
-      `SELECT cp.conversation_id, cp.user_id, cp.role, u.full_name, u.role AS user_role, u.status, u.avatar_file_id, pp.business_name
+      `SELECT cp.conversation_id, cp.user_id, cp.role, u.full_name, u.role AS user_role, u.status, u.deleted_at, u.avatar_file_id, pp.business_name
          FROM conversation_participants cp JOIN users u ON u.id = cp.user_id
          LEFT JOIN provider_profiles pp ON pp.user_id = u.id AND pp.deleted_at IS NULL
         WHERE cp.conversation_id IN (?)`,
@@ -99,6 +99,7 @@ export class AppMessagesService {
         avatarUrl: avatarUrl(this.files, r.avatar_file_id),
         role: r.role,
         blocked: r.status === UserStatus.Blocked,
+        deleted: r.deleted_at !== null && r.deleted_at !== undefined,
       };
       map.set(r.conversation_id, [...(map.get(r.conversation_id) ?? []), person]);
     }
@@ -188,6 +189,8 @@ export class AppMessagesService {
     const parties = r.kind === ConversationKind.Direct ? people.filter((p) => p.id !== auth.id && p.role !== ParticipantRole.Support) : [];
     const blockedByMe = parties.some((p) => blocks.byMe.has(p.id));
     const blockedMe = parties.some((p) => blocks.me.has(p.id));
+    // BUG-M5: the other party deleted their account — the chat stays readable, never writable.
+    const counterpartDeleted = parties.some((p) => p.deleted);
     return {
       id: r.id,
       kind: r.kind as ConversationKind,
@@ -212,7 +215,7 @@ export class AppMessagesService {
             total: String(r.total),
           }
         : null,
-      canWrite: r.status === ConversationStatus.Open && Number(r.my_can_write ?? 0) === 1 && !blockedByMe && !blockedMe,
+      canWrite: r.status === ConversationStatus.Open && Number(r.my_can_write ?? 0) === 1 && !blockedByMe && !blockedMe && !counterpartDeleted,
       blockedByMe,
       blockedMe,
     };
@@ -426,6 +429,9 @@ export class AppMessagesService {
           [id, auth.id],
         );
         await assertNotBlocked(em, auth.id, others.map((o) => o.user_id));
+        // BUG-M5: the other party deleted their account; nobody would ever read it.
+        const [gone] = await em.query('SELECT id FROM users WHERE id IN (?) AND deleted_at IS NOT NULL LIMIT 1', [others.length ? others.map((o) => o.user_id) : ['']]);
+        if (gone) throw AppException.of('RECIPIENT_DELETED');
       }
       let fileId: string | null = null;
       if (file) {

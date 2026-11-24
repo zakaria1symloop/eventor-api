@@ -59586,6 +59586,30 @@
               }
             }
           },
+          "410": {
+            "description": "`RECIPIENT_DELETED`: This account was deleted: messages can no longer be sent here.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                },
+                "examples": {
+                  "RECIPIENT_DELETED": {
+                    "value": {
+                      "statusCode": 410,
+                      "error": "Gone",
+                      "code": "RECIPIENT_DELETED",
+                      "message": "This account was deleted: messages can no longer be sent here.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "413": {
             "description": "`FILE_TOO_LARGE`: The file is larger than {maxMb} MB.",
             "content": {
@@ -63485,6 +63509,7 @@
               "BOOKING_NOT_FOUND",
               "BOOKING_INVALID_TRANSITION",
               "BOOKING_EXPIRED",
+              "RECIPIENT_DELETED",
               "COUNTERPARTY_UNAVAILABLE",
               "BOOKING_EVENT_OVER",
               "BOOKING_NOT_EDITABLE",
@@ -67266,12 +67291,18 @@
           "avatarUrl": {
             "type": "string",
             "nullable": true
+          },
+          "deleted": {
+            "type": "boolean",
+            "example": false,
+            "description": "BUG-M5: the account was deleted. Show \"Deleted user\" and no \"Open profile\" link (the user page answers 404)."
           }
         },
         "required": [
           "id",
           "fullName",
-          "avatarUrl"
+          "avatarUrl",
+          "deleted"
         ]
       },
       "BookingProviderRefDto": {
@@ -67289,12 +67320,18 @@
             "type": "string",
             "nullable": true,
             "example": "Studio Lumière"
+          },
+          "deleted": {
+            "type": "boolean",
+            "example": false,
+            "description": "BUG-M5: the account was deleted. Show \"Deleted user\" and no \"Open profile\" link (the user page answers 404)."
           }
         },
         "required": [
           "id",
           "fullName",
-          "businessName"
+          "businessName",
+          "deleted"
         ]
       },
       "BookingRowDto": {
@@ -67508,6 +67545,11 @@
             "type": "string",
             "nullable": true
           },
+          "deleted": {
+            "type": "boolean",
+            "example": false,
+            "description": "BUG-M5: the account was deleted. Show \"Deleted user\" and no \"Open profile\" link (the user page answers 404)."
+          },
           "email": {
             "type": "string",
             "example": "amina.benali@gmail.com"
@@ -67531,6 +67573,7 @@
           "id",
           "fullName",
           "avatarUrl",
+          "deleted",
           "email",
           "phone",
           "bookingsCount",
@@ -67552,6 +67595,11 @@
             "type": "string",
             "nullable": true,
             "example": "Studio Lumière"
+          },
+          "deleted": {
+            "type": "boolean",
+            "example": false,
+            "description": "BUG-M5: the account was deleted. Show \"Deleted user\" and no \"Open profile\" link (the user page answers 404)."
           },
           "avatarUrl": {
             "type": "string",
@@ -67601,6 +67649,7 @@
           "id",
           "fullName",
           "businessName",
+          "deleted",
           "avatarUrl",
           "email",
           "phone",
@@ -82892,6 +82941,11 @@
             "type": "boolean",
             "example": false,
             "description": "The account is blocked, so the chat is read-only for them."
+          },
+          "deleted": {
+            "type": "boolean",
+            "example": false,
+            "description": "BUG-M5: the account was deleted. Show the chat read-only with \"This account was deleted\" (`canWrite` is false; sending answers 410 `RECIPIENT_DELETED`). The name stays until the account is anonymised (30 days after the deletion)."
           }
         },
         "required": [
@@ -82899,7 +82953,8 @@
           "name",
           "avatarUrl",
           "role",
-          "blocked"
+          "blocked",
+          "deleted"
         ]
       },
       "AppLastMessageDto": {

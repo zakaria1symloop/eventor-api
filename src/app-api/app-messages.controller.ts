@@ -154,6 +154,7 @@ export class AppMessagesController {
     'USER_BLOCKED',
     'CONVERSATION_CLOSED',
     'CONVERSATION_READ_ONLY',
+    'RECIPIENT_DELETED',
     'FILE_TOO_LARGE',
     'FILE_TYPE_NOT_ALLOWED',
     'RATE_LIMITED',

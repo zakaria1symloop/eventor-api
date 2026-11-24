@@ -288,6 +288,25 @@ describe('App messages (e2e)', () => {
     });
   });
 
+  describe('a deleted account (BUG-M5, M-30 / N-25)', () => {
+    it('shows the chat read-only, refuses new messages with 410, and flags the dashboard booking', async () => {
+      const leaving = await loginAs(t, UserRole.Client);
+      const started = await request(t.http).post(`${BASE}/conversations`).set(leaving.headers).send({ userId: provider.user.id, body: 'Hello before I leave' }).expect(201);
+      const id = started.body.data.id;
+      const booking = await makeBooking(db(), { clientId: leaving.user.id, providerId: provider.user.id, status: BookingStatus.Pending });
+      await request(t.http).delete(`/api/v1/admin/users/${leaving.user.id}`).set(admin.headers).send({ typedName: leaving.user.fullName }).expect(204);
+
+      const chat = (await request(t.http).get(`${BASE}/conversations/${id}`).set(provider.headers).expect(200)).body.data;
+      expect(chat.other).toMatchObject({ id: leaving.user.id, deleted: true });
+      expect(chat.canWrite).toBe(false);
+      expectError(await request(t.http).post(`${BASE}/conversations/${id}/messages`).set(provider.headers).send({ body: 'Are you there?' }), 410, 'RECIPIENT_DELETED');
+
+      const detail = (await request(t.http).get(`/api/v1/admin/bookings/${booking.id}`).set(admin.headers).expect(200)).body.data;
+      expect(detail.client).toMatchObject({ id: leaving.user.id, deleted: true });
+      expect(detail.provider.deleted).toBe(false);
+    });
+  });
+
   describe('reports', () => {
     it('reports a message once, idempotently', async () => {
       const id = await chat('Contact me elsewhere');

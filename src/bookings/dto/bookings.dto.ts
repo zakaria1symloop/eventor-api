@@ -114,12 +114,14 @@ export class BookingClientRefDto {
   @ApiProperty({ format: 'uuid' }) id: string;
   @ApiProperty({ example: 'Amina Benali' }) fullName: string;
   @ApiProperty({ type: String, nullable: true }) avatarUrl: string | null;
+  @ApiProperty({ example: false, description: 'BUG-M5: the account was deleted. Show "Deleted user" and no "Open profile" link (the user page answers 404).' }) deleted: boolean;
 }
 
 export class BookingProviderRefDto {
   @ApiProperty({ format: 'uuid' }) id: string;
   @ApiProperty({ example: 'Karim Belkacem' }) fullName: string;
   @ApiProperty({ type: String, nullable: true, example: 'Studio Lumière' }) businessName: string | null;
+  @ApiProperty({ example: false, description: 'BUG-M5: the account was deleted. Show "Deleted user" and no "Open profile" link (the user page answers 404).' }) deleted: boolean;
 }
 
 export class BookingRowDto {

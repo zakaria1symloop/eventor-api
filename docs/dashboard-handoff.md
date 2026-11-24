@@ -87,6 +87,15 @@ block and cannot remove it.
 provider"). Optionally, mention in the create-block form that the note stays
 internal.
 
+## BUG-M5 — deleted accounts shown as normal users (M-30, N-25)
+
+**API (ready):** booking rows and the booking detail have `client.deleted` and
+`provider.deleted` (true once the account was deleted). **Dashboard to do:** when it is
+true, show the name with a "Deleted user" badge and no "Open profile" link (the user page
+answers 404 `USER_NOT_FOUND`). Do the same wherever the dashboard links a person from a
+booking. Listing deleted accounts in Users search is a separate product choice, not
+done here.
+
 ## BUG-M4 — block dialog wording (M-16, L-17)
 
 `POST /admin/users/{id}/block` with `bookings`:

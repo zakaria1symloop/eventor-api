@@ -542,6 +542,11 @@ export const ERROR_CODES = {
     en: 'This request expired: it was not answered in time.',
     ar: 'انتهت صلاحية هذا الطلب: لم يتم الرد عليه في الوقت المحدد.',
   },
+  RECIPIENT_DELETED: {
+    status: HttpStatus.GONE,
+    en: 'This account was deleted: messages can no longer be sent here.',
+    ar: 'تم حذف هذا الحساب: لم يعد بالإمكان إرسال رسائل هنا.',
+  },
   COUNTERPARTY_UNAVAILABLE: {
     status: HttpStatus.CONFLICT,
     en: 'The other party is temporarily unavailable on Eventor: the date cannot be changed now. Contact Eventor support.',

@@ -282,7 +282,7 @@ export class BookingsService {
     const cutoff = await this.noReplyCutoff();
     const rows: any[] = await this.dataSource.query(
       `SELECT b.id, b.reference, b.service_id, s.title_en, s.title_ar, b.pack_id, pk.name_en AS pack_name_en, pk.name_ar AS pack_name_ar,
-              b.client_id, cu.full_name AS client_name, cu.avatar_file_id AS client_avatar, b.provider_id, pu.full_name AS provider_name, pp.business_name,
+              b.client_id, cu.full_name AS client_name, cu.avatar_file_id AS client_avatar, cu.deleted_at AS client_deleted_at, b.provider_id, pu.full_name AS provider_name, pu.deleted_at AS provider_deleted_at, pp.business_name,
               b.event_date, b.end_date, b.start_time, b.end_time, b.event_type, b.wilaya_code, w.name AS wilaya_name, w.name_ar AS wilaya_name_ar, b.guests, b.total,
               b.status, b.dispute_status, (b.status = 'pending' AND b.created_at <= ?) AS no_reply, b.responded_at, b.created_at, b.source
        ${FROM} WHERE ${where.sql} ORDER BY ${SORT_COLUMNS[field]} ${direction}, b.id ${direction} LIMIT ? OFFSET ?`,
@@ -305,11 +305,13 @@ export class BookingsService {
         id: r.client_id,
         fullName: r.client_name,
         avatarUrl: this.avatar(r.client_avatar),
+        deleted: r.client_deleted_at !== null && r.client_deleted_at !== undefined,
       },
       provider: {
         id: r.provider_id,
         fullName: r.provider_name,
         businessName: r.business_name ?? null,
+        deleted: r.provider_deleted_at !== null && r.provider_deleted_at !== undefined,
       },
       eventDate: dateOnly(r.event_date),
       endDate: r.end_date ? dateOnly(r.end_date) : null,
@@ -414,8 +416,8 @@ export class BookingsService {
     const [r] = await em.query(
       `SELECT b.*, s.title_en, s.title_ar, s.price_type, s.base_price, s.cancellation_policy_en, s.cancellation_policy_ar,
               pk.name_en AS pack_name_en, pk.name_ar AS pack_name_ar, pk.price AS pack_price,
-              cu.full_name AS client_name, cu.avatar_file_id AS client_avatar, cu.email AS client_email, cu.phone AS client_phone, cu.status AS client_status,
-              pu.full_name AS provider_name, pu.avatar_file_id AS provider_avatar, pu.email AS provider_email, pu.phone AS provider_phone, pu.status AS provider_status,
+              cu.full_name AS client_name, cu.avatar_file_id AS client_avatar, cu.email AS client_email, cu.phone AS client_phone, cu.status AS client_status, cu.deleted_at AS client_deleted_at,
+              pu.full_name AS provider_name, pu.avatar_file_id AS provider_avatar, pu.email AS provider_email, pu.phone AS provider_phone, pu.status AS provider_status, pu.deleted_at AS provider_deleted_at,
               pp.business_name, pp.avg_rating, pp.rating_count, pp.avg_reply_minutes, pp.reply_rate, pp.completed_bookings_count, pp.accepting_bookings,
               w.name AS wilaya_name, w.name_ar AS wilaya_name_ar, co.name AS commune_name, co.name_ar AS commune_name_ar,
               cb.full_name AS created_by_name, ar.reference AS academic_reference, ar.title AS academic_title,

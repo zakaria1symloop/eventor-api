@@ -133,6 +133,13 @@ export class AppChatPersonDto {
   @ApiProperty({ type: String, nullable: true }) avatarUrl: string | null;
   @ApiProperty({ example: 'provider', enum: ['client', 'provider', 'support'] }) role: string;
   @ApiProperty({ example: false, description: 'The account is blocked, so the chat is read-only for them.' }) blocked: boolean;
+  @ApiProperty({
+    example: false,
+    description:
+      'BUG-M5: the account was deleted. Show the chat read-only with "This account was deleted" (`canWrite` is false; sending answers 410 `RECIPIENT_DELETED`). ' +
+      'The name stays until the account is anonymised (30 days after the deletion).',
+  })
+  deleted: boolean;
 }
 
 export class AppChatBookingDto {

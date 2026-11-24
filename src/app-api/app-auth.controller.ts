@@ -223,7 +223,7 @@ export class AppAuthController {
       'again with the new password.',
   })
   @ApiResponse({ status: 204, description: 'Password changed; sign in again.' })
-  @ApiErrorResponses('VALIDATION_FAILED', 'CODE_INVALID', 'CODE_EXPIRED', 'PASSWORD_WEAK', 'ACCOUNT_BLOCKED', 'ROLE_NOT_ALLOWED_IN_APP', 'RATE_LIMITED')
+  @ApiErrorResponses('VALIDATION_FAILED', 'CODE_INVALID', 'CODE_EXPIRED', 'PASSWORD_WEAK', 'PASSWORD_UNCHANGED', 'ACCOUNT_BLOCKED', 'ROLE_NOT_ALLOWED_IN_APP', 'RATE_LIMITED')
   async reset(@Body() dto: AppResetPasswordDto): Promise<void> {
     await this.auth.resetPassword(dto.email, dto.code, dto.password);
   }
@@ -237,7 +237,7 @@ export class AppAuthController {
       `single use). Sets the password, marks the email verified and signs in. ${TOKEN_NOTE}`,
   })
   @ApiDataResponse(AppSessionDto)
-  @ApiErrorResponses('VALIDATION_FAILED', 'RESET_TOKEN_INVALID', 'RESET_TOKEN_EXPIRED', 'PASSWORD_WEAK', 'ACCOUNT_BLOCKED', 'ROLE_NOT_ALLOWED_IN_APP', 'RATE_LIMITED')
+  @ApiErrorResponses('VALIDATION_FAILED', 'RESET_TOKEN_INVALID', 'RESET_TOKEN_EXPIRED', 'PASSWORD_WEAK', 'PASSWORD_UNCHANGED', 'ACCOUNT_BLOCKED', 'ROLE_NOT_ALLOWED_IN_APP', 'RATE_LIMITED')
   async setPassword(@Body() dto: AppSetPasswordDto, @ReqLang() lang: Lang) {
     return { data: await this.auth.setPassword(dto.token, dto.password, lang) };
   }

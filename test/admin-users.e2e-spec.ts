@@ -663,6 +663,10 @@ describe('Admin users (e2e)', () => {
       await request(t.http).post('/api/v1/admin/auth/reset').send({ token, password: 'NewPassword2x' }).expect(204);
 
       expect((await request(t.http).post('/api/v1/app/auth/login').send({ email: user.email, password: 'NewPassword2x' })).status).toBe(200);
+      // BUG-C1: a second link refuses the password the account already has.
+      await request(t.http).post(`${BASE}/${user.id}/password-reset`).set(admin.headers).send({ mode: 'link' }).expect(200);
+      const next = /reset-password\?token=(\S+)/.exec(lastMailTo(user.email)!.text)![1]!;
+      expectError(await request(t.http).post('/api/v1/admin/auth/reset').send({ token: next, password: 'NewPassword2x' }), 422, 'PASSWORD_UNCHANGED');
       expectError(await request(t.http).post('/api/v1/admin/auth/reset').send({ token, password: 'OtherPassword3x' }), 400, 'RESET_TOKEN_INVALID');
       expect(await audited('auth.password_reset', user.id)).not.toBeNull();
     });

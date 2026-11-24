@@ -118,7 +118,7 @@ export class AppMeController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Change my password', description: 'Profile · Change password. Signs out every **other** session; this one keeps working.' })
   @ApiResponse({ status: 204, description: 'Password changed.' })
-  @ApiErrorResponses('VALIDATION_FAILED', 'CURRENT_PASSWORD_INVALID', 'PASSWORD_WEAK')
+  @ApiErrorResponses('VALIDATION_FAILED', 'CURRENT_PASSWORD_INVALID', 'PASSWORD_WEAK', 'PASSWORD_UNCHANGED')
   async changePassword(@CurrentUser() auth: AuthUser, @Body() dto: AppChangePasswordDto): Promise<void> {
     await this.me.changePassword(auth, dto.currentPassword, dto.newPassword);
   }

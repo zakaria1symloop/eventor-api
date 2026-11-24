@@ -846,7 +846,7 @@
             }
           },
           "422": {
-            "description": "`PASSWORD_WEAK`: The password must have at least 10 characters, including a letter and a digit, and must not be a common password.",
+            "description": "`PASSWORD_WEAK`: The password must have at least 10 characters, including a letter and a digit, and must not be a common password.<br>`PASSWORD_UNCHANGED`: The new password must be different from your current password.",
             "content": {
               "application/json": {
                 "schema": {
@@ -859,6 +859,18 @@
                       "error": "Unprocessable Entity",
                       "code": "PASSWORD_WEAK",
                       "message": "The password must have at least 10 characters, including a letter and a digit, and must not be a common password.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "PASSWORD_UNCHANGED": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "PASSWORD_UNCHANGED",
+                      "message": "The new password must be different from your current password.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -38093,7 +38105,7 @@
             }
           },
           "422": {
-            "description": "`CODE_INVALID`: The verification code is incorrect.<br>`CODE_EXPIRED`: The verification code has expired. Ask for a new one.<br>`PASSWORD_WEAK`: The password must have at least 10 characters, including a letter and a digit, and must not be a common password.",
+            "description": "`CODE_INVALID`: The verification code is incorrect.<br>`CODE_EXPIRED`: The verification code has expired. Ask for a new one.<br>`PASSWORD_WEAK`: The password must have at least 10 characters, including a letter and a digit, and must not be a common password.<br>`PASSWORD_UNCHANGED`: The new password must be different from your current password.",
             "content": {
               "application/json": {
                 "schema": {
@@ -38130,6 +38142,18 @@
                       "error": "Unprocessable Entity",
                       "code": "PASSWORD_WEAK",
                       "message": "The password must have at least 10 characters, including a letter and a digit, and must not be a common password.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "PASSWORD_UNCHANGED": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "PASSWORD_UNCHANGED",
+                      "message": "The new password must be different from your current password.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -38318,7 +38342,7 @@
             }
           },
           "422": {
-            "description": "`PASSWORD_WEAK`: The password must have at least 10 characters, including a letter and a digit, and must not be a common password.",
+            "description": "`PASSWORD_WEAK`: The password must have at least 10 characters, including a letter and a digit, and must not be a common password.<br>`PASSWORD_UNCHANGED`: The new password must be different from your current password.",
             "content": {
               "application/json": {
                 "schema": {
@@ -38331,6 +38355,18 @@
                       "error": "Unprocessable Entity",
                       "code": "PASSWORD_WEAK",
                       "message": "The password must have at least 10 characters, including a letter and a digit, and must not be a common password.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "PASSWORD_UNCHANGED": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "PASSWORD_UNCHANGED",
+                      "message": "The new password must be different from your current password.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -39240,7 +39276,7 @@
             }
           },
           "422": {
-            "description": "`CURRENT_PASSWORD_INVALID`: The current password is incorrect.<br>`PASSWORD_WEAK`: The password must have at least 10 characters, including a letter and a digit, and must not be a common password.",
+            "description": "`CURRENT_PASSWORD_INVALID`: The current password is incorrect.<br>`PASSWORD_WEAK`: The password must have at least 10 characters, including a letter and a digit, and must not be a common password.<br>`PASSWORD_UNCHANGED`: The new password must be different from your current password.",
             "content": {
               "application/json": {
                 "schema": {
@@ -39265,6 +39301,18 @@
                       "error": "Unprocessable Entity",
                       "code": "PASSWORD_WEAK",
                       "message": "The password must have at least 10 characters, including a letter and a digit, and must not be a common password.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "PASSWORD_UNCHANGED": {
+                    "value": {
+                      "statusCode": 422,
+                      "error": "Unprocessable Entity",
+                      "code": "PASSWORD_UNCHANGED",
+                      "message": "The new password must be different from your current password.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -63432,6 +63480,7 @@
               "AUTH_REFRESH_INVALID",
               "INVALID_CREDENTIALS",
               "ACCOUNT_LOCKED",
+              "PASSWORD_UNCHANGED",
               "PASSWORD_WEAK",
               "RESET_TOKEN_INVALID",
               "RESET_TOKEN_EXPIRED",

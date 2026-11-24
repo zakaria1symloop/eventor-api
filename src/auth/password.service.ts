@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { AppException } from '../common/errors/app.exception.js';
 import argon2 from 'argon2';
 
 /**
@@ -35,6 +36,17 @@ export class PasswordService {
       return await argon2.verify(hash, password);
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * BUG-C1: a reset or change must set a different password. 422 PASSWORD_UNCHANGED (on `field`) when `password`
+   * is the one already stored; nothing to compare for an account without a password yet.
+   */
+  async assertChanged(currentHash: string | null | undefined, password: string, field = 'password'): Promise<void> {
+    if (!currentHash) return;
+    if (await this.verify(currentHash, password)) {
+      throw new AppException(422, 'PASSWORD_UNCHANGED', [{ field, code: 'PASSWORD_UNCHANGED', message: 'Choose a password different from the current one' }]);
     }
   }
 }

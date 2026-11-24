@@ -139,6 +139,11 @@ export const ERROR_CODES = {
     en: 'Too many failed attempts. Try again in {retryAfterSeconds} seconds.',
     ar: 'محاولات فاشلة كثيرة. حاول مجددًا بعد {retryAfterSeconds} ثانية.',
   },
+  PASSWORD_UNCHANGED: {
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    en: 'The new password must be different from your current password.',
+    ar: 'يجب أن تكون كلمة المرور الجديدة مختلفة عن كلمة المرور الحالية.',
+  },
   PASSWORD_WEAK: {
     status: HttpStatus.UNPROCESSABLE_ENTITY,
     en: 'The password must have at least 10 characters, including a letter and a digit, and must not be a common password.',

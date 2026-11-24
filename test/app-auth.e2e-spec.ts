@@ -529,6 +529,18 @@ describe('App auth (e2e)', () => {
       expect((await request(t.http).post(`${BASE}/login`).send({ email, password: 'Bluebird99z' })).status).toBe(200);
     });
 
+    it('422 PASSWORD_UNCHANGED for the current password, and the code still works for a new one (BUG-C1, C-14 / M-29)', async () => {
+      const { email } = await signedInClient();
+      await request(t.http).post(`${BASE}/forgot`).send({ email });
+      const code = await codeFor(email, VerificationCodePurpose.PasswordReset);
+
+      const same = await request(t.http).post(`${BASE}/reset`).send({ email, code, password: PASSWORD });
+      expectError(same, 422, 'PASSWORD_UNCHANGED');
+      expect(same.body.details).toEqual([{ field: 'password', code: 'PASSWORD_UNCHANGED', message: expect.any(String) }]);
+
+      expect((await request(t.http).post(`${BASE}/reset`).send({ email, code, password: 'Bluebird99z' })).status).toBe(204);
+    });
+
     it('422 CODE_INVALID for a wrong code and 422 PASSWORD_WEAK for a bad password', async () => {
       const { email } = await signedInClient();
       await request(t.http).post(`${BASE}/forgot`).send({ email });

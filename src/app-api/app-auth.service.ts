@@ -489,6 +489,8 @@ export class AppAuthService {
       const user = await em.getRepository(User).findOne({ where: { id: checked.userId }, lock: { mode: 'pessimistic_write' } });
       if (!user) throw AppException.of('CODE_INVALID');
       this.assertAppAccount(user);
+      // Thrown inside the transaction: the code is not used up, the user just picks another password.
+      await this.passwords.assertChanged(user.passwordHash, password);
       await em.getRepository(User).update(user.id, {
         passwordHash: await this.passwords.hash(password),
         // Receiving the code proves the address works.
@@ -551,6 +553,7 @@ export class AppAuthService {
 
     return runInTransaction(this.dataSource, async (em) => {
       const { code, user } = await this.passwordLink(em, rawToken, lang, true);
+      await this.passwords.assertChanged(user.passwordHash, password);
 
       await em.getRepository(User).update(user.id, {
         passwordHash: await this.passwords.hash(password),

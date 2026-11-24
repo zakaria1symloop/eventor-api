@@ -112,7 +112,7 @@ export class AdminAuthController {
       'the same dashboard page sends both here. It never signs anyone in.',
   })
   @ApiResponse({ status: 204, description: 'Password changed.' })
-  @ApiErrorResponses('VALIDATION_FAILED', 'RESET_TOKEN_INVALID', 'RESET_TOKEN_EXPIRED', 'PASSWORD_WEAK', 'RATE_LIMITED')
+  @ApiErrorResponses('VALIDATION_FAILED', 'RESET_TOKEN_INVALID', 'RESET_TOKEN_EXPIRED', 'PASSWORD_WEAK', 'PASSWORD_UNCHANGED', 'RATE_LIMITED')
   async reset(@Body() dto: ResetPasswordDto): Promise<void> {
     await this.auth.resetPassword(dto.token, dto.password);
   }

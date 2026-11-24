@@ -228,6 +228,7 @@ export class AppMeService {
         throw AppException.of('CURRENT_PASSWORD_INVALID');
       }
       assertPasswordStrong(newPassword);
+      await this.passwords.assertChanged(user.passwordHash, newPassword, 'newPassword');
       await em.getRepository(User).update(user.id, { passwordHash: await this.passwords.hash(newPassword) });
       const revoked = await this.sessions.revokeAllForUser(user.id, em, { exceptSessionId: auth.sessionId });
       await this.audit.log(

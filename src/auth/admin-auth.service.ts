@@ -254,6 +254,8 @@ export class AdminAuthService {
       const user = await em.getRepository(User).findOneBy({ id: code.userId });
       if (!user) throw AppException.of('RESET_TOKEN_INVALID');
       assertPasswordStrong(password);
+      // BUG-C1: the link stays valid; the person picks another password.
+      await this.passwords.assertChanged(user.passwordHash, password);
 
       await em.getRepository(User).update(user.id, { passwordHash: await this.passwords.hash(password) });
       await em.getRepository(VerificationCode).update(code.id, { consumedAt: new Date() });

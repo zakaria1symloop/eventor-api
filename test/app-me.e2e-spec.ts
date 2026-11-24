@@ -176,6 +176,12 @@ describe('App me (e2e)', () => {
         422,
         'PASSWORD_WEAK',
       );
+      // BUG-C1: the new password must differ from the current one.
+      expectError(
+        await request(t.http).post(`${BASE}/password`).set(me.headers).send({ currentPassword: 'Sunflower42x', newPassword: 'Sunflower42x' }),
+        422,
+        'PASSWORD_UNCHANGED',
+      );
     });
   });
 

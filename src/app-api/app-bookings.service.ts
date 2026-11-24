@@ -126,7 +126,9 @@ export class AppBookingsService {
       lines: computed.map((line) => ({
         id: '',
         kind: line.kind,
-        label: line.label,
+        label: pickText(lang, line.label, line.labelAr ?? ''),
+        labelEn: line.label,
+        labelAr: line.labelAr ?? null,
         quantity: line.quantity,
         unitAmount: line.unitAmount,
         amount: line.amount,
@@ -156,7 +158,7 @@ export class AppBookingsService {
   }
 
   /** Quote lines for a service, labelled in the caller's language. */
-  private async serviceLines(em: EntityManager, dto: AppQuoteDto, lang: Lang) {
+  private async serviceLines(em: EntityManager, dto: AppQuoteDto, _lang: Lang) {
     const [service] = await em.query(
       `SELECT s.id, s.provider_id, s.title_en, s.title_ar, s.base_price, s.price_type, ${SERVICE_VISIBLE_SQL} AS visible
          FROM services s JOIN users u ON u.id = s.provider_id WHERE s.id = ? AND s.deleted_at IS NULL`,
@@ -167,7 +169,8 @@ export class AppBookingsService {
     const lines: LineInput[] = [
       {
         kind: BookingLineKind.Service,
-        label: pickText(lang, service.title_en, service.title_ar),
+        label: service.title_en,
+        labelAr: service.title_ar || null,
         quantity: serviceQuantity(service.price_type as PriceType, { guests: dto.guests, startTime: dto.startTime, endTime: dto.endTime, days: range.days.length }),
         unitAmount: String(service.base_price),
         serviceId: service.id,
@@ -180,14 +183,14 @@ export class AppBookingsService {
       if (invalid.length) throw AppException.of('BOOKING_EXTRA_INVALID', { extraIds: invalid });
       for (const extra of dto.extras) {
         const row = extras.find((x) => x.id === extra.extraId)!;
-        lines.push({ kind: BookingLineKind.Extra, label: pickText(lang, row.name_en, row.name_ar), quantity: extra.quantity, unitAmount: String(row.price), serviceId: service.id });
+        lines.push({ kind: BookingLineKind.Extra, label: row.name_en, labelAr: row.name_ar || null, quantity: extra.quantity, unitAmount: String(row.price), serviceId: service.id });
       }
     }
     return { providerId: service.provider_id as string, lines, feeKey: 'platform_fee_percent' as const, range };
   }
 
   /** Quote lines for a Ready Pack: one line per item, then the pack discount. */
-  private async packLines(em: EntityManager, packId: string, lang: Lang) {
+  private async packLines(em: EntityManager, packId: string, _lang: Lang) {
     const [pack] = await em.query(
       `SELECT p.id, p.provider_id, p.name_en, p.name_ar, p.price, ${PACK_VISIBLE_SQL} AS visible FROM packs p JOIN users u ON u.id = p.provider_id WHERE p.id = ? AND p.deleted_at IS NULL`,
       [packId],
@@ -198,8 +201,8 @@ export class AppBookingsService {
       [pack.id],
     );
     const lines = packLines(
-      { price: String(pack.price), nameEn: pickText(lang, pack.name_en, pack.name_ar) },
-      items.map((i) => ({ serviceId: i.service_id, titleEn: pickText(lang, i.title_en, i.title_ar), basePrice: String(i.base_price) })),
+      { price: String(pack.price), nameEn: pack.name_en, nameAr: pack.name_ar },
+      items.map((i) => ({ serviceId: i.service_id, titleEn: i.title_en, titleAr: i.title_ar, basePrice: String(i.base_price) })),
     );
     return { providerId: pack.provider_id as string, lines, feeKey: 'pack_fee_percent' as const };
   }
@@ -324,7 +327,7 @@ export class AppBookingsService {
       this.conversations(em, [id]),
       this.pendingReschedules(em, [id]),
       this.reviewIds(em, [id], auth.id),
-      em.query('SELECT id, kind, label, quantity, unit_amount, amount FROM booking_lines WHERE booking_id = ? AND deleted_at IS NULL ORDER BY position, created_at', [id]),
+      em.query('SELECT id, kind, label, label_ar, quantity, unit_amount, amount FROM booking_lines WHERE booking_id = ? AND deleted_at IS NULL ORDER BY position, created_at', [id]),
       em.query(`SELECT sc.from_status, sc.to_status, sc.reason, sc.created_at, u.full_name, u.role FROM booking_status_changes sc LEFT JOIN users u ON u.id = sc.actor_id WHERE sc.booking_id = ? ORDER BY sc.created_at, FIELD(sc.to_status, 'pending', 'accepted', 'completed', 'declined', 'cancelled')`, [id]),
       this.invoices.summary(id, em),
       em.query('SELECT id, reference, status, type, opened_by_id, created_at, booking_outcome, resolved_at FROM disputes WHERE booking_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1', [id]),
@@ -370,7 +373,17 @@ export class AppBookingsService {
       communeName: commune ? pickText(lang, commune.name, commune.name_ar) : null,
       clientNote: r.client_note ?? null,
       lines: lines.map(
-        (l: any): AppBookingLineDto => ({ id: l.id, kind: l.kind, label: l.label, quantity: Number(l.quantity), unitAmount: String(l.unit_amount), amount: String(l.amount) }),
+        (l: any): AppBookingLineDto => ({
+          id: l.id,
+          kind: l.kind,
+          // BUG-O2: the reader's language; both are given so the app can switch without a reload.
+          label: pickText(lang, l.label, l.label_ar ?? ''),
+          labelEn: l.label,
+          labelAr: l.label_ar ?? null,
+          quantity: Number(l.quantity),
+          unitAmount: String(l.unit_amount),
+          amount: String(l.amount),
+        }),
       ),
       subtotal: String(r.subtotal),
       discountTotal: String(r.discount_total),

@@ -447,7 +447,7 @@ export class BookingsService {
       [cover],
     ] = await Promise.all([
       em.query(
-        'SELECT id, kind, label, quantity, unit_amount, amount, service_id, position FROM booking_lines WHERE booking_id = ? AND deleted_at IS NULL ORDER BY position, created_at',
+        'SELECT id, kind, label, label_ar, quantity, unit_amount, amount, service_id, position FROM booking_lines WHERE booking_id = ? AND deleted_at IS NULL ORDER BY position, created_at',
         [id],
       ),
       em.query(
@@ -614,6 +614,7 @@ export class BookingsService {
         id: l.id,
         kind: l.kind,
         label: l.label,
+        labelAr: l.label_ar ?? null,
         quantity: Number(l.quantity),
         unitAmount: String(l.unit_amount),
         amount: String(l.amount),
@@ -1022,7 +1023,7 @@ export class BookingsService {
     let feeKey: 'platform_fee_percent' | 'pack_fee_percent';
     if (dto.serviceId) {
       const [service] = await em.query(
-        `SELECT s.id, s.provider_id, s.title_en, s.base_price, s.price_type, s.deleted_at, ${SERVICE_VISIBLE_SQL} AS visible
+        `SELECT s.id, s.provider_id, s.title_en, s.title_ar, s.base_price, s.price_type, s.deleted_at, ${SERVICE_VISIBLE_SQL} AS visible
            FROM services s JOIN users u ON u.id = s.provider_id WHERE s.id = ?`,
         [dto.serviceId],
       );
@@ -1036,6 +1037,8 @@ export class BookingsService {
         {
           kind: BookingLineKind.Service,
           label: service.title_en,
+          // BUG-O2: both languages are kept, whatever the language of the person booking.
+          labelAr: service.title_ar || null,
           quantity: serviceQuantity(service.price_type as PriceType, {
             guests: dto.guests,
             startTime: dto.startTime,
@@ -1048,7 +1051,7 @@ export class BookingsService {
       ];
       if (dto.extras?.length) {
         const extras: any[] = await em.query(
-          'SELECT id, name_en, price FROM service_extras WHERE id IN (?) AND service_id = ? AND deleted_at IS NULL',
+          'SELECT id, name_en, name_ar, price FROM service_extras WHERE id IN (?) AND service_id = ? AND deleted_at IS NULL',
           [dto.extras.map((e) => e.extraId), service.id],
         );
         const invalid = dto.extras
@@ -1061,6 +1064,7 @@ export class BookingsService {
           lines.push({
             kind: BookingLineKind.Extra,
             label: row.name_en,
+            labelAr: row.name_ar || null,
             quantity: extra.quantity,
             unitAmount: String(row.price),
             serviceId: service.id,
@@ -1070,7 +1074,7 @@ export class BookingsService {
     } else {
       bookingRange({ eventDate: dto.eventDate, endDate: dto.endDate, isPack: true, priceType: null });
       const [pack] = await em.query(
-        `SELECT p.id, p.provider_id, p.name_en, p.price, p.deleted_at, ${PACK_VISIBLE_SQL} AS visible FROM packs p JOIN users u ON u.id = p.provider_id WHERE p.id = ?`,
+        `SELECT p.id, p.provider_id, p.name_en, p.name_ar, p.price, p.deleted_at, ${PACK_VISIBLE_SQL} AS visible FROM packs p JOIN users u ON u.id = p.provider_id WHERE p.id = ?`,
         [dto.packId],
       );
       if (!pack || pack.deleted_at) throw AppException.of('PACK_NOT_FOUND');
@@ -1078,14 +1082,15 @@ export class BookingsService {
       providerId = pack.provider_id;
       feeKey = 'pack_fee_percent';
       const items: any[] = await em.query(
-        'SELECT s.id AS service_id, s.title_en, s.base_price FROM pack_items pi JOIN services s ON s.id = pi.service_id WHERE pi.pack_id = ? ORDER BY pi.position',
+        'SELECT s.id AS service_id, s.title_en, s.title_ar, s.base_price FROM pack_items pi JOIN services s ON s.id = pi.service_id WHERE pi.pack_id = ? ORDER BY pi.position',
         [pack.id],
       );
       lines = packLines(
-        { price: String(pack.price), nameEn: pack.name_en },
+        { price: String(pack.price), nameEn: pack.name_en, nameAr: pack.name_ar },
         items.map((i) => ({
           serviceId: i.service_id,
           titleEn: i.title_en,
+          titleAr: i.title_ar,
           basePrice: String(i.base_price),
         })),
       );
@@ -1276,6 +1281,7 @@ export class BookingsService {
           bookingId,
           kind: l.kind,
           label: l.label,
+          labelAr: l.labelAr ?? null,
           quantity: l.quantity,
           unitAmount: l.unitAmount,
           amount: l.amount,
@@ -2194,11 +2200,11 @@ export class BookingsService {
     if (!booking.serviceId) return null;
     const [service] = await em.query('SELECT price_type FROM services WHERE id = ?', [booking.serviceId]);
     const stored: any[] = await em.query(
-      'SELECT kind, label, quantity, unit_amount, service_id FROM booking_lines WHERE booking_id = ? ORDER BY position',
+      'SELECT kind, label, label_ar, quantity, unit_amount, service_id FROM booking_lines WHERE booking_id = ? ORDER BY position',
       [booking.id],
     );
     const next = rescheduledLines(
-      stored.map((l) => ({ kind: l.kind, label: l.label, quantity: Number(l.quantity), unitAmount: String(l.unit_amount), serviceId: l.service_id })),
+      stored.map((l) => ({ kind: l.kind, label: l.label, labelAr: l.label_ar ?? null, quantity: Number(l.quantity), unitAmount: String(l.unit_amount), serviceId: l.service_id })),
       { serviceId: booking.serviceId, priceType: (service?.price_type ?? null) as PriceType | null, startTime: start, endTime: end },
     );
     if (!next) return null;

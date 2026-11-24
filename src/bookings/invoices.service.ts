@@ -79,7 +79,7 @@ export class InvoicesService implements OnModuleInit {
        WHERE b.id = ?`,
       [bookingId],
     );
-    const lines: any[] = await em.query('SELECT kind, label, quantity, unit_amount, amount FROM booking_lines WHERE booking_id = ? AND deleted_at IS NULL ORDER BY position', [bookingId]);
+    const lines: any[] = await em.query('SELECT kind, label, label_ar, quantity, unit_amount, amount FROM booking_lines WHERE booking_id = ? AND deleted_at IS NULL ORDER BY position', [bookingId]);
     const issuer = await this.settings.get('invoice_issuer');
     const currency = await this.settings.get('currency');
     const snapshot: InvoiceSnapshot = {
@@ -90,7 +90,8 @@ export class InvoicesService implements OnModuleInit {
       titleAr: parties.title_ar ?? '',
       client: { id: parties.client_id, name: parties.client_name, businessName: null, email: parties.client_email, phone: parties.client_phone },
       provider: { id: parties.provider_id, name: parties.provider_name, businessName: parties.business_name ?? null, email: parties.provider_email, phone: parties.provider_phone },
-      lines: lines.map((l) => ({ kind: l.kind, label: l.label, quantity: Number(l.quantity), unitAmount: String(l.unit_amount), amount: String(l.amount) })),
+      // BUG-O2: both labels, so the Arabic invoice prints the Arabic name.
+      lines: lines.map((l) => ({ kind: l.kind, label: l.label, labelAr: l.label_ar ?? null, quantity: Number(l.quantity), unitAmount: String(l.unit_amount), amount: String(l.amount) })),
     };
     const fee = computeFee(booking.total, booking.feePercent);
     const repository = em.getRepository(Invoice);

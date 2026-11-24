@@ -209,7 +209,9 @@ export class AppProviderBookingsQueryDto extends PaginationQueryDto {
 export class AppBookingLineDto {
   @ApiProperty({ format: 'uuid' }) id: string;
   @ApiProperty({ enum: BookingLineKind, example: BookingLineKind.Service }) kind: BookingLineKind;
-  @ApiProperty({ example: 'Wedding photo & video coverage' }) label: string;
+  @ApiProperty({ example: 'Wedding photo & video coverage', description: 'BUG-O2: in the request language (Arabic when there is an Arabic name).' }) label: string;
+  @ApiProperty({ example: 'Wedding photo & video coverage' }) labelEn: string;
+  @ApiProperty({ type: String, nullable: true, example: 'تغطية تصوير الأعراس', description: 'Null on lines without an Arabic name (then show `labelEn`).' }) labelAr: string | null;
   @ApiProperty({ example: 1 }) quantity: number;
   @ApiProperty({ example: '45000.00' }) unitAmount: string;
   @ApiProperty({ example: '45000.00', description: 'Negative on a `discount` line.' }) amount: string;

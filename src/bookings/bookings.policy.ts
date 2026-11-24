@@ -65,7 +65,10 @@ export const fromCents = (cents: number): string => {
 
 export interface LineInput {
   kind: BookingLineKind;
+  /** English label (the service / extra / pack name). */
   label: string;
+  /** BUG-O2: the Arabic label; null when there is none (the English one is shown then). */
+  labelAr?: string | null;
   quantity: number;
   unitAmount: string;
   serviceId?: string | null;
@@ -96,6 +99,7 @@ export function computeLines(lines: LineInput[]): ComputedLine[] {
     return {
       kind: line.kind,
       label: line.label,
+      labelAr: line.labelAr ?? null,
       quantity: line.quantity,
       unitAmount: fromCents(line.kind === BookingLineKind.Discount ? Math.abs(unit) : unit),
       serviceId: line.serviceId ?? null,
@@ -187,12 +191,23 @@ export function rescheduledLines(
 }
 
 /** Pack lines: one per item at its base price, then a discount down to the pack price. */
-export function packLines(pack: { price: string; nameEn: string }, items: { serviceId: string; titleEn: string; basePrice: string }[]): LineInput[] {
-  const lines: LineInput[] = items.map((item) => ({ kind: BookingLineKind.PackService, label: item.titleEn, quantity: 1, unitAmount: item.basePrice, serviceId: item.serviceId }));
+export function packLines(
+  pack: { price: string; nameEn: string; nameAr?: string | null },
+  items: { serviceId: string; titleEn: string; titleAr?: string | null; basePrice: string }[],
+): LineInput[] {
+  const lines: LineInput[] = items.map((item) => ({
+    kind: BookingLineKind.PackService,
+    label: item.titleEn,
+    labelAr: item.titleAr || null,
+    quantity: 1,
+    unitAmount: item.basePrice,
+    serviceId: item.serviceId,
+  }));
+  const priceAr = pack.nameAr ? `سعر الباقة ${pack.nameAr}` : null;
   const sum = items.reduce((total, item) => total + toCents(item.basePrice), 0);
   const saving = sum - toCents(pack.price);
-  if (saving > 0) lines.push({ kind: BookingLineKind.Discount, label: `${pack.nameEn} pack price`, quantity: 1, unitAmount: fromCents(saving) });
-  if (saving < 0) lines.push({ kind: BookingLineKind.Adjustment, label: `${pack.nameEn} pack price`, quantity: 1, unitAmount: fromCents(-saving) });
+  if (saving > 0) lines.push({ kind: BookingLineKind.Discount, label: `${pack.nameEn} pack price`, labelAr: priceAr, quantity: 1, unitAmount: fromCents(saving) });
+  if (saving < 0) lines.push({ kind: BookingLineKind.Adjustment, label: `${pack.nameEn} pack price`, labelAr: priceAr, quantity: 1, unitAmount: fromCents(-saving) });
   return lines;
 }
 

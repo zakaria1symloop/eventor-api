@@ -112,6 +112,11 @@ export function renderInvoicePdf(invoice: InvoiceDto): Promise<Buffer> {
       write(String(line.quantity), cols.qty, y, { size: 9, width: 40, align: 'right' });
       write(formatDzd(line.unitAmount), cols.unit, y, { size: 9, width: 80, align: 'right' });
       write(formatDzd(line.amount), cols.amount, y, { size: 9, width: 72, align: 'right' });
+      // BUG-O2: the Arabic name under the English one, as for the event title.
+      if (line.labelAr && line.labelAr !== line.label) {
+        y += 13;
+        write(line.labelAr, cols.label, y, { size: 9, width: 270, align: 'right', color: '#555' });
+      }
       y += 18;
       if (y > 700) {
         doc.addPage();

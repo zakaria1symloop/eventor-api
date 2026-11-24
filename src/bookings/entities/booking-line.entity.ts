@@ -27,6 +27,10 @@ export class BookingLine extends AbstractEntity {
   @Column({ type: 'varchar', length: 190 })
   label: string;
 
+  /** BUG-O2: the Arabic label (service / extra / pack name in Arabic); null = none, the English one is shown. */
+  @Column({ type: 'varchar', length: 190, nullable: true })
+  labelAr: string | null;
+
   @Column({ type: 'int', default: 1 })
   quantity: number;
 

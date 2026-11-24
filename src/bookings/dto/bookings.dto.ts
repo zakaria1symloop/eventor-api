@@ -192,6 +192,7 @@ export class BookingLineDto {
   @ApiProperty({ format: 'uuid' }) id: string;
   @ApiProperty({ enum: BookingLineKind }) kind: BookingLineKind;
   @ApiProperty({ example: 'Wedding photo & video coverage' }) label: string;
+  @ApiProperty({ type: String, nullable: true, example: 'تغطية تصوير الأعراس', description: 'BUG-O2: the Arabic label; null = none.' }) labelAr: string | null;
   @ApiProperty({ example: 1 }) quantity: number;
   @ApiProperty({ example: '45000.00' }) unitAmount: string;
   @ApiProperty({ example: '45000.00', description: 'Negative for discounts.' }) amount: string;
@@ -415,6 +416,9 @@ export class RescheduleBookingDto {
 export class PriceLineInputDto {
   @ApiProperty({ enum: BookingLineKind }) @IsEnum(BookingLineKind) kind: BookingLineKind;
   @ApiProperty({ example: 'Drone footage', maxLength: 190 }) @Transform(trim) @IsString() @MinLength(1) @MaxLength(190) label: string;
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'تصوير بالطائرة', maxLength: 190, description: 'BUG-O2: the Arabic label shown to Arabic readers and on the invoice.' })
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(190)
+  labelAr?: string | null;
   @ApiProperty({ example: 1, minimum: 1, maximum: 100000 }) @IsInt() @Min(1) @Max(100000) quantity: number;
   @ApiProperty({ example: '7500.00', description: 'DZD. Discounts always reduce the total; adjustments may be negative.' })
   @Transform(toMoneyString)
@@ -454,6 +458,7 @@ export class UpdateBookingDto {
 export class InvoiceLineDto {
   @ApiProperty({ enum: BookingLineKind }) kind: BookingLineKind;
   @ApiProperty({ example: 'Wedding photo & video coverage' }) label: string;
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'تغطية تصوير الأعراس', description: 'BUG-O2: the Arabic label (invoices issued since 24 Nov 2026); print it on the Arabic invoice.' }) labelAr?: string | null;
   @ApiProperty({ example: 1 }) quantity: number;
   @ApiProperty({ example: '45000.00' }) unitAmount: string;
   @ApiProperty({ example: '45000.00' }) amount: string;

@@ -992,6 +992,31 @@ describe('App bookings (e2e)', () => {
       expect(pdf.headers['content-type']).toContain('application/pdf');
     });
 
+    it('keeps the Arabic names on the price lines and the invoice, whatever language booked (BUG-O2, O-07 / O-09)', async () => {
+      const service = await bookableService({ titleEn: 'Wedding DJ', titleAr: 'دي جي للأعراس', basePrice: '45000.00' });
+      await db().query('INSERT INTO service_extras (id, created_at, updated_at, service_id, name_en, name_ar, price, position) VALUES (UUID(), NOW(6), NOW(6), ?, ?, ?, ?, 0)', [service.id, 'Smoke machine', 'آلة الدخان', '5000.00']);
+      const [extra] = await db().query('SELECT id FROM service_extras WHERE service_id = ?', [service.id]);
+      // Booked from an app in English.
+      const created = await request(t.http).post(BASE).set(client.headers).set('Accept-Language', 'en')
+        .send({ serviceId: service.id, eventDate: '2027-01-22', wilayaCode: 16, eventType: EventType.Wedding, extras: [{ extraId: extra.id, quantity: 1 }] });
+      const id = created.body.data.id;
+      await request(t.http).post(`/api/v1/app/provider/bookings/${id}/accept`).set(provider.headers).expect(200);
+
+      const inArabic = (await request(t.http).get(`${BASE}/${id}`).set(client.headers).set('Accept-Language', 'ar').expect(200)).body.data;
+      expect(inArabic.lines.map((l: { label: string }) => l.label)).toEqual(['دي جي للأعراس', 'آلة الدخان']);
+      expect(inArabic.lines[0]).toMatchObject({ labelEn: 'Wedding DJ', labelAr: 'دي جي للأعراس' });
+      const inEnglish = (await request(t.http).get(`${BASE}/${id}`).set(client.headers).set('Accept-Language', 'en').expect(200)).body.data;
+      expect(inEnglish.lines.map((l: { label: string }) => l.label)).toEqual(['Wedding DJ', 'Smoke machine']);
+
+      const invoice = (await request(t.http).get(`${BASE}/${id}/invoice`).set(client.headers).expect(200)).body.data;
+      expect(invoice.lines.map((l: { label: string; labelAr: string }) => [l.label, l.labelAr])).toEqual([
+        ['Wedding DJ', 'دي جي للأعراس'],
+        ['Smoke machine', 'آلة الدخان'],
+      ]);
+      const pdf = await request(t.http).get(`${BASE}/${id}/invoice.pdf`).set(client.headers);
+      expect(pdf.status).toBe(200);
+    });
+
     it('refuses somebody else’s invoice', async () => {
       const booking = await makeBooking(db(), { clientId: otherClient.user.id, providerId: provider.user.id, status: BookingStatus.Accepted });
       expectError(await request(t.http).get(`${BASE}/${booking.id}/invoice`).set(client.headers), 403, 'NOT_OWNER');

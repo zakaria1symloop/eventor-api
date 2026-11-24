@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ADMIN_TEAM_EVENTS, type AdminTeamChangedEvent } from './admins.events.js';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { IsNull, type DataSource } from 'typeorm';
 import { AuditService } from '../audit/audit.service.js';
@@ -233,6 +234,7 @@ export class AdminsService {
   }
 
   private emitInvitation(afterCommit: AfterCommit, invitation: AdminInvitation, inviter: User, token: string): void {
+    this.events.emitAfterCommit<AdminTeamChangedEvent>(afterCommit, ADMIN_TEAM_EVENTS.changed, { reason: 'invitation_sent', userId: null, invitationId: invitation.id });
     this.events.emitAfterCommit<AdminInvitedEvent>(afterCommit, AUTH_EVENTS.adminInvited, {
       invitationId: invitation.id,
       email: invitation.email,
@@ -319,9 +321,10 @@ export class AdminsService {
   }
 
   async revokeInvitation(_auth: AuthUser, id: string): Promise<void> {
-    await runInTransaction(this.dataSource, async (em) => {
+    await runInTransaction(this.dataSource, async (em, afterCommit) => {
       const invitation = await this.lockPendingInvitation(em, id);
       await em.getRepository(AdminInvitation).update(invitation.id, { revokedAt: new Date() });
+      this.events.emitAfterCommit<AdminTeamChangedEvent>(afterCommit, ADMIN_TEAM_EVENTS.changed, { reason: 'invitation_revoked', userId: null, invitationId: invitation.id });
       await this.audit.log(
         {
           action: 'admin.invitation_revoked',
@@ -336,7 +339,8 @@ export class AdminsService {
   }
 
   async removeAdmin(auth: AuthUser, id: string): Promise<void> {
-    await runInTransaction(this.dataSource, async (em) => {
+    await runInTransaction(this.dataSource, async (em, afterCommit) => {
+      this.events.emitAfterCommit<AdminTeamChangedEvent>(afterCommit, ADMIN_TEAM_EVENTS.changed, { reason: 'admin_removed', userId: id, invitationId: null });
       const users = em.getRepository(User);
       // Lock every admin row so two removals cannot leave zero admins.
       const admins = await users.find({ where: { role: UserRole.Admin }, lock: { mode: 'pessimistic_write' } });

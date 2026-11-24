@@ -87,6 +87,17 @@ block and cannot remove it.
 provider"). Optionally, mention in the create-block form that the note stays
 internal.
 
+## #24 — admin accounts list stays on "Invitation sent" after acceptance (L-02)
+
+The API list was already right: an accepted invitation is no longer listed, the new
+admin is. The open dashboard simply never knew, because the invitee accepts in their own
+browser. **API (ready):** the admin socket (`/admin` namespace) now emits
+**`admins:updated`** `{ reason, userId, invitationId }` to every connected admin when an
+invitation is sent, accepted or revoked, or an admin is removed (`reason`:
+`invitation_sent` | `invitation_accepted` | `invitation_revoked` | `admin_removed`).
+**Dashboard to do:** on `admins:updated`, invalidate / refetch the team list (and the
+pending invitations badge if there is one).
+
 ## BUG-L1 — saved view: the trash icon applies the view instead of deleting it (L-39)
 
 **API (ready, unchanged, tested):** `DELETE /admin/saved-views/{id}` → 204 (owner only,

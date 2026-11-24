@@ -35,7 +35,7 @@ describe('booking notifications', () => {
     const t = setup();
     await t.listener.onCreated(base);
     expect(t.notified()).toEqual([
-      { to: PROVIDER, type: 'booking.requested', title: 'New booking request', body: '"Wedding photos" on 2026-11-14. Accept or decline it in the app.', data: { bookingId: 'b-1', reference: 'EVT-1' }, push: true },
+      { to: PROVIDER, type: 'booking.requested', title: 'New booking request', body: '"Wedding photos" on 14 November 2026. Accept or decline it in the app.', data: { bookingId: 'b-1', reference: 'EVT-1' }, push: true },
     ]);
   });
 
@@ -44,6 +44,9 @@ describe('booking notifications', () => {
     await t.listener.onAccepted(status());
     expect(t.notified()).toEqual([expect.objectContaining({ to: CLIENT, type: 'booking.accepted', title: 'تم تأكيد الحجز', push: true })]);
     expect(t.notified()[0]!.body).toContain('«تصوير الأعراس»');
+    // O-07 (#24): the date in words, in Arabic.
+    expect(t.notified()[0]!.body).toContain('14 نوفمبر 2026');
+    expect(t.notified()[0]!.body).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 
   it('a decline tells the client', async () => {
@@ -76,7 +79,7 @@ describe('booking notifications', () => {
     const t = setup();
     await t.listener.onRescheduleProposed(moved({ actorId: CLIENT }));
     expect(t.notified()).toEqual([expect.objectContaining({ to: PROVIDER, type: 'booking.reschedule_proposed', title: 'New date proposed' })]);
-    expect(t.notified()[0]!.body).toBe('The client proposed to move "Wedding photos" from 2026-11-14 to 2026-11-21. Accept or decline it in the app.');
+    expect(t.notified()[0]!.body).toBe('The client proposed to move "Wedding photos" from 14 November 2026 to 21 November 2026. Accept or decline it in the app.');
     expect(t.emailed()).toEqual(['provider@example.com']);
 
     const byEventor = setup();
@@ -93,7 +96,7 @@ describe('booking notifications', () => {
     const rejected = setup();
     await rejected.listener.onRescheduleRejected(moved({ actorId: PROVIDER }));
     expect(rejected.notified()).toEqual([expect.objectContaining({ to: CLIENT, type: 'booking.reschedule_rejected', title: 'New date declined' })]);
-    expect(rejected.notified()[0]!.body).toBe('The proposal to move "Wedding photos" to 2026-11-21 was declined. The booking stays on 2026-11-14.');
+    expect(rejected.notified()[0]!.body).toBe('The proposal to move "Wedding photos" to 21 November 2026 was declined. The booking stays on 14 November 2026.');
   });
 
   it('price changes, reminders and review requests reach the right party', async () => {

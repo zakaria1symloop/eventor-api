@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { ADMIN_TEAM_EVENTS, type AdminTeamChangedEvent } from '../admins/admins.events.js';
 import { OnEvent } from '@nestjs/event-emitter';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { ConnectedSocket, MessageBody, SubscribeMessage, WebSocketGateway, WebSocketServer, type OnGatewayConnection, type OnGatewayInit } from '@nestjs/websockets';
@@ -119,6 +120,12 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection {
   @OnEvent(MESSAGING_EVENTS.conversationUpdated)
   onConversationUpdated(event: ConversationUpdatedEvent): void {
     this.server?.to(ADMIN_ROOM).emit('conversation:updated', event);
+  }
+
+  /** #24 (L-02): reload the team list (an invitation accepted in another browser, a revoke, a removal). */
+  @OnEvent(ADMIN_TEAM_EVENTS.changed)
+  onAdminTeamChanged(event: AdminTeamChangedEvent): void {
+    this.server?.to(ADMIN_ROOM).emit('admins:updated', event);
   }
 
   @OnEvent(NOTIFICATION_EVENTS.adminCreated)

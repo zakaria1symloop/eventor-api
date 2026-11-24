@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ADMIN_TEAM_EVENTS, type AdminTeamChangedEvent } from '../admins/admins.events.js';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { MoreThan, type DataSource, type EntityManager } from 'typeorm';
 import { AuditService } from '../audit/audit.service.js';
@@ -299,7 +300,7 @@ export class AdminAuthService {
   }
 
   async acceptInvitation(rawToken: string, password: string): Promise<SignedIn> {
-    return runInTransaction(this.dataSource, async (em) => {
+    return runInTransaction(this.dataSource, async (em, afterCommit) => {
       const invitation = await this.findInvitation(em, rawToken, true);
       assertPasswordStrong(password);
       const taken = await em.getRepository(User).exists({ where: { email: invitation.email }, withDeleted: true });
@@ -320,6 +321,7 @@ export class AdminAuthService {
         }),
       );
       await em.getRepository(AdminInvitation).update(invitation.id, { acceptedAt: new Date(), userId: user.id });
+      this.events.emitAfterCommit<AdminTeamChangedEvent>(afterCommit, ADMIN_TEAM_EVENTS.changed, { reason: 'invitation_accepted', userId: user.id, invitationId: invitation.id });
       const issued = await this.sessions.create(em, { userId: user.id, audience: SessionAudience.Dashboard, remember: false });
       await this.audit.log(
         {

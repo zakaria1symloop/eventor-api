@@ -2,6 +2,8 @@ import type { AddressInfo } from 'node:net';
 import { io, type Socket } from 'socket.io-client';
 import request from 'supertest';
 import { AuditLog } from '../src/admin/entities/audit-log.entity.js';
+import { AdminInvitation } from '../src/auth/entities/admin-invitation.entity.js';
+import { hashToken } from '../src/auth/refresh-token.js';
 import { BookingStatus } from '../src/common/enums/booking.enums.js';
 import { ConversationKind, MessageKind, MessageStatus, ParticipantRole } from '../src/common/enums/messaging.enums.js';
 import { ReportStatus, ReportTargetType } from '../src/common/enums/moderation.enums.js';
@@ -381,6 +383,27 @@ describe('Admin messages (e2e)', () => {
       await request(t.http).post(`${API}/conversations/${c.conversation.id}/messages`).set(admin.headers).send({ body: 'Numéro 0555 12 34 56' }).expect(201);
       expect(await received).toMatchObject({ body: 'Numéro 0555 12 34 56', bodyMasked: 'Numéro [phone hidden]', senderLabel: 'Eventor support' });
       expect(await updated).toEqual({ conversationId: c.conversation.id, reason: 'message' });
+    });
+
+    it('tells open dashboards when an invitation is accepted in another browser (#24, L-02)', async () => {
+      const socket = connect({ token: `Bearer ${admin.token}` });
+      await new Promise<void>((resolve, reject) => {
+        socket.on('ready', () => resolve());
+        socket.on('connect_error', reject);
+      });
+      const token = `tok-${uid()}`;
+      const invitation = await t.dataSource.getRepository(AdminInvitation).save({
+        email: `invitee.${uid()}@eventor.dz`,
+        fullName: 'Nadia Ouali',
+        tokenHash: hashToken(token),
+        invitedById: admin.user.id,
+        expiresAt: new Date(Date.now() + 3_600_000),
+      });
+      const changed = new Promise<any>((resolve) => socket.on('admins:updated', (e: any) => e.invitationId === invitation.id && resolve(e)));
+
+      await request(t.http).post(`/api/v1/admin/auth/invitations/${token}/accept`).send({ password: 'Sunflower42x' }).expect(200);
+
+      expect(await changed).toMatchObject({ reason: 'invitation_accepted', invitationId: invitation.id, userId: expect.any(String) });
     });
   });
 });

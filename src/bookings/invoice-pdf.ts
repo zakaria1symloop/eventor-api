@@ -96,7 +96,10 @@ export function renderInvoicePdf(invoice: InvoiceDto): Promise<Buffer> {
     write('EVENT', left, y, { bold: true, size: 9, color: '#86868b' });
     write(invoice.titleEn, left, y + 14, { bold: true, size: 11, width });
     if (invoice.titleAr) write(invoice.titleAr, left, y + 30, { size: 11, width, align: 'right' });
-    write(`${EVENT_TYPES[invoice.eventType] ?? 'Event'} · ${invoice.eventDate}`, left, y + 50, { size: 9, color: '#555' });
+    // A multi-day booking shows its range, and the hours when it has some (older invoices have neither).
+    const days = invoice.endDate && invoice.endDate !== invoice.eventDate ? `${invoice.eventDate} to ${invoice.endDate}` : invoice.eventDate;
+    const hours = invoice.startTime && invoice.endTime ? ` · ${invoice.startTime}–${invoice.endTime}` : '';
+    write(`${EVENT_TYPES[invoice.eventType] ?? 'Event'} · ${days}${hours}`, left, y + 50, { size: 9, color: '#555' });
 
     // Lines
     y += 80;

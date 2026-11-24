@@ -495,6 +495,9 @@ export class InvoiceDto {
   @ApiProperty({ example: 'Wedding photo & video coverage' }) titleEn: string;
   @ApiProperty({ example: 'تغطية الزفاف بالصور والفيديو' }) titleAr: string;
   @ApiProperty({ example: '2026-12-20' }) eventDate: string;
+  @ApiProperty({ type: String, nullable: true, example: '2026-12-22', description: 'Last day of a multi-day booking; null for one day (and on invoices issued before 24 Nov 2026).' }) endDate: string | null;
+  @ApiProperty({ type: String, nullable: true, example: '18:00', description: 'Event hours (HH:mm); null when the booking has none (and on older invoices).' }) startTime: string | null;
+  @ApiProperty({ type: String, nullable: true, example: '23:00' }) endTime: string | null;
   @ApiProperty({ enum: EventType }) eventType: EventType;
   @ApiProperty({ type: [InvoiceLineDto] }) lines: InvoiceLineDto[];
   @ApiProperty({ example: '45000.00' }) subtotal: string;

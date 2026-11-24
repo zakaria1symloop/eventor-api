@@ -828,14 +828,14 @@ describe('App bookings (e2e)', () => {
       });
     });
 
-    it('reissues the invoice when an accepted booking moves to another day, not for new hours alone (BUG-E5, E-23)', async () => {
+    it('reissues the invoice when what it prints changes — the day or the hours — and only then (BUG-E5, E-23)', async () => {
       const PROVIDER = '/api/v1/app/provider/bookings';
       const service = await bookableService({ basePrice: '45000.00', priceType: PriceType.PerEvent, maxEventsPerDay: null, concurrentClients: 1 });
       const created = await request(t.http).post(BASE).set(client.headers).send({ serviceId: service.id, eventDate: '2027-10-08', startTime: '18:00', endTime: '22:00', wilayaCode: 16, eventType: EventType.Wedding });
       const id = created.body.data.id;
       await request(t.http).post(`${PROVIDER}/${id}/accept`).set(provider.headers).expect(200);
       const v1 = (await request(t.http).get(`${BASE}/${id}/invoice`).set(client.headers).expect(200)).body.data;
-      expect(v1).toMatchObject({ version: 1, eventDate: '2027-10-08' });
+      expect(v1).toMatchObject({ version: 1, eventDate: '2027-10-08', endDate: null, startTime: '18:00', endTime: '22:00' });
 
       const move = async (body: Record<string, unknown>) => {
         const proposed = await request(t.http).post(`${BASE}/${id}/reschedule`).set(client.headers).send({ reason: 'Move', ...body }).expect(200);
@@ -844,14 +844,18 @@ describe('App bookings (e2e)', () => {
         return (await request(t.http).get(`${BASE}/${id}/invoice`).set(client.headers).expect(200)).body.data;
       };
 
-      // Same day, later hours, flat price: nothing printed on the invoice changed.
-      expect(await move({ date: '2027-10-08', startTime: '19:00', endTime: '23:00' })).toMatchObject({ version: 1, number: v1.number });
+      // Same day and same hours: nothing printed on the invoice changed.
+      expect(await move({ date: '2027-10-08', startTime: '18:00', endTime: '22:00' })).toMatchObject({ version: 1, number: v1.number });
 
-      const v2 = await move({ date: '2027-10-15' });
-      expect(v2).toMatchObject({ version: 2, eventDate: '2027-10-15', total: '45000.00', versions: [1, 2] });
+      // Same day, later hours, flat price: the hours are printed, so a new version.
+      const v2 = await move({ date: '2027-10-08', startTime: '19:00', endTime: '23:00' });
+      expect(v2).toMatchObject({ version: 2, eventDate: '2027-10-08', startTime: '19:00', endTime: '23:00', total: '45000.00' });
       expect(v2.number).not.toBe(v1.number);
+
+      const v3 = await move({ date: '2027-10-15' });
+      expect(v3).toMatchObject({ version: 3, eventDate: '2027-10-15', versions: [1, 2, 3] });
       const live = await db().query('SELECT version FROM invoices WHERE booking_id = ? AND deleted_at IS NULL', [id]);
-      expect(live).toEqual([{ version: 2 }]);
+      expect(live).toEqual([{ version: 3 }]);
     });
 
     it('404s on an unknown proposal', async () => {

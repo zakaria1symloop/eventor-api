@@ -607,7 +607,7 @@ describe('Admin bookings (e2e)', () => {
       expectError(await request(t.http).post(`${BASE}/${accepted.id}/remind`).set(admin.headers), 409, 'BOOKING_NOT_EDITABLE');
     });
 
-    it('reissues the invoice of an accepted booking when its event type changes, not for details the invoice does not print (BUG-E5)', async () => {
+    it('reissues the invoice of an accepted booking when its event type or hours change, not for details the invoice does not print (BUG-E5)', async () => {
       const { booking } = await createPending();
       await setStatus(booking.id, { status: 'accepted' }).expect(200);
       const versions = async () => (await db().query('SELECT version, deleted_at IS NULL AS live, JSON_UNQUOTE(JSON_EXTRACT(snapshot, "$.eventType")) AS type FROM invoices WHERE booking_id = ? ORDER BY version', [booking.id])).map((r: any) => ({ version: Number(r.version), live: Number(r.live), type: r.type }));
@@ -618,6 +618,10 @@ describe('Admin bookings (e2e)', () => {
 
       await request(t.http).patch(`${BASE}/${booking.id}`).set(admin.headers).send({ eventType: 'engagement' }).expect(200);
       expect(await versions()).toEqual([{ version: 1, live: 0, type: 'wedding' }, { version: 2, live: 1, type: 'engagement' }]);
+
+      // The hours are printed on the invoice too: editing them issues version 3.
+      await request(t.http).patch(`${BASE}/${booking.id}`).set(admin.headers).send({ startTime: '17:00', endTime: '21:00' }).expect(200);
+      expect((await versions()).at(-1)).toEqual({ version: 3, live: 1, type: 'engagement' });
     });
 
     it('edits event details; eventDate → 422 USE_RESCHEDULE; commune checks; not editable when completed', async () => {

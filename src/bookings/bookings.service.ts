@@ -1807,7 +1807,8 @@ export class BookingsService {
       if (apply) {
         await this.moveBooking(em, booking, dto.date, newStart, newEnd, now);
         if (price) await this.replaceLines(em, booking, price.lines, price.totals, dto.reason ?? null, auth.id);
-        await this.reissueInvoice(em, afterCommit, booking, price !== null || dto.date !== oldDate);
+        // The invoice prints the dates and the hours: any of them, or the price, changing means a new version.
+        await this.reissueInvoice(em, afterCommit, booking, price !== null || dto.date !== oldDate || newStart !== hhmm(booking.startTime) || newEnd !== hhmm(booking.endTime));
       }
       await this.audit.log(
         {
@@ -1978,7 +1979,12 @@ export class BookingsService {
         await this.assertCanMove(em, booking, newDate, newStart, newEnd);
         await this.moveBooking(em, booking, newDate, newStart, newEnd, now);
         if (price) await this.replaceLines(em, booking, price.lines, price.totals, row.reason, auth.id);
-        await this.reissueInvoice(em, afterCommit, booking, price !== null || newDate !== dateOnly(booking.eventDate));
+        await this.reissueInvoice(
+          em,
+          afterCommit,
+          booking,
+          price !== null || newDate !== dateOnly(booking.eventDate) || newStart !== hhmm(booking.startTime) || newEnd !== hhmm(booking.endTime),
+        );
       }
       await em.getRepository(BookingReschedule).update(row.id, {
         status:
@@ -2213,7 +2219,7 @@ export class BookingsService {
   }
 
   /**
-   * The invoice of an accepted booking prints its event date, event type and
+   * The invoice of an accepted booking prints its dates, hours, event type and
    * lines: when one of them changes it gets a new version and the old one is
    * voided (BUG-E5; numbering stays gap-free, `InvoicesService.issue`). Pending
    * bookings have no invoice yet; acceptance issues it from the current state.
@@ -2340,8 +2346,8 @@ export class BookingsService {
           ],
         );
       }
-      // The event type is printed on the invoice (BUG-E5); times, guests and place are not.
-      await this.reissueInvoice(em, afterCommit, booking, update.eventType !== undefined);
+      // The invoice prints the event type and the hours (BUG-E5); guests and place it does not.
+      await this.reissueInvoice(em, afterCommit, booking, update.eventType !== undefined || update.startTime !== undefined || update.endTime !== undefined);
       await this.audit.log(
         {
           action: 'booking.updated',

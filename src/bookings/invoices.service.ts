@@ -29,6 +29,10 @@ const dateOnly = (value: Date | string): string => (value instanceof Date ? valu
 interface InvoiceSnapshot {
   bookingReference: string;
   eventDate: string;
+  /** Since 24 Nov 2026: the last day of a multi-day booking and the hours, printed on the PDF. */
+  endDate?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
   eventType: EventType;
   titleEn: string;
   titleAr: string;
@@ -85,6 +89,9 @@ export class InvoicesService implements OnModuleInit {
     const snapshot: InvoiceSnapshot = {
       bookingReference: booking.reference,
       eventDate: dateOnly(booking.eventDate),
+      endDate: booking.endDate ? dateOnly(booking.endDate) : null,
+      startTime: booking.startTime ? String(booking.startTime).slice(0, 5) : null,
+      endTime: booking.endTime ? String(booking.endTime).slice(0, 5) : null,
       eventType: booking.eventType,
       titleEn: parties.title_en ?? '',
       titleAr: parties.title_ar ?? '',
@@ -153,6 +160,9 @@ export class InvoicesService implements OnModuleInit {
       titleEn: s.titleEn,
       titleAr: s.titleAr,
       eventDate: s.eventDate,
+      endDate: s.endDate ?? null,
+      startTime: s.startTime ?? null,
+      endTime: s.endTime ?? null,
       eventType: s.eventType,
       lines: s.lines,
       subtotal: String(invoice.subtotal),

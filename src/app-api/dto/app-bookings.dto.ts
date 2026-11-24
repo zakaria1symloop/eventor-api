@@ -286,6 +286,17 @@ export class AppRescheduleRowDto {
   @ApiProperty({ example: 'The hall is only free the week after.' }) reason: string | null;
   @ApiProperty({ enum: PartyRole, description: 'Which side proposed it.' }) proposedByRole: PartyRole;
   @ApiProperty({ example: true, description: 'True when it is this caller’s turn to accept or reject.' }) awaitingMe: boolean;
+  @ApiProperty({ type: String, nullable: true, example: '24000.00', description: 'Booking total when the date was proposed. Null on proposals made before 24 Nov 2026.' })
+  oldTotal: string | null;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: '30000.00',
+    description:
+      'Total with the new hours: a `per_hour` service is billed the new number of hours at the rate already agreed on the booking (BUG-E3). ' +
+      'Equal to `oldTotal` when the price does not change; show "New total" when they differ. Once accepted, the total that was applied. Null on older proposals.',
+  })
+  newTotal: string | null;
   @ApiProperty({ format: 'date-time' }) createdAt: string;
 }
 
@@ -335,6 +346,13 @@ export class AppBookingCardDto {
   @ApiProperty({ example: '57000.00' }) total: string;
   @ApiProperty({ type: AppBookingPartyDto, description: 'The provider for a client, the client for a provider.' }) counterparty: AppBookingPartyDto;
   @ApiProperty({ type: String, nullable: true, format: 'uuid', description: 'The direct chat, for the "Message" button.' }) conversationId: string | null;
+  @ApiProperty({
+    example: false,
+    description:
+      'The other party\'s account is blocked by Eventor and the booking was kept (BUG-M4). Show "<counterparty> is temporarily unavailable"; ' +
+      '`reschedule` is then missing from `allowedActions` on an accepted booking. Back to false when they are unblocked (`booking:updated`).',
+  })
+  counterpartyBlocked: boolean;
   @ApiProperty({ enum: APP_BOOKING_ACTIONS, isArray: true, description: 'The buttons to draw; the write endpoints enforce the same rules.' })
   allowedActions: AppBookingAction[];
   @ApiProperty({ format: 'date-time' }) createdAt: string;

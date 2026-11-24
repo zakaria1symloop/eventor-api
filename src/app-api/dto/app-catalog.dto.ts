@@ -307,7 +307,7 @@ export class AppServicesQueryDto extends PaginationQueryDto {
   @IsOptional() @Type(() => Number) @IsNumber() @Min(1) @Max(5)
   rating?: number;
 
-  @ApiPropertyOptional({ format: 'date', example: '2026-03-14', description: 'Keep only services free on that day.' })
+  @ApiPropertyOptional({ format: 'date', example: '2026-03-14', description: 'Keep only services free on that day: the day their calendar (`GET /app/services/{id}/availability`) shows as `available`. A day before `firstBookableDate` returns an empty list.' })
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'eventDate must be YYYY-MM-DD' })
   eventDate?: string;
 

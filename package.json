@@ -28,6 +28,10 @@
     "spec:export": "nest build && node dist/tools/export-openapi.js",
     "seed:demo": "tsx src/database/seeds/demo-seed.ts",
     "stats:backfill": "tsx src/stats/stats-backfill.cli.ts",
+    "bookings:expire-preview": "tsx src/bookings/booking-expiry-preview.cli.ts",
+    "bookings:expire-preview:prod": "node dist/bookings/booking-expiry-preview.cli.js",
+    "mail:test": "tsx src/mail/mail-test.cli.ts",
+    "mail:test:prod": "node dist/mail/mail-test.cli.js",
     "perf:seed": "tsx src/tools/perf-seed.ts",
     "perf:check": "nest build && node dist/tools/perf-check.js"
   },

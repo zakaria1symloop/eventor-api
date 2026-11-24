@@ -106,6 +106,7 @@ const DEFINITIONS: Record<SettingKey, Def> = {
   // Bookings
   booking_reply_deadline_hours: int('bookings', 1, 720),
   booking_auto_reminder: { section: 'bookings', type: 'boolean', sensitive: false },
+  booking_auto_expire: { section: 'bookings', type: 'boolean', sensitive: true },
   booking_min_notice_days: int('bookings', 0, 365),
   dispute_window_hours: int('bookings', 1, 720),
   review_open_after_hours: int('bookings', 0, 720),

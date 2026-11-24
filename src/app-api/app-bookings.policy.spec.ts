@@ -63,6 +63,23 @@ describe('appBookingActions', () => {
 
   it('gives the provider Accept and Decline on a pending booking', () => {
     expect(appBookingActions('provider', state({ status: BookingStatus.Pending }))).toEqual(expect.arrayContaining(['accept', 'decline']));
+    expect(appBookingActions('provider', state({ status: BookingStatus.Pending, canAccept: true }))).toContain('accept');
+  });
+
+  it('drops Accept, but keeps Decline, once the slot is taken (BUG-M2)', () => {
+    const actions = appBookingActions('provider', state({ status: BookingStatus.Pending, canAccept: false }));
+    expect(actions).not.toContain('accept');
+    expect(actions).toEqual(expect.arrayContaining(['decline', 'cancel', 'reschedule', 'message']));
+    // Only the provider's pending requests are concerned.
+    expect(appBookingActions('provider', state({ canAccept: false }))).toEqual(appBookingActions('provider', state()));
+  });
+
+  it('offers only cancel and message on an expired request, to both sides (BUG-F1)', () => {
+    for (const party of ['client', 'provider'] as const) {
+      expect(appBookingActions(party, state({ status: BookingStatus.Pending, expired: true })).sort()).toEqual(['cancel', 'message']);
+    }
+    // Only pending requests can be expired.
+    expect(appBookingActions('provider', state({ expired: true }))).toEqual(appBookingActions('provider', state()));
   });
 
   it('offers the invoice only from acceptance on', () => {
@@ -110,6 +127,27 @@ describe('appBookingActions', () => {
     const actions = appBookingActions('provider', state({ eventDate: TODAY, disputeWindowOpen: true, pendingRescheduleForMe: true }));
     expect(new Set(actions).size).toBe(actions.length);
     expect(actions).toContain('message');
+  });
+
+  it('stops offering cancel and reschedule once an accepted event is over, to both sides (BUG-E6)', () => {
+    for (const party of ['client', 'provider'] as const) {
+      const before = appBookingActions(party, state({ eventDate: TODAY, eventOver: false, disputeWindowOpen: true }));
+      const after = appBookingActions(party, state({ eventDate: TODAY, eventOver: true, disputeWindowOpen: true }));
+      expect(before).toEqual(expect.arrayContaining(['cancel', 'reschedule']));
+      expect(after).not.toContain('cancel');
+      expect(after).not.toContain('reschedule');
+      // What makes sense after the event stays: everything else.
+      expect(after.sort()).toEqual(before.filter((a) => a !== 'cancel' && a !== 'reschedule').sort());
+    }
+    expect(appBookingActions('provider', state({ eventDate: TODAY, eventOver: true }))).toEqual(expect.arrayContaining(['complete', 'check_in', 'invoice', 'message']));
+    // Omitted = not over, as before.
+    expect(appBookingActions('client', state())).toEqual(appBookingActions('client', state({ eventOver: false })));
+  });
+
+  it('drops only reschedule from an accepted booking whose counterpart is blocked (BUG-M4)', () => {
+    const before = appBookingActions('client', state());
+    expect(appBookingActions('client', state({ counterpartyBlocked: true })).sort()).toEqual(before.filter((a) => a !== 'reschedule').sort());
+    expect(appBookingActions('client', state({ status: BookingStatus.Pending, counterpartyBlocked: true }))).toContain('reschedule');
   });
 
   it('leaves a cancelled booking with nothing but the chat', () => {

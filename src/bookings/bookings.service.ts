@@ -26,7 +26,7 @@ import {
   type Paginated,
 } from '../common/pagination/paginated.js';
 import { toOrder } from '../common/pagination/sort.js';
-import { runInTransaction, type AfterCommit } from '../database/transaction.js';
+import { BOOKING_ISOLATION, runInTransaction, type AfterCommit } from '../database/transaction.js';
 import { FilesService } from '../files/files.service.js';
 import {
   MessagingService,
@@ -41,6 +41,7 @@ import { SettingsService } from '../settings/settings.service.js';
 import {
   BOOKING_EVENTS,
   type BookingCancelledEvent,
+  type BookingCounterpartyBlockedEvent,
   type BookingEvent,
   type BookingPriceChangedEvent,
   type BookingReminderEvent,
@@ -54,15 +55,20 @@ import {
   bookingDays,
   bookingRange,
   canTransition,
+  EXPIRED_REASON,
+  isExpired,
+  type ExpiryCause,
   lastDay,
   computeFee,
   computeLines,
   computeTotals,
+  eventEndsAt,
   fromCents,
   isEditable,
   packLines,
   reminderRetryAfter,
   REMINDER_INTERVAL_HOURS,
+  rescheduledLines,
   checkInOutcome,
   checkInRefusal,
   serviceQuantity,
@@ -705,6 +711,8 @@ export class BookingsService {
       status: s.status,
       createdAt: iso(s.created_at)!,
       resolvedAt: iso(s.resolved_at),
+      oldTotal: s.old_total === null || s.old_total === undefined ? null : String(s.old_total),
+      newTotal: s.new_total === null || s.new_total === undefined ? null : String(s.new_total),
     };
   }
 
@@ -717,6 +725,9 @@ export class BookingsService {
    * `max_events_per_day` (for a pack: the smallest among its items); held and
    * booked rows of other bookings count, and a manual block covering the day
    * (or overlapping the booked hours) makes the date unavailable.
+   *
+   * `lock: false` is the read-only variant for screens (quote, `allowedActions`):
+   * same answer, no row locks.
    */
   async isAvailable(
     em: EntityManager,
@@ -729,10 +740,14 @@ export class BookingsService {
       endTime: string | null;
       excludeBookingId?: string;
     },
+    options: { lock?: boolean } = {},
   ): Promise<boolean> {
-    await em.query('SELECT id FROM users WHERE id = ? FOR UPDATE', [
-      input.providerId,
-    ]);
+    const lock = options.lock ?? true;
+    if (lock) {
+      await em.query('SELECT id FROM users WHERE id = ? FOR UPDATE', [
+        input.providerId,
+      ]);
+    }
     const serviceIds: string[] = input.serviceId
       ? [input.serviceId]
       : (
@@ -755,7 +770,7 @@ export class BookingsService {
       end_time: string | null;
       booking_id: string | null;
     }[] = await em.query(
-      'SELECT kind, service_id, start_time, end_time, booking_id FROM availability_blocks WHERE provider_id = ? AND date = ? AND deleted_at IS NULL FOR UPDATE',
+      `SELECT kind, service_id, start_time, end_time, booking_id FROM availability_blocks WHERE provider_id = ? AND date = ? AND deleted_at IS NULL${lock ? ' FOR UPDATE' : ''}`,
       [input.providerId, input.date],
     );
     // Minutes from midnight, so an overnight booking (18:00 → 02:00) still meets a 20:00–22:00 block.
@@ -845,21 +860,87 @@ export class BookingsService {
         return { code: 'OUTSIDE_SERVICE_HOURS', details: { weekday: weekdayOf(input.date), hours: today } };
       }
 
-      // null = "Allow several clients at the same time": no slot limit.
-      if (booked && service.concurrent_clients !== null) {
-        const others: { start_time: string | null; end_time: string | null }[] = await em.query(
-          `SELECT b.start_time, b.end_time FROM bookings b
-            WHERE ? BETWEEN b.event_date AND COALESCE(b.end_date, b.event_date)
-              AND b.status IN ('pending', 'accepted') AND b.deleted_at IS NULL AND b.id <> ?
-              AND (b.service_id = ? OR b.pack_id IN (SELECT pack_id FROM pack_items WHERE service_id = ?))`,
-          [input.date, input.excludeBookingId ?? '', service.id, service.id],
-        );
-        const taken = overlapping(
-          booked,
-          others.map((o) => timeSpan(hhmm(o.start_time), hhmm(o.end_time))),
-        );
-        if (taken >= Math.max(1, Number(service.concurrent_clients))) {
-          return { code: 'SLOT_UNAVAILABLE', details: { date: input.date, startTime: input.startTime, endTime: input.endTime } };
+      if (await this.slotFull(em, service, { ...input, statuses: [BookingStatus.Pending, BookingStatus.Accepted] })) {
+        return { code: 'SLOT_UNAVAILABLE', details: { date: input.date, startTime: input.startTime, endTime: input.endTime } };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * True when `concurrent_clients` bookings in `statuses` already overlap the
+   * hours on `date` for this service, booked directly or through a pack that
+   * contains it. A request (create, reschedule) counts pending and accepted
+   * bookings; an acceptance counts accepted ones only (`acceptObstacle`).
+   * null `concurrent_clients` ("Allow several clients at the same time") and
+   * bookings without hours never fill a slot: the daily limit covers those.
+   */
+  private async slotFull(
+    em: EntityManager,
+    service: { id: string; concurrent_clients: number | null },
+    input: { date: string; startTime: string | null; endTime: string | null; excludeBookingId?: string; statuses: BookingStatus[] },
+  ): Promise<boolean> {
+    const booked = timeSpan(input.startTime, input.endTime);
+    if (!booked || service.concurrent_clients === null) return false;
+    const others: { start_time: string | null; end_time: string | null }[] = await em.query(
+      `SELECT b.start_time, b.end_time FROM bookings b
+        WHERE ? BETWEEN b.event_date AND COALESCE(b.end_date, b.event_date)
+          AND b.status IN (?) AND b.deleted_at IS NULL AND b.id <> ?
+          AND (b.service_id = ? OR b.pack_id IN (SELECT pack_id FROM pack_items WHERE service_id = ?))`,
+      [input.date, input.statuses, input.excludeBookingId ?? '', service.id, service.id],
+    );
+    const taken = overlapping(
+      booked,
+      others.map((o) => timeSpan(hhmm(o.start_time), hhmm(o.end_time))),
+    );
+    return taken >= Math.max(1, Number(service.concurrent_clients));
+  }
+
+  /**
+   * Why a pending booking can no longer be accepted, or null (BUG-M2). Checked
+   * on every day of the booking, for the service or each item of the pack:
+   * - `DATE_UNAVAILABLE`: a manual block or the daily limit (`isAvailable`);
+   * - `SLOT_UNAVAILABLE`: `concurrent_clients` **accepted** bookings already
+   *   overlap its hours (other pending requests don't count: they are not
+   *   commitments yet).
+   *
+   * The accept transition throws it (409), and the app drops `accept` from
+   * `allowedActions` with the same answer (`lock: false`), so the button and the
+   * endpoint never disagree.
+   */
+  async acceptObstacle(
+    em: EntityManager,
+    booking: {
+      id: string;
+      providerId: string;
+      serviceId: string | null;
+      packId: string | null;
+      eventDate: string;
+      endDate: string | null;
+      startTime: string | null;
+      endTime: string | null;
+    },
+    options: { lock: boolean },
+  ): Promise<{ code: 'DATE_UNAVAILABLE' | 'SLOT_UNAVAILABLE'; details: Record<string, unknown> } | null> {
+    const services: { id: string; concurrent_clients: number | null }[] = booking.serviceId
+      ? await em.query('SELECT id, concurrent_clients FROM services WHERE id = ?', [booking.serviceId])
+      : await em.query('SELECT s.id, s.concurrent_clients FROM pack_items pi JOIN services s ON s.id = pi.service_id WHERE pi.pack_id = ?', [booking.packId]);
+    for (const date of bookingDays(booking.eventDate, booking.endDate)) {
+      const input = {
+        providerId: booking.providerId,
+        serviceId: booking.serviceId,
+        packId: booking.packId,
+        date,
+        startTime: booking.startTime,
+        endTime: booking.endTime,
+        excludeBookingId: booking.id,
+      };
+      if (!(await this.isAvailable(em, input, { lock: options.lock }))) {
+        return { code: 'DATE_UNAVAILABLE', details: { date } };
+      }
+      for (const service of services) {
+        if (await this.slotFull(em, service, { ...input, statuses: [BookingStatus.Accepted] })) {
+          return { code: 'SLOT_UNAVAILABLE', details: { date, startTime: booking.startTime, endTime: booking.endTime } };
         }
       }
     }
@@ -903,13 +984,18 @@ export class BookingsService {
         },
       ]);
     }
-    const id = await runInTransaction(this.dataSource, (em, afterCommit) =>
-      this.createInTransaction(em, afterCommit, auth, dto),
+    const id = await runInTransaction(
+      this.dataSource,
+      (em, afterCommit) => this.createInTransaction(em, afterCommit, auth, dto),
+      BOOKING_ISOLATION,
     );
     return this.get(id);
   }
 
-  /** The create rules and effects inside the caller's transaction (academic requests book proposals with it). Returns the booking id. */
+  /**
+   * The create rules and effects inside the caller's transaction (academic requests book proposals with it). Returns the booking id.
+   * The caller's transaction must run at `BOOKING_ISOLATION`, or a request sent in the same second can miss this one (BUG-M2).
+   */
   async createInTransaction(
     em: EntityManager,
     afterCommit: AfterCommit,
@@ -1256,7 +1342,7 @@ export class BookingsService {
         notify: dto.notify,
         cancelledBy: dto.cancelledBy ?? PartyRole.Admin,
       });
-    });
+    }, BOOKING_ISOLATION);
     return this.get(id);
   }
 
@@ -1286,17 +1372,22 @@ export class BookingsService {
     switch (action) {
       case 'accepted': {
         const days = bookingDays(dateOnly(booking.eventDate), booking.endDate ? dateOnly(booking.endDate) : null);
-        for (const date of days) {
-          await this.assertAvailable(em, {
+        // Daily limit, blocks and the hours already taken by accepted bookings (BUG-M2).
+        const obstacle = await this.acceptObstacle(
+          em,
+          {
+            id: booking.id,
             providerId: booking.providerId,
             serviceId: booking.serviceId,
             packId: booking.packId,
-            date,
+            eventDate: dateOnly(booking.eventDate),
+            endDate: booking.endDate ? dateOnly(booking.endDate) : null,
             startTime: hhmm(booking.startTime),
             endTime: hhmm(booking.endTime),
-            excludeBookingId: booking.id,
-          });
-        }
+          },
+          { lock: true },
+        );
+        if (obstacle) throw AppException.of(obstacle.code, obstacle.details);
         update.respondedAt = booking.respondedAt ?? now;
         const moved = await em.query(
           "UPDATE availability_blocks SET kind = 'booked', updated_at = ? WHERE booking_id = ? AND deleted_at IS NULL",
@@ -1313,7 +1404,8 @@ export class BookingsService {
         break;
       }
       case 'declined':
-        update.respondedAt = booking.respondedAt ?? now;
+        // An expired request was never answered (BUG-F1): no "responded" time.
+        if (options.reason !== EXPIRED_REASON) update.respondedAt = booking.respondedAt ?? now;
         update.declineReason = options.reason;
         await this.releaseAvailability(em, booking.id, now);
         break;
@@ -1488,12 +1580,16 @@ export class BookingsService {
       reason: string;
       actorId: string | null;
       causedByUserId: string | null;
+      /** Also the accepted bookings whose event is not over (account block with "cancel", BUG-M4). */
+      includeAccepted?: boolean;
     },
   ): Promise<number> {
-    const pending: { id: string }[] = await em.query(
-      `SELECT id FROM bookings WHERE ${input.column} = ? AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at FOR UPDATE`,
-      [input.id],
-    );
+    const pending = input.includeAccepted
+      ? await this.activeBookingsOf(em, input.column, input.id, true)
+      : await em.query(
+          `SELECT id FROM bookings WHERE ${input.column} = ? AND status = 'pending' AND deleted_at IS NULL ORDER BY created_at FOR UPDATE`,
+          [input.id],
+        );
     for (const { id } of pending) {
       const booking = await this.load(em, id, true);
       await this.applyTransition(em, afterCommit, booking, 'cancelled', {
@@ -1506,6 +1602,105 @@ export class BookingsService {
       });
     }
     return pending.length;
+  }
+
+  /**
+   * Pending bookings and accepted ones whose event is not over yet
+   * (`eventEndsAt`), of one client or provider, oldest first. `lock` takes the
+   * rows FOR UPDATE.
+   */
+  async activeBookingsOf(
+    em: EntityManager,
+    column: BookingOwnerColumn,
+    userId: string,
+    lock = false,
+  ): Promise<{ id: string; reference: string; status: BookingStatus; client_id: string; provider_id: string }[]> {
+    const rows: any[] = await em.query(
+      `SELECT id, reference, status, client_id, provider_id, event_date, end_date, start_time, end_time FROM bookings
+       WHERE ${column} = ? AND status IN ('pending', 'accepted') AND deleted_at IS NULL ORDER BY created_at${lock ? ' FOR UPDATE' : ''}`,
+      [userId],
+    );
+    const now = Date.now();
+    return rows.filter(
+      (r) =>
+        r.status === BookingStatus.Pending ||
+        now < eventEndsAt({ eventDate: dateOnly(r.event_date), endDate: r.end_date ? dateOnly(r.end_date) : null, startTime: hhmm(r.start_time), endTime: hhmm(r.end_time) }).getTime(),
+    );
+  }
+
+  /**
+   * An account was blocked or unblocked (BUG-M4): both apps reload its active
+   * bookings (`booking:updated`, so `counterpartyBlocked` and `allowedActions`
+   * follow). On a block where the admin kept the bookings, the other party of
+   * each accepted one is also told the counterpart is unavailable.
+   */
+  async announceAccountStatus(
+    em: EntityManager,
+    afterCommit: AfterCommit,
+    input: { column: 'client_id' | 'provider_id'; userId: string; blocked: boolean },
+  ): Promise<number> {
+    let told = 0;
+    for (const b of await this.activeBookingsOf(em, input.column, input.userId)) {
+      const base = { bookingId: b.id, reference: b.reference, clientId: b.client_id, providerId: b.provider_id };
+      if (input.blocked && b.status === BookingStatus.Accepted) {
+        told += 1;
+        this.events.emitAfterCommit<BookingCounterpartyBlockedEvent>(afterCommit, BOOKING_EVENTS.counterpartyBlocked, { ...base, notify: true, blockedUserId: input.userId });
+      } else {
+        this.events.emitAfterCommit<BookingEvent>(afterCommit, BOOKING_EVENTS.updated, { ...base, notify: false });
+      }
+    }
+    return told;
+  }
+
+  // ── expiry (BUG-F1) ─────────────────────────────────────────
+
+  /**
+   * True when `booking_auto_expire` is on and this pending request's reply
+   * deadline or event start has passed. The app then hides accept / decline /
+   * reschedule and those endpoints answer 409 `BOOKING_EXPIRED`, until the hourly
+   * job declines it. Always false while the setting is off.
+   */
+  async isRequestExpired(booking: { status: BookingStatus; createdAt: Date; eventDate: string; startTime: string | null }, now = new Date()): Promise<boolean> {
+    if (booking.status !== BookingStatus.Pending) return false;
+    const { booking_auto_expire: enabled, booking_reply_deadline_hours: deadline } = await this.settings.getMany(['booking_auto_expire', 'booking_reply_deadline_hours']);
+    return enabled && isExpired(booking, Number(deadline), now);
+  }
+
+  /**
+   * pending → declined by the system, reason `expired` (BUG-F1), with the usual
+   * effects of a decline (status row with no actor, hold released, audit,
+   * `booking.declined` → both parties notified with "request expired",
+   * `booking:updated` on the socket) plus a system message in the chat. The
+   * booking must be locked by the caller and still pending.
+   */
+  async expireRequest(
+    em: EntityManager,
+    afterCommit: AfterCommit,
+    booking: Booking,
+    cause: ExpiryCause,
+    replyDeadlineHours: number,
+  ): Promise<void> {
+    const why = cause === 'reply_deadline' ? `no reply within ${replyDeadlineHours} h` : 'the event start passed without a reply';
+    await this.applyTransition(em, afterCommit, booking, 'declined', {
+      actorId: null,
+      reason: EXPIRED_REASON,
+      note: `Expired automatically: ${why}.`,
+      notify: true,
+      source: AuditSource.System,
+      auditAction: 'booking.expired',
+    });
+    const [conversation] = await em.query(
+      "SELECT id FROM conversations WHERE booking_id = ? AND kind = 'direct' AND deleted_at IS NULL LIMIT 1",
+      [booking.id],
+    );
+    if (conversation) {
+      await this.messaging.insertMessage(em, afterCommit, {
+        conversationId: conversation.id,
+        senderId: null,
+        kind: MessageKind.System,
+        body: `Booking request ${booking.reference} expired: ${why}. The date is free again.`,
+      });
+    }
   }
 
   // ── reschedule ──────────────────────────────────────────────
@@ -1539,6 +1734,10 @@ export class BookingsService {
       const now = new Date();
       const repository = em.getRepository(BookingReschedule);
       const oldDate = dateOnly(booking.eventDate);
+      // A per-hour service costs the new hours at the agreed rate (BUG-E3).
+      const price = await this.rescheduledPrice(em, booking, newStart, newEnd);
+      const oldTotal = String(booking.total);
+      const newTotal = price?.totals.total ?? oldTotal;
       const row = await repository.save(
         repository.create({
           bookingId: id,
@@ -1553,10 +1752,15 @@ export class BookingsService {
           forced: force,
           status: apply ? RescheduleStatus.Accepted : RescheduleStatus.Pending,
           resolvedAt: apply ? now : null,
+          oldTotal,
+          newTotal,
         }),
       );
-      if (apply)
+      if (apply) {
         await this.moveBooking(em, booking, dto.date, newStart, newEnd, now);
+        if (price) await this.replaceLines(em, booking, price.lines, price.totals, dto.reason ?? null, auth.id);
+        await this.reissueInvoice(em, afterCommit, booking, price !== null || dto.date !== oldDate);
+      }
       await this.audit.log(
         {
           action: apply ? 'booking.rescheduled' : 'booking.reschedule_proposed',
@@ -1568,6 +1772,7 @@ export class BookingsService {
             eventDate: { from: oldDate, to: dto.date },
             startTime: { from: hhmm(booking.startTime), to: newStart },
             endTime: { from: hhmm(booking.endTime), to: newEnd },
+            ...(price ? { total: { from: oldTotal, to: newTotal } } : {}),
             force,
             rescheduleId: row.id,
           },
@@ -1584,9 +1789,10 @@ export class BookingsService {
           newDate: dto.date,
           applied: apply,
           actorId: auth.id,
+          ...(price ? { oldTotal, newTotal } : {}),
         },
       );
-    });
+    }, BOOKING_ISOLATION);
     return this.get(id);
   }
 
@@ -1708,9 +1914,14 @@ export class BookingsService {
       const newDate = dateOnly(row.newDate);
       const newStart = hhmm(row.newStart);
       const newEnd = hhmm(row.newEnd);
+      // Recomputed from the lines as they are now, in case an admin changed the price since the proposal (BUG-E3).
+      const price = action === 'accept' ? await this.rescheduledPrice(em, booking, newStart, newEnd) : null;
+      const oldTotal = String(booking.total);
       if (action === 'accept') {
         await this.assertCanMove(em, booking, newDate, newStart, newEnd);
         await this.moveBooking(em, booking, newDate, newStart, newEnd, now);
+        if (price) await this.replaceLines(em, booking, price.lines, price.totals, row.reason, auth.id);
+        await this.reissueInvoice(em, afterCommit, booking, price !== null || newDate !== dateOnly(booking.eventDate));
       }
       await em.getRepository(BookingReschedule).update(row.id, {
         status:
@@ -1718,6 +1929,8 @@ export class BookingsService {
             ? RescheduleStatus.Accepted
             : RescheduleStatus.Rejected,
         resolvedAt: now,
+        // What was applied (a rejected proposal keeps the total it offered).
+        ...(action === 'accept' ? { oldTotal, newTotal: price?.totals.total ?? oldTotal } : {}),
       });
       await this.audit.log(
         {
@@ -1732,6 +1945,7 @@ export class BookingsService {
           changes: {
             rescheduleId,
             eventDate: { from: dateOnly(row.oldDate), to: newDate },
+            ...(price ? { total: { from: oldTotal, to: price.totals.total } } : {}),
           },
         },
         em,
@@ -1747,9 +1961,10 @@ export class BookingsService {
           newDate,
           applied: action === 'accept',
           actorId: auth.id,
+          ...(price ? { oldTotal, newTotal: price.totals.total } : {}),
         },
       );
-    });
+    }, BOOKING_ISOLATION);
   }
 
   /**
@@ -1824,34 +2039,7 @@ export class BookingsService {
       const totals = computeTotals(computed);
       if (toCents(totals.total) < 0)
         throw AppException.of('BOOKING_TOTAL_NEGATIVE');
-      const before: any[] = await em.query(
-        'SELECT kind, label, quantity, unit_amount, amount, service_id FROM booking_lines WHERE booking_id = ? ORDER BY position',
-        [id],
-      );
-      await this.saveLines(em, id, computed);
-      await em.getRepository(Booking).update(id, totals);
-      await em.query(
-        'INSERT INTO booking_price_changes (id, created_at, booking_id, old_total, new_total, lines_before, lines_after, reason, actor_id) VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          new Date(),
-          id,
-          booking.total,
-          totals.total,
-          JSON.stringify(
-            before.map((l) => ({
-              kind: l.kind,
-              label: l.label,
-              quantity: Number(l.quantity),
-              unitAmount: String(l.unit_amount),
-              amount: String(l.amount),
-              serviceId: l.service_id,
-            })),
-          ),
-          JSON.stringify(computed.map(({ position: _position, ...l }) => l)),
-          dto.reason,
-          auth.id,
-        ],
-      );
+      await this.replaceLines(em, booking, computed, totals, dto.reason, auth.id);
       let invoiceVersion: number | null = null;
       if (booking.status === BookingStatus.Accepted) {
         invoiceVersion = (await this.invoices.issue(em, afterCommit, id, true))
@@ -1887,6 +2075,85 @@ export class BookingsService {
       );
     });
     return this.get(id);
+  }
+
+  /**
+   * New lines and totals for a booking, with the before / after kept in
+   * `booking_price_changes` (the "price" entries of the booking timeline).
+   * The caller issues the invoice and tells the parties.
+   */
+  private async replaceLines(
+    em: EntityManager,
+    booking: Booking,
+    computed: ReturnType<typeof computeLines>,
+    totals: ReturnType<typeof computeTotals>,
+    reason: string | null,
+    actorId: string,
+  ): Promise<void> {
+    const before: any[] = await em.query(
+      'SELECT kind, label, quantity, unit_amount, amount, service_id FROM booking_lines WHERE booking_id = ? ORDER BY position',
+      [booking.id],
+    );
+    await this.saveLines(em, booking.id, computed);
+    await em.getRepository(Booking).update(booking.id, totals);
+    await em.query(
+      'INSERT INTO booking_price_changes (id, created_at, booking_id, old_total, new_total, lines_before, lines_after, reason, actor_id) VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        new Date(),
+        booking.id,
+        booking.total,
+        totals.total,
+        JSON.stringify(
+          before.map((l) => ({
+            kind: l.kind,
+            label: l.label,
+            quantity: Number(l.quantity),
+            unitAmount: String(l.unit_amount),
+            amount: String(l.amount),
+            serviceId: l.service_id,
+          })),
+        ),
+        JSON.stringify(computed.map(({ position: _position, ...l }) => l)),
+        reason,
+        actorId,
+      ],
+    );
+  }
+
+  /**
+   * What moving the booking to these hours does to its price (BUG-E3): the
+   * per-hour line re-counted at the agreed rate (`rescheduledLines`). Null when
+   * the price does not change — flat, per-person, per-day, packs, same length.
+   */
+  private async rescheduledPrice(
+    em: EntityManager,
+    booking: Booking,
+    start: string | null,
+    end: string | null,
+  ): Promise<{ lines: ReturnType<typeof computeLines>; totals: ReturnType<typeof computeTotals> } | null> {
+    if (!booking.serviceId) return null;
+    const [service] = await em.query('SELECT price_type FROM services WHERE id = ?', [booking.serviceId]);
+    const stored: any[] = await em.query(
+      'SELECT kind, label, quantity, unit_amount, service_id FROM booking_lines WHERE booking_id = ? ORDER BY position',
+      [booking.id],
+    );
+    const next = rescheduledLines(
+      stored.map((l) => ({ kind: l.kind, label: l.label, quantity: Number(l.quantity), unitAmount: String(l.unit_amount), serviceId: l.service_id })),
+      { serviceId: booking.serviceId, priceType: (service?.price_type ?? null) as PriceType | null, startTime: start, endTime: end },
+    );
+    if (!next) return null;
+    const lines = computeLines(next);
+    return { lines, totals: computeTotals(lines) };
+  }
+
+  /**
+   * The invoice of an accepted booking prints its event date, event type and
+   * lines: when one of them changes it gets a new version and the old one is
+   * voided (BUG-E5; numbering stays gap-free, `InvoicesService.issue`). Pending
+   * bookings have no invoice yet; acceptance issues it from the current state.
+   */
+  private async reissueInvoice(em: EntityManager, afterCommit: AfterCommit, booking: Booking, changed: boolean): Promise<void> {
+    if (changed && booking.status === BookingStatus.Accepted) await this.invoices.issue(em, afterCommit, booking.id, true);
   }
 
   // ── remind ──────────────────────────────────────────────────
@@ -1940,7 +2207,7 @@ export class BookingsService {
     dto: UpdateBookingDto,
   ): Promise<BookingDetailDto> {
     if (dto.eventDate !== undefined) throw AppException.of('USE_RESCHEDULE');
-    await runInTransaction(this.dataSource, async (em) => {
+    await runInTransaction(this.dataSource, async (em, afterCommit) => {
       const booking = await this.load(em, id, true);
       if (!isEditable(booking.status))
         throw AppException.of('BOOKING_NOT_EDITABLE', {
@@ -2007,6 +2274,8 @@ export class BookingsService {
           ],
         );
       }
+      // The event type is printed on the invoice (BUG-E5); times, guests and place are not.
+      await this.reissueInvoice(em, afterCommit, booking, update.eventType !== undefined);
       await this.audit.log(
         {
           action: 'booking.updated',
@@ -2018,6 +2287,8 @@ export class BookingsService {
         },
         em,
       );
+      // Both apps reload the booking (`booking:updated`); nobody is notified.
+      this.events.emitAfterCommit<BookingEvent>(afterCommit, BOOKING_EVENTS.updated, this.eventBase(booking, false));
     });
     return this.get(id);
   }

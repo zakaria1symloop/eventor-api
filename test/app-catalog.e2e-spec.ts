@@ -193,20 +193,22 @@ describe('App catalog (e2e)', () => {
 
   describe('GET /app/services (search)', () => {
     it('is public and returns only services visible per the rule', async () => {
-      const visible = await visibleService({ titleEn: `Visible ${uid()}` });
-      const draft = await makeService(db(), { status: ServiceStatus.Draft });
+      // Its own category: the suites share one database, so "the first 100 services" may not include these.
+      const { id: categoryId } = await makeCategory(db());
+      const visible = await visibleService({ titleEn: `Visible ${uid()}`, categoryId });
+      const draft = await makeService(db(), { status: ServiceStatus.Draft, categoryId });
       await addWilayas(draft.id);
-      const hidden = await makeService(db(), { status: ServiceStatus.Hidden });
+      const hidden = await makeService(db(), { status: ServiceStatus.Hidden, categoryId });
       await addWilayas(hidden.id);
       const { user: unverified } = await makeProvider(db(), { user: { verificationStatus: VerificationStatus.Pending } });
-      const ofUnverified = await makeService(db(), { providerId: unverified.id, status: ServiceStatus.Published });
+      const ofUnverified = await makeService(db(), { providerId: unverified.id, status: ServiceStatus.Published, categoryId });
       await addWilayas(ofUnverified.id);
       const { user: blocked } = await makeProvider(db(), { user: { status: UserStatus.Blocked } });
-      const ofBlocked = await makeService(db(), { providerId: blocked.id, status: ServiceStatus.Published });
+      const ofBlocked = await makeService(db(), { providerId: blocked.id, status: ServiceStatus.Published, categoryId });
       await addWilayas(ofBlocked.id);
-      const noWilaya = await makeService(db(), { status: ServiceStatus.Published });
+      const noWilaya = await makeService(db(), { status: ServiceStatus.Published, categoryId });
 
-      const res = await request(t.http).get(`${BASE}/services?limit=100`);
+      const res = await request(t.http).get(`${BASE}/services?categoryId=${categoryId}&limit=100`);
 
       expect(res.status).toBe(200);
       const ids = res.body.data.map((s: { id: string }) => s.id);
@@ -308,6 +310,97 @@ describe('App catalog (e2e)', () => {
       expect(ids).toContain(free.id);
       expect(ids).not.toContain(blocked.id);
       expect(ids).not.toContain(booked.id);
+    });
+
+    describe('eventDate follows the service calendar (BUG-D2)', () => {
+      /** `YYYY-MM-DD` plus `n` days. */
+      const addDays = (date: string, n: number) => new Date(new Date(`${date}T00:00:00Z`).getTime() + n * 86_400_000).toISOString().slice(0, 10);
+      /** The first date at least 60 days ahead on this ISO weekday (1 = Monday … 7 = Sunday). */
+      const futureWeekday = (weekday: number) => {
+        let date = new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10);
+        while (((new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7) + 1 !== weekday) date = addDays(date, 1);
+        return date;
+      };
+      const addHours = (serviceId: string, weekday: number, start: string, end: string) =>
+        db().query('INSERT INTO service_hours (id, created_at, service_id, weekday, start_time, end_time) VALUES (UUID(), NOW(6), ?, ?, ?, ?)', [serviceId, weekday, start, end]);
+      const search = async (query: string) => (await request(t.http).get(`${BASE}/services?${query}`).expect(200)).body;
+      const idsOf = (body: { data: { id: string }[] }) => body.data.map((s) => s.id).sort();
+
+      it('drops closed weekdays, ended periods, days with no free hour and days before firstBookableDate', async () => {
+        const category = await makeCategory(db());
+        const friday = futureWeekday(5);
+        const saturday = addDays(friday, 1);
+        // The D-15 case ("Solo oud for dinners"): open Thursday–Saturday evenings only, searched on another weekday.
+        const fridaysOnly = await visibleService({ categoryId: category.id, maxEventsPerDay: null });
+        await addHours(fridaysOnly.id, 5, '19:00', '01:00');
+        // Its period of event dates ends the day before.
+        const ended = await visibleService({ categoryId: category.id });
+        await db().query('UPDATE services SET available_until = ? WHERE id = ?', [addDays(friday, -1), ended.id]);
+        // Open 18:00–22:00, one client at a time, already booked 18:00–22:00 (the daily limit is not reached).
+        const fullHours = await visibleService({ categoryId: category.id, maxEventsPerDay: 5, concurrentClients: 1 });
+        await addHours(fullHours.id, 5, '18:00', '22:00');
+        await makeBooking(db(), { serviceId: fullHours.id, providerId: fullHours.providerId, eventDate: friday, startTime: '18:00:00', endTime: '22:00:00', status: BookingStatus.Accepted } as never);
+        // Open 10:00–12:00 and the provider blocked exactly those hours.
+        const hoursBlocked = await visibleService({ categoryId: category.id });
+        await addHours(hoursBlocked.id, 5, '10:00', '12:00');
+        await db().query(
+          "INSERT INTO availability_blocks (id, created_at, updated_at, provider_id, date, start_time, end_time, kind) VALUES (UUID(), NOW(6), NOW(6), ?, ?, '10:00:00', '12:00:00', ?)",
+          [hoursBlocked.providerId, friday, AvailabilityKind.Blocked],
+        );
+        // Free; its sibling (same provider) is blocked on that Friday by a block of the sibling only.
+        const free = await visibleService({ categoryId: category.id });
+        const sibling = await visibleService({ categoryId: category.id, providerId: free.providerId });
+        await db().query(
+          'INSERT INTO availability_blocks (id, created_at, updated_at, provider_id, service_id, date, kind) VALUES (UUID(), NOW(6), NOW(6), ?, ?, ?, ?)',
+          [free.providerId, sibling.id, friday, AvailabilityKind.Blocked],
+        );
+
+        const onFriday = await search(`categoryId=${category.id}&eventDate=${friday}&limit=100`);
+        expect(idsOf(onFriday)).toEqual([fridaysOnly.id, free.id].sort());
+        expect(onFriday.meta.total).toBe(2);
+
+        // Saturday: the Friday-only services are closed, the sibling's block was on Friday only.
+        expect(idsOf(await search(`categoryId=${category.id}&eventDate=${saturday}&limit=100`))).toEqual([free.id, sibling.id].sort());
+
+        // Before firstBookableDate nothing can be booked, so nothing is listed.
+        const yesterday = addDays(new Date().toISOString().slice(0, 10), -1);
+        const past = await search(`categoryId=${category.id}&eventDate=${yesterday}&limit=100`);
+        expect(past.data).toEqual([]);
+        expect(past.meta.total).toBe(0);
+
+        // Without eventDate every one of them is still listed.
+        expect((await search(`categoryId=${category.id}&limit=100`)).meta.total).toBe(6);
+      });
+
+      it('agrees with GET /app/services/:id/availability for every service, and pages on the filtered total', async () => {
+        const category = await makeCategory(db());
+        const friday = futureWeekday(5);
+        const services = [
+          await visibleService({ categoryId: category.id }),
+          await visibleService({ categoryId: category.id }),
+          await visibleService({ categoryId: category.id }),
+          await visibleService({ categoryId: category.id, maxEventsPerDay: 5, concurrentClients: 1 }),
+        ];
+        await addHours(services[1]!.id, 2, '09:00', '17:00'); // Tuesdays only
+        await makeBooking(db(), { serviceId: services[2]!.id, providerId: services[2]!.providerId, eventDate: friday, status: BookingStatus.Pending });
+        await addHours(services[3]!.id, 5, '20:00', '23:00');
+        await makeBooking(db(), { serviceId: services[3]!.id, providerId: services[3]!.providerId, eventDate: friday, startTime: '20:00:00', endTime: '23:00:00', status: BookingStatus.Accepted } as never);
+
+        const listed = idsOf(await search(`categoryId=${category.id}&eventDate=${friday}&limit=100`));
+        for (const service of services) {
+          const calendar = await request(t.http).get(`${BASE}/services/${service.id}/availability?month=${friday.slice(0, 7)}`).expect(200);
+          const day = calendar.body.data.days.find((d: { date: string }) => d.date === friday);
+          expect({ id: service.id, listed: listed.includes(service.id) }).toEqual({ id: service.id, listed: day.state === 'available' });
+        }
+        expect(listed).toEqual([services[0]!.id]);
+
+        // Two free services, one per page: the total and the page count are those of the filtered list.
+        const extra = await visibleService({ categoryId: category.id });
+        const page1 = await search(`categoryId=${category.id}&eventDate=${friday}&limit=1&page=1`);
+        const page2 = await search(`categoryId=${category.id}&eventDate=${friday}&limit=1&page=2`);
+        expect(page1.meta).toMatchObject({ total: 2, totalPages: 2 });
+        expect([...idsOf(page1), ...idsOf(page2)].sort()).toEqual([services[0]!.id, extra.id].sort());
+      });
     });
 
     it('sorts by price, rating and popularity', async () => {

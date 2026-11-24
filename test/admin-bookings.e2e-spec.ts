@@ -1,6 +1,7 @@
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import request from 'supertest';
 import { AuditLog } from '../src/admin/entities/audit-log.entity.js';
+import { findExpiredRequests } from '../src/bookings/booking-expiry.js';
 import { BookingJobsService } from '../src/bookings/booking-jobs.service.js';
 import { Booking } from '../src/bookings/entities/booking.entity.js';
 import { Invoice } from '../src/bookings/entities/invoice.entity.js';
@@ -9,6 +10,7 @@ import { EventType, PackStatus, PriceType, ServiceStatus } from '../src/common/e
 import { UserRole } from '../src/common/enums/user.enums.js';
 import { ExportRegistry } from '../src/exports/export-registry.js';
 import { MailService } from '../src/mail/mail.service.js';
+import { AdminAlertsService } from '../src/notifications/admin-alerts.service.js';
 import { PackItem } from '../src/packs/entities/pack-item.entity.js';
 import { ServiceExtra } from '../src/services/entities/service-extra.entity.js';
 import type { Service } from '../src/services/entities/service.entity.js';
@@ -19,6 +21,7 @@ import {
   makeBooking,
   makeCategory,
   makeCommune,
+  makeConversation,
   makePack,
   makeProvider,
   makeService,
@@ -604,6 +607,19 @@ describe('Admin bookings (e2e)', () => {
       expectError(await request(t.http).post(`${BASE}/${accepted.id}/remind`).set(admin.headers), 409, 'BOOKING_NOT_EDITABLE');
     });
 
+    it('reissues the invoice of an accepted booking when its event type changes, not for details the invoice does not print (BUG-E5)', async () => {
+      const { booking } = await createPending();
+      await setStatus(booking.id, { status: 'accepted' }).expect(200);
+      const versions = async () => (await db().query('SELECT version, deleted_at IS NULL AS live, JSON_UNQUOTE(JSON_EXTRACT(snapshot, "$.eventType")) AS type FROM invoices WHERE booking_id = ? ORDER BY version', [booking.id])).map((r: any) => ({ version: Number(r.version), live: Number(r.live), type: r.type }));
+      expect(await versions()).toEqual([{ version: 1, live: 1, type: 'wedding' }]);
+
+      await request(t.http).patch(`${BASE}/${booking.id}`).set(admin.headers).send({ guests: 90, locationText: 'Hall B' }).expect(200);
+      expect(await versions()).toHaveLength(1);
+
+      await request(t.http).patch(`${BASE}/${booking.id}`).set(admin.headers).send({ eventType: 'engagement' }).expect(200);
+      expect(await versions()).toEqual([{ version: 1, live: 0, type: 'wedding' }, { version: 2, live: 1, type: 'engagement' }]);
+    });
+
     it('edits event details; eventDate → 422 USE_RESCHEDULE; commune checks; not editable when completed', async () => {
       const { booking } = await createPending();
       const commune = await makeCommune(db(), { wilayaCode: 16 });
@@ -672,6 +688,107 @@ describe('Admin bookings (e2e)', () => {
       expect((await reload(done.id)).reviewRequestedAt).not.toBeNull();
       expect((await reload(tooRecent.id)).reviewRequestedAt).toBeNull();
       expect(lastMailTo(ctx.client.email)!.subject).toBe('How was your event?');
+    });
+
+    describe('request expiry (BUG-F1, acceptance F-10 / N-02 / L-35)', () => {
+      const setAutoExpire = (on: boolean) =>
+        request(t.http).patch('/api/v1/admin/settings').set(admin.headers).send({ values: { booking_auto_expire: on }, confirm: true, note: 'BUG-F1 test' }).expect(200);
+      const statusRows = async (id: string) => Number((await db().query('SELECT COUNT(*) AS n FROM booking_status_changes WHERE booking_id = ?', [id]))[0].n);
+
+      /** A pending request with its hold and its chat, as the create flow leaves it. */
+      async function pendingRequest(ctx: Awaited<ReturnType<typeof bookable>>, overrides: Record<string, unknown>) {
+        const booking = await makeBooking(db(), { serviceId: ctx.service.id, providerId: ctx.provider.id, clientId: ctx.client.id, status: BookingStatus.Pending, eventDate: futureDate(), ...overrides } as never);
+        await db().query(
+          "INSERT INTO availability_blocks (id, created_at, updated_at, provider_id, service_id, date, start_time, end_time, kind, booking_id, note) VALUES (UUID(), NOW(6), NOW(6), ?, ?, ?, NULL, NULL, 'held', ?, NULL)",
+          [ctx.provider.id, ctx.service.id, booking.eventDate, booking.id],
+        );
+        const conversation = await makeConversation(db(), { bookingId: booking.id });
+        return { booking, conversation };
+      }
+
+      it('does nothing while booking_auto_expire is off (the default)', async () => {
+        const ctx = await bookable();
+        const { booking } = await pendingRequest(ctx, { createdAt: new Date(Date.now() - 100 * HOUR) });
+        expect(await jobs().expireRequests()).toBe(0);
+        expect((await reload(booking.id)).status).toBe('pending');
+      });
+
+      it('declines requests past the reply deadline or the event start as `expired`, with every effect, once', async () => {
+        const ctx = await bookable();
+        const late = await pendingRequest(ctx, { createdAt: new Date(Date.now() - 49 * HOUR) });
+        // Requested an hour ago, but the event already started (EVT-000003: event in the past, still pending).
+        const past = await pendingRequest(ctx, { createdAt: new Date(Date.now() - HOUR), eventDate: '2026-11-13', startTime: '18:00:00', endTime: '22:00:00' });
+        const fresh = await pendingRequest(ctx, { createdAt: new Date(Date.now() - 47 * HOUR) });
+        const accepted = await makeBooking(db(), { serviceId: ctx.service.id, providerId: ctx.provider.id, status: BookingStatus.Accepted, createdAt: new Date(Date.now() - 500 * HOUR), eventDate: '2026-11-13' } as never);
+        const updates = recordEvents('booking.declined');
+        await setAutoExpire(true);
+        try {
+          expect(await jobs().expireRequests()).toBeGreaterThanOrEqual(2);
+        } finally {
+          await setAutoExpire(false);
+          updates.stop();
+        }
+
+        for (const { booking, conversation } of [late, past]) {
+          expect(await reload(booking.id)).toMatchObject({ status: 'declined', declineReason: 'expired', respondedAt: null });
+          const [change] = await db().query('SELECT from_status, to_status, actor_id, reason FROM booking_status_changes WHERE booking_id = ?', [booking.id]);
+          expect(change).toEqual({ from_status: 'pending', to_status: 'declined', actor_id: null, reason: 'expired' });
+          expect(await audited('booking.expired', booking.id)).toMatchObject({ source: 'system', actorId: null });
+          // The hold is released, so the date is free again.
+          const holds = await db().query('SELECT id FROM availability_blocks WHERE booking_id = ? AND deleted_at IS NULL', [booking.id]);
+          expect(holds).toHaveLength(0);
+          const [message] = await db().query("SELECT body FROM messages WHERE conversation_id = ? AND kind = 'system'", [conversation.id]);
+          expect(message.body).toMatch(new RegExp(`^Booking request ${booking.reference} expired`));
+          // Both sides hear about it (nobody acted), with the type the app already routes.
+          const notes = await db().query("SELECT user_id, title FROM notifications WHERE type = 'booking.declined' AND JSON_UNQUOTE(JSON_EXTRACT(data, '$.bookingId')) = ?", [booking.id]);
+          expect(notes.map((n: any) => n.user_id).sort()).toEqual([ctx.client.id, ctx.provider.id].sort());
+          expect(notes.every((n: any) => n.title === 'Request expired')).toBe(true);
+          expect(updates.seen.some((e) => e.bookingId === booking.id && e.reason === 'expired')).toBe(true);
+        }
+        expect(await db().query("SELECT body FROM messages WHERE conversation_id = ? AND kind = 'system'", [late.conversation.id]).then((r: any[]) => r[0].body)).toMatch(/no reply within 48 h/);
+        expect(await db().query("SELECT body FROM messages WHERE conversation_id = ? AND kind = 'system'", [past.conversation.id]).then((r: any[]) => r[0].body)).toMatch(/event start passed/);
+        expect(lastMailTo(ctx.client.email)!.subject).toMatch(/^Booking request .* expired$/);
+        expect(lastMailTo(ctx.provider.email)!.subject).toMatch(/^Booking request .* expired$/);
+        // Not yet due, and accepted bookings are never touched.
+        expect((await reload(fresh.booking.id)).status).toBe('pending');
+        expect((await reload(accepted.id)).status).toBe('accepted');
+
+        // Idempotent: a second run (setting on again) changes nothing for them.
+        await setAutoExpire(true);
+        try {
+          await jobs().expireRequests();
+        } finally {
+          await setAutoExpire(false);
+        }
+        expect(await statusRows(late.booking.id)).toBe(1);
+        expect(await statusRows(past.booking.id)).toBe(1);
+      });
+
+      it('lists the same bookings read-only (the preview behind `bookings:expire-preview`)', async () => {
+        const ctx = await bookable();
+        const late = await pendingRequest(ctx, { createdAt: new Date(Date.now() - 60 * HOUR) });
+        const fresh = await pendingRequest(ctx, { createdAt: new Date(Date.now() - HOUR) });
+        const rows = await findExpiredRequests(db(), 48, new Date(), 100_000);
+        expect(rows.find((r) => r.id === late.booking.id)).toMatchObject({ reference: late.booking.reference, cause: 'reply_deadline' });
+        expect(rows.find((r) => r.id === fresh.booking.id)).toBeUndefined();
+        expect((await reload(late.booking.id)).status).toBe('pending');
+      });
+
+      it('skips the "please reply" reminder and the admin no-reply alert for a request that is already expired', async () => {
+        const ctx = await bookable();
+        const { booking } = await pendingRequest(ctx, { createdAt: new Date(Date.now() - 49 * HOUR) });
+        await setAutoExpire(true);
+        try {
+          await jobs().sendReplyReminders();
+          expect((await reload(booking.id)).reminderSentAt).toBeNull();
+          expect(await t.get(AdminAlertsService).notifyNoReply()).toBe(0);
+        } finally {
+          await setAutoExpire(false);
+        }
+        // Setting off: today's behaviour (reminder sent).
+        await jobs().sendReplyReminders();
+        expect((await reload(booking.id)).reminderSentAt).not.toBeNull();
+      });
     });
   });
 

@@ -22,7 +22,8 @@ describe('settings registry', () => {
 
   it('marks exactly the sensitive keys', () => {
     const sensitive = Object.values(SETTINGS_REGISTRY).filter((d) => d.sensitive).map((d) => d.key).sort();
-    expect(sensitive).toEqual(['invoice_issuer', 'maintenance_mode', 'pack_fee_percent', 'platform_fee_percent']);
+    // booking_auto_expire declines old requests in bulk (BUG-F1): it asks for confirmation.
+    expect(sensitive).toEqual(['booking_auto_expire', 'invoice_issuer', 'maintenance_mode', 'pack_fee_percent', 'platform_fee_percent']);
   });
 
   it('accepts every default value unchanged', () => {

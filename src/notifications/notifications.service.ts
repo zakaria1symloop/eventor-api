@@ -23,6 +23,7 @@ export const APP_NOTIFICATION_TYPES = [
   'booking.reschedule_proposed',
   'booking.reschedule_rejected',
   'booking.price_changed',
+  'booking.counterparty_blocked',
   'booking.reminder',
   'booking.review_requested',
   'dispute.opened',

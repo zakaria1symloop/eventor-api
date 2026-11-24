@@ -8,6 +8,7 @@ import { NotificationsService, type AppNotificationType } from '../notifications
 import {
   BOOKING_EVENTS,
   type BookingCancelledEvent,
+  type BookingCounterpartyBlockedEvent,
   type BookingEvent,
   type BookingPriceChangedEvent,
   type BookingReminderEvent,
@@ -15,6 +16,7 @@ import {
   type BookingStatusChangedEvent,
   type InvoiceSentEvent,
 } from './bookings.events.js';
+import { EXPIRED_REASON } from './bookings.policy.js';
 
 interface Party {
   id: string;
@@ -109,6 +111,7 @@ export class BookingsMailListener {
   @OnEvent(BOOKING_EVENTS.declined)
   async onDeclined(event: BookingStatusChangedEvent): Promise<void> {
     if (!event.notify) return;
+    if (event.reason === EXPIRED_REASON) return this.onExpired(event);
     const { client, title, date } = await this.parties(event);
     await this.send(client, {
       en: { subject: `Booking ${event.reference} declined`, lines: [`Your booking request for "${title.en}" on ${date} was declined.`, 'You can look for another provider in the app.'] },
@@ -117,6 +120,31 @@ export class BookingsMailListener {
     await this.notify(client, 'booking.declined', {
       en: { title: 'Booking declined', body: `Your request for "${title.en}" on ${date} was declined. You can book another provider in the app.` },
       ar: { title: 'تم رفض الحجز', body: `تم رفض طلبك لـ «${title.ar}» بتاريخ ${date}. يمكنك الحجز لدى مقدم خدمة آخر من التطبيق.` },
+    }, event);
+  }
+
+  /**
+   * BUG-F1: a request nobody answered in time is declined by the system with the
+   * reason `expired`. Both sides are told (nobody acted), with the
+   * `booking.declined` type the app already routes to the booking.
+   */
+  private async onExpired(event: BookingStatusChangedEvent): Promise<void> {
+    const { client, provider, title, date } = await this.parties(event);
+    await this.send(client, {
+      en: { subject: `Booking request ${event.reference} expired`, lines: [`The provider did not answer your request for "${title.en}" on ${date} in time, so it has expired.`, 'You can book another provider in the app.'] },
+      ar: { subject: `انتهت صلاحية طلب الحجز ${event.reference}`, lines: [`لم يرد مقدم الخدمة على طلبك لـ «${title.ar}» بتاريخ ${date} في الوقت المحدد، لذا انتهت صلاحيته.`, 'يمكنك الحجز لدى مقدم خدمة آخر من التطبيق.'] },
+    });
+    await this.notify(client, 'booking.declined', {
+      en: { title: 'Request expired', body: `Your request for "${title.en}" on ${date} got no reply in time. You can book another provider in the app.` },
+      ar: { title: 'انتهت صلاحية الطلب', body: `لم يتلقَّ طلبك لـ «${title.ar}» بتاريخ ${date} ردًا في الوقت المحدد. يمكنك الحجز لدى مقدم خدمة آخر من التطبيق.` },
+    }, event);
+    await this.send(provider, {
+      en: { subject: `Booking request ${event.reference} expired`, lines: [`The request for "${title.en}" on ${date} expired because it was not answered in time. The date is free again.`] },
+      ar: { subject: `انتهت صلاحية طلب الحجز ${event.reference}`, lines: [`انتهت صلاحية الطلب لـ «${title.ar}» بتاريخ ${date} لعدم الرد عليه في الوقت المحدد. أصبح التاريخ متاحًا من جديد.`] },
+    });
+    await this.notify(provider, 'booking.declined', {
+      en: { title: 'Request expired', body: `The request for "${title.en}" on ${date} expired without a reply. The date is free again.` },
+      ar: { title: 'انتهت صلاحية الطلب', body: `انتهت صلاحية الطلب لـ «${title.ar}» بتاريخ ${date} دون رد. أصبح التاريخ متاحًا من جديد.` },
     }, event);
   }
 
@@ -171,16 +199,25 @@ export class BookingsMailListener {
   async onRescheduled(event: BookingRescheduledEvent): Promise<void> {
     if (!event.notify) return;
     const { client, provider, title } = await this.parties(event);
+    const total = this.totalChange(event, 'applied');
     for (const party of this.others([client, provider], event)) {
       await this.send(party, {
-        en: { subject: `New date for booking ${event.reference}`, lines: [`The booking for "${title.en}" moved from ${event.oldDate} to ${event.newDate}.`] },
-        ar: { subject: `تاريخ جديد للحجز ${event.reference}`, lines: [`تم نقل الحجز لـ «${title.ar}» من ${event.oldDate} إلى ${event.newDate}.`] },
+        en: { subject: `New date for booking ${event.reference}`, lines: [`The booking for "${title.en}" moved from ${event.oldDate} to ${event.newDate}.`, ...total.en] },
+        ar: { subject: `تاريخ جديد للحجز ${event.reference}`, lines: [`تم نقل الحجز لـ «${title.ar}» من ${event.oldDate} إلى ${event.newDate}.`, ...total.ar] },
       });
       await this.notify(party, 'booking.rescheduled', {
-        en: { title: 'New date for your booking', body: `"${title.en}" moved from ${event.oldDate} to ${event.newDate}.` },
-        ar: { title: 'تاريخ جديد لحجزك', body: `تم نقل «${title.ar}» من ${event.oldDate} إلى ${event.newDate}.` },
+        en: { title: 'New date for your booking', body: [`"${title.en}" moved from ${event.oldDate} to ${event.newDate}.`, ...total.en].join(' ') },
+        ar: { title: 'تاريخ جديد لحجزك', body: [`تم نقل «${title.ar}» من ${event.oldDate} إلى ${event.newDate}.`, ...total.ar].join(' ') },
       }, event);
     }
+  }
+
+  /** The price sentence of a move that changes the total (BUG-E3); empty when it does not. */
+  private totalChange(event: BookingRescheduledEvent, mode: 'applied' | 'proposed'): { en: string[]; ar: string[] } {
+    if (!event.oldTotal || !event.newTotal || event.oldTotal === event.newTotal) return { en: [], ar: [] };
+    return mode === 'applied'
+      ? { en: [`The total is now ${event.newTotal} DZD (was ${event.oldTotal} DZD).`], ar: [`أصبح المجموع ${event.newTotal} دج (كان ${event.oldTotal} دج).`] }
+      : { en: [`With the new hours the total would be ${event.newTotal} DZD (now ${event.oldTotal} DZD).`], ar: [`مع الساعات الجديدة سيصبح المجموع ${event.newTotal} دج (حاليًا ${event.oldTotal} دج).`] };
   }
 
   @OnEvent(BOOKING_EVENTS.rescheduleProposed)
@@ -189,14 +226,15 @@ export class BookingsMailListener {
     const { client, provider, title } = await this.parties(event);
     const by =
       event.actorId === event.clientId ? { en: 'The client', ar: 'العميل' } : event.actorId === event.providerId ? { en: 'The provider', ar: 'مقدم الخدمة' } : { en: 'Eventor', ar: 'Eventor' };
+    const total = this.totalChange(event, 'proposed');
     for (const party of this.others([client, provider], event)) {
       await this.send(party, {
-        en: { subject: `New date proposed for booking ${event.reference}`, lines: [`${by.en} proposed to move "${title.en}" from ${event.oldDate} to ${event.newDate}.`, 'Please accept or decline the new date in the app.'] },
-        ar: { subject: `اقتراح تاريخ جديد للحجز ${event.reference}`, lines: [`اقترح ${by.ar} نقل «${title.ar}» من ${event.oldDate} إلى ${event.newDate}.`, 'يرجى قبول التاريخ الجديد أو رفضه من التطبيق.'] },
+        en: { subject: `New date proposed for booking ${event.reference}`, lines: [`${by.en} proposed to move "${title.en}" from ${event.oldDate} to ${event.newDate}.`, ...total.en, 'Please accept or decline the new date in the app.'] },
+        ar: { subject: `اقتراح تاريخ جديد للحجز ${event.reference}`, lines: [`اقترح ${by.ar} نقل «${title.ar}» من ${event.oldDate} إلى ${event.newDate}.`, ...total.ar, 'يرجى قبول التاريخ الجديد أو رفضه من التطبيق.'] },
       });
       await this.notify(party, 'booking.reschedule_proposed', {
-        en: { title: 'New date proposed', body: `${by.en} proposed to move "${title.en}" from ${event.oldDate} to ${event.newDate}. Accept or decline it in the app.` },
-        ar: { title: 'اقتراح تاريخ جديد', body: `اقترح ${by.ar} نقل «${title.ar}» من ${event.oldDate} إلى ${event.newDate}. اقبله أو ارفضه من التطبيق.` },
+        en: { title: 'New date proposed', body: [`${by.en} proposed to move "${title.en}" from ${event.oldDate} to ${event.newDate}.`, ...total.en, 'Accept or decline it in the app.'].join(' ') },
+        ar: { title: 'اقتراح تاريخ جديد', body: [`اقترح ${by.ar} نقل «${title.ar}» من ${event.oldDate} إلى ${event.newDate}.`, ...total.ar, 'اقبله أو ارفضه من التطبيق.'].join(' ') },
       }, event);
     }
   }
@@ -215,6 +253,20 @@ export class BookingsMailListener {
         ar: { title: 'تم رفض التاريخ الجديد', body: `تم رفض اقتراح نقل «${title.ar}» إلى ${event.newDate}. يبقى الحجز بتاريخ ${event.oldDate}.` },
       }, event);
     }
+  }
+
+  /** BUG-M4: the admin blocked one party and kept the booking; the other one is told it stays, and who to ask. */
+  @OnEvent(BOOKING_EVENTS.counterpartyBlocked)
+  async onCounterpartyBlocked(event: BookingCounterpartyBlockedEvent): Promise<void> {
+    if (!event.notify) return;
+    const { client, provider, title, date } = await this.parties(event);
+    const providerBlocked = event.blockedUserId === event.providerId;
+    const to = providerBlocked ? client : provider;
+    const who = providerBlocked ? { en: 'The provider', ar: 'مقدم الخدمة' } : { en: 'The client', ar: 'العميل' };
+    const en = `${who.en} of "${title.en}" on ${date} is temporarily unavailable on Eventor. Your booking ${event.reference} stays as it is; changing the date is paused. Contact Eventor support if you have a question.`;
+    const ar = `${who.ar} في «${title.ar}» بتاريخ ${date} غير متاح مؤقتًا على Eventor. يبقى حجزك ${event.reference} كما هو، وتغيير الموعد متوقف حاليًا. تواصل مع دعم Eventor إذا كان لديك سؤال.`;
+    await this.send(to, { en: { subject: `Booking ${event.reference}: ${who.en.toLowerCase()} is unavailable`, lines: [en] }, ar: { subject: `الحجز ${event.reference}: ${who.ar} غير متاح`, lines: [ar] } });
+    await this.notify(to, 'booking.counterparty_blocked', { en: { title: `${who.en} is unavailable`, body: en }, ar: { title: `${who.ar} غير متاح`, body: ar } }, event);
   }
 
   @OnEvent(BOOKING_EVENTS.priceChanged)

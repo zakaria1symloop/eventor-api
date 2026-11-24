@@ -164,6 +164,28 @@ export function serviceQuantity(priceType: PriceType, input: { guests?: number |
   return 1;
 }
 
+/**
+ * A reschedule's price (BUG-E3): the booked lines with the per-hour line of the
+ * booked service re-counted for the new hours, at the unit price already on it
+ * (the agreed rate, not the service's price today). Every other line is kept:
+ * extras, discounts, adjustments and pack items — a reschedule changes neither
+ * the guests nor the number of days. `null` when nothing changes.
+ */
+export function rescheduledLines(
+  lines: LineInput[],
+  booking: { serviceId: string | null; priceType: PriceType | null; startTime: string | null; endTime: string | null },
+): LineInput[] | null {
+  if (!booking.serviceId || booking.priceType !== PriceType.PerHour) return null;
+  const hours = serviceQuantity(PriceType.PerHour, { startTime: booking.startTime, endTime: booking.endTime });
+  let changed = false;
+  const next = lines.map((line) => {
+    if (line.kind !== BookingLineKind.Service || line.serviceId !== booking.serviceId || line.quantity === hours) return line;
+    changed = true;
+    return { ...line, quantity: hours };
+  });
+  return changed ? next : null;
+}
+
 /** Pack lines: one per item at its base price, then a discount down to the pack price. */
 export function packLines(pack: { price: string; nameEn: string }, items: { serviceId: string; titleEn: string; basePrice: string }[]): LineInput[] {
   const lines: LineInput[] = items.map((item) => ({ kind: BookingLineKind.PackService, label: item.titleEn, quantity: 1, unitAmount: item.basePrice, serviceId: item.serviceId }));
@@ -267,6 +289,56 @@ export function checkInRefusal(outcome: CheckInOutcome): AppException | null {
 export function eventEndUtc(eventDate: string, endTime: string | null): Date {
   const time = endTime ? endTime.slice(0, 5) : '23:59';
   return new Date(`${eventDate}T${time}:00+01:00`);
+}
+
+/**
+ * When the event is over (BUG-E6), as a UTC instant in Africa/Algiers (UTC+1, no DST): the end time of its
+ * last day — the next morning when the hours run past midnight (20:00 → 02:00) — or midnight after the
+ * last day when it has no end time. From then on the client and the provider can no longer cancel or move it.
+ */
+export function eventEndsAt(booking: { eventDate: string; endDate?: string | null; startTime: string | null; endTime: string | null }): Date {
+  const midnight = eventStartUtc(booking.endDate ?? booking.eventDate, null).getTime();
+  if (!booking.endTime) return new Date(midnight + 24 * HOUR);
+  // `timeSpan` puts an end at or before the start on the next day (00:00 → 00:00 is the whole day).
+  const minutes = timeSpan(booking.startTime ?? '00:00', booking.endTime)?.end ?? 24 * 60;
+  return new Date(midnight + minutes * 60_000);
+}
+
+/** Event start as a UTC instant: date + start time (or the start of the day) in Africa/Algiers (UTC+1, no DST). */
+export function eventStartUtc(eventDate: string, startTime: string | null): Date {
+  const time = startTime ? startTime.slice(0, 5) : '00:00';
+  return new Date(`${eventDate}T${time}:00+01:00`);
+}
+
+/** Why a pending request expired (BUG-F1): stored as the decline reason code `expired`, this says which limit ran out. */
+export type ExpiryCause = 'reply_deadline' | 'event_started';
+
+/** The `declineReason` code of a request that expired without a reply. */
+export const EXPIRED_REASON = 'expired';
+
+/**
+ * When a pending request expires (BUG-F1): at `created_at + booking_reply_deadline_hours`,
+ * or at the event start if that comes first. Returns the moment and its cause,
+ * whether or not it has passed yet; `null` for anything but a pending booking.
+ */
+export function pendingExpiry(
+  booking: { status: BookingStatus; createdAt: Date; eventDate: string; startTime: string | null },
+  replyDeadlineHours: number,
+): { at: Date; cause: ExpiryCause } | null {
+  if (booking.status !== BookingStatus.Pending) return null;
+  const deadline = new Date(booking.createdAt.getTime() + replyDeadlineHours * HOUR);
+  const start = eventStartUtc(booking.eventDate, booking.startTime);
+  return start.getTime() < deadline.getTime() ? { at: start, cause: 'event_started' } : { at: deadline, cause: 'reply_deadline' };
+}
+
+/** True once a pending request's expiry moment has passed. */
+export function isExpired(
+  booking: Parameters<typeof pendingExpiry>[0],
+  replyDeadlineHours: number,
+  now = new Date(),
+): boolean {
+  const expiry = pendingExpiry(booking, replyDeadlineHours);
+  return expiry !== null && expiry.at.getTime() <= now.getTime();
 }
 
 /** status-rules §5: accepted → completed at event end + dispute window, unless a dispute is open. */

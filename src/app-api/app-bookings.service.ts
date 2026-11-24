@@ -11,6 +11,7 @@ import {
   bookingRange,
   computeLines,
   computeTotals,
+  eventEndsAt,
   packLines,
   serviceQuantity,
   toCents,
@@ -22,7 +23,7 @@ import { PartyRole, UserStatus, VerificationStatus } from '../common/enums/user.
 import { AppException } from '../common/errors/app.exception.js';
 import type { Lang } from '../common/i18n/language.js';
 import { paginate, type Paginated } from '../common/pagination/paginated.js';
-import { runInTransaction } from '../database/transaction.js';
+import { BOOKING_ISOLATION, runInTransaction } from '../database/transaction.js';
 import { disputeWindow } from '../disputes/disputes.policy.js';
 import { FilesService } from '../files/files.service.js';
 import { PACK_VISIBLE_SQL } from '../packs/packs.policy.js';
@@ -240,6 +241,7 @@ export class AppBookingsService {
         },
         { source },
       ),
+      BOOKING_ISOLATION,
     );
     return this.detail(auth, id, 'client', lang);
   }
@@ -267,8 +269,8 @@ export class AppBookingsService {
   private readonly SELECT = `b.*, s.title_en, s.title_ar, s.price_type, s.cancellation_policy_en, s.cancellation_policy_ar,
     sc.id AS cat_id, sc.slug AS cat_slug, sc.name_en AS cat_name_en, sc.name_ar AS cat_name_ar, sc.icon AS cat_icon,
     pk.name_en AS pack_name_en, pk.name_ar AS pack_name_ar,
-    cu.full_name AS client_name, cu.avatar_file_id AS client_avatar, cu.email AS client_email, cu.phone AS client_phone,
-    pu.full_name AS provider_name, pu.avatar_file_id AS provider_avatar, pu.phone AS provider_phone, pu.verification_status AS provider_verification,
+    cu.full_name AS client_name, cu.avatar_file_id AS client_avatar, cu.email AS client_email, cu.phone AS client_phone, cu.status AS client_status,
+    pu.status AS provider_status, pu.full_name AS provider_name, pu.avatar_file_id AS provider_avatar, pu.phone AS provider_phone, pu.verification_status AS provider_verification,
     pp.business_name, pp.avg_rating, pp.rating_count, pp.completed_bookings_count, pp.years_active, pp.avg_reply_minutes, pp.accepting_bookings, pp.category_id,
     w.code AS wilaya_code_ref, w.name AS wilaya_name, w.name_ar AS wilaya_name_ar`;
 
@@ -461,6 +463,8 @@ export class AppBookingsService {
       reason: row.reason ?? null,
       proposedByRole,
       awaitingMe: row.status === RescheduleStatus.Pending && proposedByRole !== (party === 'client' ? PartyRole.Client : PartyRole.Provider),
+      oldTotal: row.old_total === null || row.old_total === undefined ? null : String(row.old_total),
+      newTotal: row.new_total === null || row.new_total === undefined ? null : String(row.new_total),
       createdAt: iso(row.created_at)!,
     };
   }
@@ -470,6 +474,11 @@ export class AppBookingsService {
    * accepted booking. A provider's email is never exposed in the app at all
    * (mobile-api §7) — the client writes in the chat.
    */
+  /** BUG-M4: an admin blocked the other side and kept the booking. */
+  private counterpartyBlocked(r: { client_status?: string; provider_status?: string }, party: Party): boolean {
+    return (party === 'client' ? r.provider_status : r.client_status) === UserStatus.Blocked;
+  }
+
   private counterparty(r: any, party: Party): AppBookingPartyDto {
     const unmasked = r.status === BookingStatus.Accepted || r.status === BookingStatus.Completed;
     if (party === 'client') {
@@ -526,6 +535,25 @@ export class AppBookingsService {
       (extra.pendingReschedule.proposer_role === 'provider' ? PartyRole.Provider : PartyRole.Client) !== mineRole;
     const window = await this.reviewWindowFor(r);
     const em = this.dataSource.manager;
+    const expired = await this.bookings.isRequestExpired({ status: r.status, createdAt: new Date(r.created_at), eventDate: dateOnly(r.event_date), startTime: hhmm(r.start_time) });
+    // Same check as the accept endpoint, without locks (BUG-M2).
+    const canAccept =
+      party !== 'provider' || r.status !== BookingStatus.Pending || expired
+        ? true
+        : (await this.bookings.acceptObstacle(
+            em,
+            {
+              id: r.id,
+              providerId: r.provider_id,
+              serviceId: r.service_id ?? null,
+              packId: r.pack_id ?? null,
+              eventDate: dateOnly(r.event_date),
+              endDate: r.end_date ? dateOnly(r.end_date) : null,
+              startTime: hhmm(r.start_time),
+              endTime: hhmm(r.end_time),
+            },
+            { lock: false },
+          )) === null;
     return {
       id: r.id,
       reference: r.reference,
@@ -548,6 +576,7 @@ export class AppBookingsService {
       total: String(r.total),
       counterparty: this.counterparty(r, party),
       conversationId: extra.conversationId,
+      counterpartyBlocked: this.counterpartyBlocked(r, party),
       allowedActions: appBookingActions(party, {
         status: r.status,
         disputeStatus: r.dispute_status as BookingDisputeStatus,
@@ -559,6 +588,10 @@ export class AppBookingsService {
         hasReview: extra.reviewId !== null,
         disputeWindowOpen: await this.disputeOpen(em, r),
         reviewWindowOpen: window.open,
+        canAccept,
+        expired,
+        counterpartyBlocked: this.counterpartyBlocked(r, party),
+        eventOver: Date.now() >= eventEndsAt({ eventDate: dateOnly(r.event_date), endDate: r.end_date ? dateOnly(r.end_date) : null, startTime: hhmm(r.start_time), endTime: hhmm(r.end_time) }).getTime(),
       }),
       createdAt: iso(r.created_at)!,
     };
@@ -567,11 +600,52 @@ export class AppBookingsService {
   // ── writes ────────────────────────────────────────────────────
 
   /** Loads the booking and refuses somebody else's (403 NOT_OWNER), 404 when it does not exist. */
-  private async own(id: string, auth: AuthUser, party: Party): Promise<{ id: string; status: BookingStatus }> {
-    const [row] = await this.dataSource.query('SELECT id, status, client_id, provider_id FROM bookings WHERE id = ? AND deleted_at IS NULL', [id]);
+  private async own(
+    id: string,
+    auth: AuthUser,
+    party: Party,
+  ): Promise<{
+    id: string;
+    status: BookingStatus;
+    createdAt: Date;
+    eventDate: string;
+    endDate: string | null;
+    startTime: string | null;
+    endTime: string | null;
+    counterpartyBlocked: boolean;
+  }> {
+    const [row] = await this.dataSource.query(
+      `SELECT b.id, b.status, b.client_id, b.provider_id, b.created_at, b.event_date, b.end_date, b.start_time, b.end_time,
+              cu.status AS client_status, pu.status AS provider_status
+       FROM bookings b JOIN users cu ON cu.id = b.client_id JOIN users pu ON pu.id = b.provider_id
+       WHERE b.id = ? AND b.deleted_at IS NULL`,
+      [id],
+    );
     if (!row) throw AppException.of('BOOKING_NOT_FOUND');
     assertOwner(party === 'client' ? row.client_id : row.provider_id, auth.id);
-    return { id: row.id, status: row.status };
+    return {
+      id: row.id,
+      status: row.status,
+      createdAt: new Date(row.created_at),
+      eventDate: dateOnly(row.event_date),
+      endDate: row.end_date ? dateOnly(row.end_date) : null,
+      startTime: hhmm(row.start_time),
+      endTime: hhmm(row.end_time),
+      counterpartyBlocked: this.counterpartyBlocked(row, party),
+    };
+  }
+
+  /**
+   * BUG-E6: once an accepted event is over, neither party cancels or moves it from the app (409 BOOKING_EVENT_OVER),
+   * matching `allowedActions`. Admins still can (dispute outcomes cancel after the event).
+   */
+  private assertEventNotOver(booking: Awaited<ReturnType<AppBookingsService['own']>>): void {
+    if (booking.status === BookingStatus.Accepted && Date.now() >= eventEndsAt(booking).getTime()) throw AppException.of('BOOKING_EVENT_OVER');
+  }
+
+  /** BUG-F1: an expired request (setting on) can only be cancelled until the job declines it: 409 BOOKING_EXPIRED. */
+  private async assertNotExpired(booking: Awaited<ReturnType<AppBookingsService['own']>>): Promise<void> {
+    if (await this.bookings.isRequestExpired(booking)) throw AppException.of('BOOKING_EXPIRED');
   }
 
   /** Cancel, accept, decline or complete — always through `BookingsService.changeStatus`. */
@@ -583,7 +657,9 @@ export class AppBookingsService {
     reason: string | null,
     lang: Lang,
   ): Promise<AppBookingDetailDto> {
-    await this.own(id, auth, party);
+    const booking = await this.own(id, auth, party);
+    if (action === 'accepted' || action === 'declined') await this.assertNotExpired(booking);
+    if (action === 'cancelled') this.assertEventNotOver(booking);
     if (action === 'accepted') await this.assertLiveProvider(auth);
     await this.bookings.changeStatus(auth, id, {
       status: action,
@@ -604,7 +680,11 @@ export class AppBookingsService {
   }
 
   async reschedule(auth: AuthUser, id: string, party: Party, dto: AppRescheduleDto, lang: Lang): Promise<AppBookingDetailDto> {
-    await this.own(id, auth, party);
+    const booking = await this.own(id, auth, party);
+    await this.assertNotExpired(booking);
+    this.assertEventNotOver(booking);
+    // BUG-M4: nobody could answer the proposal of a booking kept through a block.
+    if (booking.status === BookingStatus.Accepted && booking.counterpartyBlocked) throw AppException.of('COUNTERPARTY_UNAVAILABLE');
     await this.bookings.reschedule(auth, id, { date: dto.date, startTime: dto.startTime, endTime: dto.endTime, reason: dto.reason, force: false });
     return this.detail(auth, id, party, lang);
   }

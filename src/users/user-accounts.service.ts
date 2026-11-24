@@ -155,10 +155,22 @@ export class UserAccountsService implements OnModuleInit {
     return { upcomingBookings: Number(upcoming.n), openDisputes: Number(disputes.n) };
   }
 
-  /** Cancels the user's pending bookings through BookingsService (status rows, released availability, audit, one event per booking). */
-  private async cancelPendingBookings(em: EntityManager, afterCommit: AfterCommit, user: User, choice: BookingChoice, reason: string, actorId: string | null): Promise<number> {
+  /**
+   * Cancels the user's bookings through BookingsService (status rows, released availability, voided invoices, audit,
+   * one event per booking → the other party is notified). Account deletion: pending only (accepted upcoming ones
+   * block the deletion). Account block with "cancel": pending **and** accepted ones whose event is not over (BUG-M4).
+   */
+  private async cancelPendingBookings(
+    em: EntityManager,
+    afterCommit: AfterCommit,
+    user: User,
+    choice: BookingChoice,
+    reason: string,
+    actorId: string | null,
+    includeAccepted = false,
+  ): Promise<number> {
     if (bookingsToCancel(choice, [user.id]).length === 0) return 0;
-    return this.bookings.cancelPendingFor(em, afterCommit, { column: this.column(user), id: user.id, reason, actorId, causedByUserId: user.id });
+    return this.bookings.cancelPendingFor(em, afterCommit, { column: this.column(user), id: user.id, reason, actorId, causedByUserId: user.id, includeAccepted });
   }
 
   // ── block / unblock ─────────────────────────────────────────
@@ -175,7 +187,9 @@ export class UserAccountsService implements OnModuleInit {
       blockedById: auth.id,
     });
     const sessionsRevoked = await this.sessions.revokeAllForUser(user.id, em);
-    const cancelledBookings = await this.cancelPendingBookings(em, afterCommit, user, input.bookings, 'account_blocked', auth.id);
+    const cancelledBookings = await this.cancelPendingBookings(em, afterCommit, user, input.bookings, 'account_blocked', auth.id, true);
+    // "Keep": what stays is reloaded by both apps (`counterpartyBlocked`), and the other party of an accepted booking is told.
+    if (input.bookings === 'keep') await this.bookings.announceAccountStatus(em, afterCommit, { column: this.column(user), userId: user.id, blocked: true });
     await em.query('UPDATE conversation_participants SET can_write = 0 WHERE user_id = ?', [user.id]);
     await this.audit.log(
       {
@@ -223,6 +237,8 @@ export class UserAccountsService implements OnModuleInit {
        SET cp.can_write = 1 WHERE cp.user_id = ? AND c.status = 'open'`,
       [user.id],
     );
+    // Bookings kept through the block: both apps reload them (`counterpartyBlocked` false again, reschedule back).
+    await this.bookings.announceAccountStatus(em, afterCommit, { column: this.column(user), userId: user.id, blocked: false });
     await this.audit.log(
       {
         ...(automatic ? { actorId: null, actorRole: null } : {}),

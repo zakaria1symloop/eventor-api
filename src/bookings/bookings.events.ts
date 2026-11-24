@@ -12,6 +12,10 @@ export const BOOKING_EVENTS = {
   /** The other party turned a proposed date down; the booking keeps its date. */
   rescheduleRejected: 'booking.reschedule_rejected',
   priceChanged: 'booking.price_changed',
+  /** An admin edited the details (BKG-02 edit): no notification, only the apps' `booking:updated` (BUG-E5). */
+  updated: 'booking.updated',
+  /** The other party's account was blocked and the admin kept the booking (BUG-M4): the remaining party is told. */
+  counterpartyBlocked: 'booking.counterparty_blocked',
   /** Manual (BKG-03) or automatic (reply deadline − 12 h) reminder to the provider. */
   reminderSent: 'booking.reminder_sent',
   reviewRequested: 'booking.review_requested',
@@ -50,6 +54,14 @@ export interface BookingRescheduledEvent extends BookingEvent {
   applied: boolean;
   /** Who proposed, accepted or rejected the date: not notified about their own action. */
   actorId: string | null;
+  /** Set only when the move changes the price (per-hour services, BUG-E3): the total before and with the new hours. */
+  oldTotal?: string;
+  newTotal?: string;
+}
+
+export interface BookingCounterpartyBlockedEvent extends BookingEvent {
+  /** The blocked account: the other party is the one notified. */
+  blockedUserId: string;
 }
 
 export interface BookingPriceChangedEvent extends BookingEvent {

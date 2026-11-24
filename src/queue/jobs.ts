@@ -10,6 +10,7 @@ export const JOBS = {
   bookingReplyReminders: 'bookings.reply-reminders',
   bookingAutoComplete: 'bookings.auto-complete',
   bookingReviewRequests: 'bookings.review-requests',
+  bookingExpireRequests: 'bookings.expire-requests',
   disputeCloseConversations: 'disputes.close-conversations',
   academicRequestsComplete: 'academic-requests.complete',
   bookingNoReplyAlerts: 'notifications.booking-no-reply',

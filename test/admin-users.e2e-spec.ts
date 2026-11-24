@@ -324,6 +324,8 @@ describe('Admin users (e2e)', () => {
         packs: { total: 0, published: 0 },
         reviews: { avg: 4, count: 1, reported: 1 },
         disputes: { open: 1, total: 1 },
+        // The reported review was written by the client: it counts in reviews.reported, not as a report about the provider (BUG-H3).
+        reports: { open: 0, openOnAccount: 0, total: 0 },
         earnings: '30000.00',
         replyRate: 96,
       });
@@ -394,6 +396,34 @@ describe('Admin users (e2e)', () => {
     });
   });
 
+  describe('reports about an account (BUG-H3, H-08 / L-31)', () => {
+    it('counts and lists the reports on the account and on what it owns, from the app report routes', async () => {
+      const { user: provider } = await makeProvider(db());
+      const service = await makeService(db(), { providerId: provider.id, status: ServiceStatus.Published });
+      await db().query('INSERT INTO service_wilayas (service_id, wilaya_code, created_at) VALUES (?, 16, NOW(6))', [service.id]);
+      const { user: someoneElse } = await makeProvider(db());
+      const reporter = await loginAs(t, UserRole.Client);
+      const report = (targetType: ReportTargetType, targetId: string) =>
+        request(t.http).post('/api/v1/app/reports').set(reporter.headers).send({ targetType, targetId, reason: 'inappropriate', note: 'QA H-08' }).expect(201);
+      const onAccount = (await report(ReportTargetType.User, provider.id)).body.data;
+      const onService = (await report(ReportTargetType.Service, service.id)).body.data;
+      await report(ReportTargetType.User, someoneElse.id);
+
+      const detail = await request(t.http).get(`${BASE}/${provider.id}`).set(admin.headers).expect(200);
+      expect(detail.body.data.stats.reports).toEqual({ open: 2, openOnAccount: 1, total: 2 });
+
+      const about = await request(t.http).get(`/api/v1/admin/reports?aboutUserId=${provider.id}&tab=all`).set(admin.headers).expect(200);
+      expect(about.body.data.map((r: { id: string }) => r.id).sort()).toEqual([onAccount.id, onService.id].sort());
+      expect(about.body.data.find((r: { id: string }) => r.id === onAccount.id).target).toMatchObject({ href: `/users/${provider.id}`, exists: true });
+      expect(about.body.meta.total).toBe(2);
+      const accountOnly = await request(t.http).get(`/api/v1/admin/reports?targetType=user&targetId=${provider.id}`).set(admin.headers).expect(200);
+      expect(accountOnly.body.data.map((r: { id: string }) => r.id)).toEqual([onAccount.id]);
+      // Every target type appears in the unfiltered moderation list.
+      const all = await request(t.http).get('/api/v1/admin/reports?tab=all&limit=100&sort=createdAt:desc').set(admin.headers).expect(200);
+      expect(all.body.data.map((r: { id: string }) => r.id)).toEqual(expect.arrayContaining([onAccount.id, onService.id]));
+    });
+  });
+
   describe('block / unblock', () => {
     async function providerWithActivity() {
       const { user: provider } = await makeProvider(db());
@@ -416,8 +446,10 @@ describe('Admin users (e2e)', () => {
       expectError(await request(t.http).get(`${BASE}/${MISSING}/block-impact`).set(admin.headers), 404, 'USER_NOT_FOUND');
     });
 
-    it('blocks: sessions revoked, pending bookings cancelled with status rows and events, chats read-only, audit, email', async () => {
+    it('blocks: sessions revoked, pending and upcoming accepted bookings cancelled (BUG-M4, M-16), chats read-only, audit, email', async () => {
       const { provider, pending, accepted } = await providerWithActivity();
+      // An event already over stays as it is.
+      const past = await makeBooking(db(), { providerId: provider.id, status: BookingStatus.Accepted, eventDate: '2026-09-01' });
       const cancelled = recordEvents('booking.cancelled');
       const until = new Date(Math.floor((Date.now() + 7 * 86_400_000) / 1000) * 1000).toISOString();
       const res = await request(t.http)
@@ -429,15 +461,17 @@ describe('Admin users (e2e)', () => {
       expect(res.body.data).toMatchObject({
         user: { id: provider.id, status: 'blocked' },
         impact: { servicesCount: 1, pendingBookings: 2, upcomingBookings: 1, conversations: 1 },
-        cancelledBookings: 2,
+        cancelledBookings: 3,
         sessionsRevoked: 1,
       });
+      const active = [...pending, accepted].map((b) => b.id).sort();
       const bookings = await db().getRepository(Booking).findBy({ providerId: provider.id });
-      expect(bookings.filter((b) => b.status === BookingStatus.Cancelled).map((b) => b.id).sort()).toEqual(pending.map((b) => b.id).sort());
-      expect(bookings.find((b) => b.id === accepted.id)!.status).toBe(BookingStatus.Accepted);
-      const [{ n }] = await db().query("SELECT COUNT(*) AS n FROM booking_status_changes WHERE booking_id IN (?) AND to_status = 'cancelled'", [pending.map((b) => b.id)]);
-      expect(Number(n)).toBe(2);
-      expect(cancelled.seen.map((e) => e.bookingId).sort()).toEqual(pending.map((b) => b.id).sort());
+      expect(bookings.filter((b) => b.status === BookingStatus.Cancelled).map((b) => b.id).sort()).toEqual(active);
+      expect(bookings.find((b) => b.id === accepted.id)).toMatchObject({ cancelledBy: 'admin', cancelReason: 'account_blocked' });
+      expect(bookings.find((b) => b.id === past.id)!.status).toBe(BookingStatus.Accepted);
+      const [{ n }] = await db().query("SELECT COUNT(*) AS n FROM booking_status_changes WHERE booking_id IN (?) AND to_status = 'cancelled'", [active]);
+      expect(Number(n)).toBe(3);
+      expect(cancelled.seen.map((e) => e.bookingId).sort()).toEqual(active);
       expect(Number((await db().query('SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND revoked_at IS NULL', [provider.id]))[0].n)).toBe(0);
       expect((await db().getRepository(ConversationParticipant).findOneByOrFail({ userId: provider.id })).canWrite).toBe(false);
       expect(await reload(provider.id)).toMatchObject({ status: 'blocked', blockedReason: 'fraud', blockedById: admin.user.id });
@@ -459,11 +493,29 @@ describe('Admin users (e2e)', () => {
       expect(again.body.message).toBe('هذا الحساب غير محظور.');
     });
 
-    it('keeps pending bookings when asked', async () => {
+    it('keeps the bookings when asked: the client is told, cannot propose a new date, and gets it back on unblock (BUG-M4)', async () => {
       const { provider } = await providerWithActivity();
+      const client = await loginAs(t, UserRole.Client);
+      const service = await makeService(db(), { providerId: provider.id });
+      const kept = await makeBooking(db(), { serviceId: service.id, providerId: provider.id, clientId: client.user.id, status: BookingStatus.Accepted, eventDate: FUTURE });
+      const mine = async () => (await request(t.http).get(`/api/v1/app/bookings/${kept.id}`).set(client.headers).expect(200)).body.data;
+      expect(await mine()).toMatchObject({ counterpartyBlocked: false, allowedActions: expect.arrayContaining(['reschedule']) });
+
       const res = await request(t.http).post(`${BASE}/${provider.id}/block`).set(admin.headers).send({ reason: 'spam', bookings: 'keep' }).expect(200);
+
       expect(res.body.data.cancelledBookings).toBe(0);
       expect(await db().getRepository(Booking).countBy({ providerId: provider.id, status: BookingStatus.Pending })).toBe(2);
+      expect(await db().getRepository(Booking).countBy({ providerId: provider.id, status: BookingStatus.Accepted })).toBe(2);
+      const notes = await db().query("SELECT user_id FROM notifications WHERE type = 'booking.counterparty_blocked' AND JSON_UNQUOTE(JSON_EXTRACT(data, '$.bookingId')) = ?", [kept.id]);
+      expect(notes).toEqual([{ user_id: client.user.id }]);
+      const during = await mine();
+      expect(during.counterpartyBlocked).toBe(true);
+      expect(during.allowedActions).not.toContain('reschedule');
+      expect(during.allowedActions).toEqual(expect.arrayContaining(['cancel', 'message']));
+      expectError(await request(t.http).post(`/api/v1/app/bookings/${kept.id}/reschedule`).set(client.headers).send({ date: '2031-02-02', reason: 'Move' }), 409, 'COUNTERPARTY_UNAVAILABLE');
+
+      await request(t.http).post(`${BASE}/${provider.id}/unblock`).set(admin.headers).expect(200);
+      expect(await mine()).toMatchObject({ counterpartyBlocked: false, allowedActions: expect.arrayContaining(['reschedule']) });
     });
 
     it('400 for missing fields and a past until; 404; 401/403', async () => {

@@ -447,7 +447,15 @@ export class BlockUserDto {
   @MaxLength(2000)
   message?: string | null;
 
-  @ApiProperty({ enum: ['cancel', 'keep'], example: 'cancel', description: 'What happens to pending bookings.' })
+  @ApiProperty({
+    enum: ['cancel', 'keep'],
+    example: 'cancel',
+    description:
+      'What happens to the account\'s bookings (BUG-M4). `cancel`: every pending request **and** every accepted booking whose event is not over ' +
+      'is cancelled (cancelledBy `admin`, reason `account_blocked`, invoices voided, the other party notified). `keep`: they all stay; the other ' +
+      'party of each accepted one is notified that the counterpart is unavailable, and cannot propose a new date until the unblock. Unblocking ' +
+      'never restores cancelled bookings.',
+  })
   @IsIn(['cancel', 'keep'])
   bookings: 'cancel' | 'keep';
 }
@@ -516,7 +524,7 @@ export class BlockImpactDto {
   @ApiProperty({ example: 3 })
   pendingBookings: number;
 
-  @ApiProperty({ example: 5, description: 'Accepted bookings from today (kept).' })
+  @ApiProperty({ example: 5, description: 'Accepted bookings from today: cancelled with `bookings: cancel`, kept with `keep` (BUG-M4).' })
   upcomingBookings: number;
 
   @ApiProperty({ example: 8, description: 'Open conversations that become read-only for the user.' })
@@ -641,6 +649,15 @@ export class ReviewStatsDto {
   @ApiProperty({ example: 1, description: 'Open reports on those reviews.' }) reported: number;
 }
 
+export class UserReportStatsDto {
+  @ApiProperty({ example: 3, description: 'Open reports about this account: on the account itself and on what it owns or wrote (`GET /admin/reports?aboutUserId=`, open tab).' })
+  open: number;
+  @ApiProperty({ example: 1, description: 'Of those, open reports on the account itself (`targetType=user`), e.g. a client reporting a provider from the app.' })
+  openOnAccount: number;
+  @ApiProperty({ example: 9, description: 'All reports about the account, whatever their status (`aboutUserId`, tab all).' })
+  total: number;
+}
+
 export class DisputeStatsDto {
   @ApiProperty({ example: 0, description: 'Open or in review.' }) open: number;
   @ApiProperty({ example: 2 }) total: number;
@@ -652,6 +669,8 @@ export class UserStatsDto {
   @ApiProperty({ type: PackStatsDto, nullable: true, description: 'Providers only.' }) packs: PackStatsDto | null;
   @ApiProperty({ type: ReviewStatsDto }) reviews: ReviewStatsDto;
   @ApiProperty({ type: DisputeStatsDto }) disputes: DisputeStatsDto;
+  @ApiProperty({ type: UserReportStatsDto, description: 'BUG-H3: reports about this account and its content (reviews.reported only covers reviews).' })
+  reports: UserReportStatsDto;
   @ApiProperty({ example: '3840000.00', description: 'DZD. Sum of completed booking totals (earned by a provider, spent by a client).' }) earnings: string;
   @ApiProperty({ type: Number, nullable: true, example: 96, description: 'Providers only, percent.' }) replyRate: number | null;
 }

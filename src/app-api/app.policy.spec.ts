@@ -12,6 +12,7 @@ import {
   pickTextOrNull,
   ratingBreakdown,
   replyTimeLabel,
+  serviceDay,
 } from './app.policy.js';
 
 describe('pickText (language fallback)', () => {
@@ -155,6 +156,42 @@ describe('dayState (calendar on screens 12 / 20)', () => {
   it('treats a capacity of zero as one, so a bad row cannot black out a calendar', () => {
     expect(dayState({ past: false, manualBlock: false, taken: 0, capacity: 0 })).toBe('available');
     expect(dayState({ past: false, manualBlock: false, taken: 1, capacity: 0 })).toBe('busy');
+  });
+});
+
+describe('serviceDay (one service day: calendar and eventDate search, BUG-D2)', () => {
+  // 2027-03-05 is a Friday (ISO weekday 5), 2027-03-07 a Sunday (7).
+  const FRI = '2027-03-05';
+  const SUN = '2027-03-07';
+  const evenings = [4, 5, 6].map((weekday) => ({ weekday, startTime: '19:00', endTime: '01:00' }));
+  const day = (over: Partial<Parameters<typeof serviceDay>[0]> = {}) =>
+    serviceDay({ date: FRI, state: 'available', hours: evenings, from: null, until: null, blocks: [], booked: [], concurrent: 1, ...over });
+
+  it('is available with its free hours on an open weekday', () => {
+    expect(day()).toEqual({ state: 'available', freeRanges: [{ startTime: '19:00', endTime: '01:00' }] });
+  });
+
+  it('is blocked on a weekday without hours (the D-15 "Solo oud" case) — no hours at all means open every day', () => {
+    expect(day({ date: SUN })).toEqual({ state: 'blocked', freeRanges: [] });
+    expect(day({ date: SUN, hours: [] })).toMatchObject({ state: 'available' });
+  });
+
+  it('is blocked outside the period of event dates', () => {
+    expect(day({ until: '2027-03-04' }).state).toBe('blocked');
+    expect(day({ from: '2027-03-06' }).state).toBe('blocked');
+    expect(day({ from: FRI, until: FRI }).state).toBe('available');
+  });
+
+  it('is busy when blocks and bookings leave no free hour', () => {
+    expect(day({ booked: [{ start: 19 * 60, end: 25 * 60 }] })).toEqual({ state: 'busy', freeRanges: [] });
+    expect(day({ blocks: [{ start: 19 * 60, end: 25 * 60 }] }).state).toBe('busy');
+    // Two clients at a time: one booking leaves room.
+    expect(day({ booked: [{ start: 19 * 60, end: 25 * 60 }], concurrent: 2 }).state).toBe('available');
+  });
+
+  it('keeps the provider state when it is not available', () => {
+    expect(day({ state: 'busy' })).toEqual({ state: 'busy', freeRanges: [] });
+    expect(day({ state: 'blocked' })).toEqual({ state: 'blocked', freeRanges: [] });
   });
 });
 

@@ -1,5 +1,6 @@
 import { AppException } from '../common/errors/app.exception.js';
 import type { Lang } from '../common/i18n/language.js';
+import { freeRanges, inPeriod, weekdayOf, type HourRange, type Span } from '../services/scheduling.policy.js';
 import { fromCents, toCents } from '../services/services.policy.js';
 
 /** How many budget lines one client may keep (screen 18 shows a handful). */
@@ -97,6 +98,32 @@ export function dayState(input: { past: boolean; manualBlock: boolean; taken: nu
   // null = no daily limit: only manual blocks (and, for services, the free hours) close a day.
   if (input.capacity === null) return 'available';
   return input.taken >= Math.max(1, input.capacity) ? 'busy' : 'available';
+}
+
+/**
+ * One day of one service, after `dayState`: the service's own schedule. Outside
+ * its period of event dates, or on a weekday it has no hours for, the day is
+ * `blocked`; when partial blocks and booked moments leave no free hour, `busy`.
+ * The screen 12 calendar and the `eventDate` search filter both use it, so the
+ * list never shows a service its calendar says can't be booked (BUG-D2).
+ */
+export function serviceDay(input: {
+  date: string;
+  /** `dayState` of the provider that day. */
+  state: DayState;
+  hours: HourRange[];
+  from: string | null;
+  until: string | null;
+  blocks: Span[];
+  booked: Span[];
+  /** Clients at the same time; null = no limit. */
+  concurrent: number | null;
+}): { state: DayState; freeRanges: { startTime: string; endTime: string }[] } {
+  const closed = !inPeriod(input.date, input.from, input.until) || (input.hours.length > 0 && !input.hours.some((h) => h.weekday === weekdayOf(input.date)));
+  const state: DayState = closed ? 'blocked' : input.state;
+  if (state !== 'available') return { state, freeRanges: [] };
+  const free = freeRanges({ hours: input.hours, date: input.date, blocks: input.blocks, booked: input.booked, capacity: input.concurrent });
+  return { state: free.length === 0 ? 'busy' : 'available', freeRanges: free };
 }
 
 /** Rating histogram (screen 12 "rating breakdown"), always five buckets. */

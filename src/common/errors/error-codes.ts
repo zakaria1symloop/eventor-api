@@ -531,6 +531,21 @@ export const ERROR_CODES = {
     en: 'A booking cannot move from "{from}" to "{to}".',
     ar: 'لا يمكن نقل الحجز من "{from}" إلى "{to}".',
   },
+  BOOKING_EXPIRED: {
+    status: HttpStatus.CONFLICT,
+    en: 'This request expired: it was not answered in time.',
+    ar: 'انتهت صلاحية هذا الطلب: لم يتم الرد عليه في الوقت المحدد.',
+  },
+  COUNTERPARTY_UNAVAILABLE: {
+    status: HttpStatus.CONFLICT,
+    en: 'The other party is temporarily unavailable on Eventor: the date cannot be changed now. Contact Eventor support.',
+    ar: 'الطرف الآخر غير متاح مؤقتًا على Eventor: لا يمكن تغيير الموعد الآن. تواصل مع دعم Eventor.',
+  },
+  BOOKING_EVENT_OVER: {
+    status: HttpStatus.CONFLICT,
+    en: 'This event is over: the booking can no longer be cancelled or moved.',
+    ar: 'انتهت هذه المناسبة: لم يعد بالإمكان إلغاء الحجز أو تغيير موعده.',
+  },
   BOOKING_NOT_EDITABLE: {
     status: HttpStatus.CONFLICT,
     en: 'This action is not possible while the booking is {status}.',

@@ -70,3 +70,19 @@ export const CONVERTIBLE_TARGETS: readonly ReportTargetType[] = [ReportTargetTyp
 /** Action labels recorded when an admin resolves a report after acting elsewhere (hide, block, close chat…). */
 export const REPORT_RESOLVE_ACTIONS = ['content_hidden', 'content_redacted', 'content_deleted', 'chat_closed', 'user_warned', 'user_blocked', 'service_hidden', 'other'] as const;
 export type ReportResolveAction = (typeof REPORT_RESOLVE_ACTIONS)[number];
+
+/**
+ * BUG-H3: "reports about this user", with `rp` the reports alias. Reports on the
+ * account itself, and on what it owns or wrote: its services and packs, the
+ * messages it sent, the reviews and review replies it wrote. The admin user page
+ * counts them (`stats.reports`) and lists them (`GET /admin/reports?aboutUserId=`)
+ * with this one definition, so the two can't disagree. `params(id)` fills the six `?`.
+ */
+export const REPORTS_ABOUT_USER_SQL = `((rp.target_type = 'user' AND rp.target_id = ?)
+  OR (rp.target_type = 'service' AND rp.target_id IN (SELECT id FROM services WHERE provider_id = ?))
+  OR (rp.target_type = 'pack' AND rp.target_id IN (SELECT id FROM packs WHERE provider_id = ?))
+  OR (rp.target_type = 'message' AND rp.target_id IN (SELECT id FROM messages WHERE sender_id = ?))
+  OR (rp.target_type = 'review' AND rp.target_id IN (SELECT id FROM reviews WHERE author_id = ?))
+  OR (rp.target_type = 'review_reply' AND rp.target_id IN (SELECT id FROM review_replies WHERE provider_id = ?)))`;
+
+export const reportsAboutUserParams = (userId: string): string[] => Array.from({ length: 6 }, () => userId);

@@ -15,7 +15,7 @@ import { paginate, type Paginated } from '../common/pagination/paginated.js';
 import { FilesService } from '../files/files.service.js';
 import { PACK_VISIBLE_SQL } from '../packs/packs.policy.js';
 import { packPricing } from '../packs/packs.policy.js';
-import { freeRanges, inPeriod, weekdayOf, type HourRange } from '../services/scheduling.policy.js';
+import type { HourRange } from '../services/scheduling.policy.js';
 import { SERVICE_VISIBLE_SQL } from '../services/services.policy.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { algiersToday, dateOnly } from '../users/users.service.js';
@@ -33,6 +33,7 @@ import {
   pickTextOrNull,
   ratingBreakdown,
   replyTimeLabel,
+  serviceDay,
   type DayState,
 } from './app.policy.js';
 import type {
@@ -68,6 +69,28 @@ const SERVICE_CARD_JOINS = `FROM services s
   LEFT JOIN provider_profiles pp ON pp.user_id = u.id AND pp.deleted_at IS NULL
   LEFT JOIN categories c ON c.id = s.category_id AND c.deleted_at IS NULL
   LEFT JOIN categories pc ON pc.id = pp.category_id AND pc.deleted_at IS NULL`;
+
+/** What a service calendar needs from one `services` row. */
+interface CalendarService {
+  id: string;
+  providerId: string;
+  /** `max_events_per_day`: the provider's events per day; null = no daily limit. */
+  capacity: number | null;
+  /** `concurrent_clients`: clients at the same time; null = no limit. */
+  concurrent: number | null;
+  from: string | null;
+  until: string | null;
+}
+
+/** A row with `id, provider_id, max_events_per_day, concurrent_clients, available_from, available_until`. */
+const calendarService = (row: any): CalendarService => ({
+  id: row.id,
+  providerId: row.provider_id,
+  capacity: row.max_events_per_day === null ? null : Number(row.max_events_per_day),
+  concurrent: row.concurrent_clients === null ? null : Number(row.concurrent_clients),
+  from: row.available_from ? dateOnly(row.available_from) : null,
+  until: row.available_until ? dateOnly(row.available_until) : null,
+});
 
 /**
  * Everything a client browses: home, categories, search, service and provider
@@ -249,20 +272,27 @@ export class AppCatalogService {
       where.push('EXISTS (SELECT 1 FROM pack_items pi JOIN packs pk ON pk.id = pi.pack_id WHERE pi.service_id = s.id AND pk.event_type = ?)');
       params.push(query.eventType);
     }
-    if (query.eventDate) {
-      // Free that day: no manual whole-day block and capacity left after held / booked events.
-      where.push(`NOT EXISTS (SELECT 1 FROM availability_blocks ab WHERE ab.provider_id = s.provider_id AND ab.date = ?
-          AND ab.deleted_at IS NULL AND ab.kind = 'blocked' AND ab.start_time IS NULL AND (ab.service_id IS NULL OR ab.service_id = s.id))`);
-      params.push(query.eventDate);
-      where.push(`(s.max_events_per_day IS NULL OR (SELECT COUNT(*) FROM bookings bk WHERE bk.provider_id = s.provider_id
-          AND ? BETWEEN bk.event_date AND COALESCE(bk.end_date, bk.event_date)
-          AND bk.deleted_at IS NULL AND bk.status IN ('pending', 'accepted')) < s.max_events_per_day)`);
-      params.push(query.eventDate);
-    }
     if (query.favourite) {
       if (!viewer) throw AppException.of('AUTH_TOKEN_MISSING');
       where.push('EXISTS (SELECT 1 FROM favourites fv WHERE fv.service_id = s.id AND fv.user_id = ? AND fv.deleted_at IS NULL)');
       params.push(viewer.id);
+    }
+    if (query.eventDate) {
+      // "Free on that day" is the day the screen 12 calendar shows as `available` — the same rows through the
+      // same rules (BUG-D2): blocks, daily limit, period, weekly hours, free hours, min notice. The other filters
+      // narrow the candidates first; paging and `total` then run on the services that are free.
+      const date = query.eventDate;
+      const candidates = await this.dataSource.query(
+        `SELECT s.id, s.provider_id, s.max_events_per_day, s.concurrent_clients, s.available_from, s.available_until
+         ${SERVICE_CARD_JOINS} WHERE ${where.join(' AND ')}`,
+        params,
+      );
+      const { firstBookable } = await this.bookableFrom();
+      const dayOf = await this.serviceCalendars(this.dataSource.manager, candidates.map(calendarService), date, date, firstBookable);
+      const free = candidates.filter((row: any) => dayOf(row.id, date).state === 'available').map((row: any) => row.id);
+      if (free.length === 0) return paginate([], 0, query);
+      where.push('s.id IN (?)');
+      params.push(free);
     }
 
     const sql = where.join(' AND ');
@@ -703,12 +733,112 @@ export class AppCatalogService {
 
   // ── availability (screens 12 / 20) ──────────────────────────
 
+  /** `booking_min_notice_days` and the first day it lets a client book (Africa/Algiers). */
+  private async bookableFrom(): Promise<{ minNoticeDays: number; firstBookable: string }> {
+    const minNoticeDays = await this.settings.get('booking_min_notice_days');
+    const today = algiersToday();
+    const firstBookable = new Date(new Date(`${today}T00:00:00.000Z`).getTime() + minNoticeDays * 86_400_000).toISOString().slice(0, 10);
+    return { minNoticeDays, firstBookable };
+  }
+
   /**
-   * A month of `available | busy | blocked` for one provider (a service) or for
-   * several at once (a pack: a day is only free when *every* item's provider
-   * is). Three queries, never one per day.
+   * The days of several services over `first`…`last`, from five queries (never
+   * one per service or per day). Screen 12 asks one service for a month; the
+   * `eventDate` search filter asks every candidate service for one day. Both read
+   * the same rows through `dayState` + `serviceDay`, so they can't disagree (BUG-D2).
    */
-  private async availability(
+  private async serviceCalendars(
+    em: EntityManager,
+    services: CalendarService[],
+    first: string,
+    last: string,
+    firstBookable: string,
+  ): Promise<(serviceId: string, date: string) => { state: DayState; freeRanges: { startTime: string; endTime: string }[] }> {
+    const ids = services.map((s) => s.id);
+    const providerIds = [...new Set(services.map((s) => s.providerId))];
+    const [hourRows, blockRows, bookingRows, packItemRows, timedRows]: any[][] =
+      ids.length === 0
+        ? [[], [], [], [], []]
+        : await Promise.all([
+            em.query('SELECT service_id, weekday, start_time, end_time FROM service_hours WHERE service_id IN (?) ORDER BY weekday, start_time', [ids]),
+            // Blocks of the provider, or of one of these services; whole-day ones have no start time.
+            em.query(
+              `SELECT ab.date, ab.provider_id, ab.service_id, ab.start_time, ab.end_time FROM availability_blocks ab
+               WHERE ab.provider_id IN (?) AND ab.date BETWEEN ? AND ? AND ab.deleted_at IS NULL AND ab.kind = 'blocked'
+                 AND (ab.service_id IS NULL OR ab.service_id IN (?))`,
+              [providerIds, first, last, ids],
+            ),
+            // The provider's events per day, against the daily limit. A multi-day booking takes every day of its range.
+            em.query(
+              `SELECT b.event_date, b.end_date, b.provider_id FROM bookings b
+               WHERE b.provider_id IN (?) AND b.event_date <= ? AND COALESCE(b.end_date, b.event_date) >= ? AND b.deleted_at IS NULL
+                 AND b.status IN ('pending', 'accepted')`,
+              [providerIds, last, first],
+            ),
+            em.query('SELECT pack_id, service_id FROM pack_items WHERE service_id IN (?)', [ids]),
+            // Timed bookings of the service itself or of a pack holding it, against the clients at the same time.
+            em.query(
+              `SELECT b.event_date AS date, b.end_date, b.start_time, b.end_time, b.service_id, b.pack_id FROM bookings b
+               WHERE b.event_date <= ? AND COALESCE(b.end_date, b.event_date) >= ? AND b.deleted_at IS NULL AND b.status IN ('pending', 'accepted')
+                 AND b.start_time IS NOT NULL AND b.end_time IS NOT NULL
+                 AND (b.service_id IN (?) OR b.pack_id IN (SELECT pack_id FROM pack_items WHERE service_id IN (?)))`,
+              [last, first, ids, ids],
+            ),
+          ]);
+
+    // `date` columns come back from mysql2 as JS Dates, so they go through
+    // `dateOnly` rather than a string slice — `String(new Date())` is "Wed Sep 30 …".
+    const hours = new Map<string, HourRange[]>();
+    for (const r of hourRows) {
+      hours.set(r.service_id, [...(hours.get(r.service_id) ?? []), { weekday: Number(r.weekday), startTime: String(r.start_time).slice(0, 5), endTime: String(r.end_time).slice(0, 5) }]);
+    }
+    // Whole-day blocks: `provider|*|date` for the provider, `provider|service|date` for one service.
+    const wholeDay = new Set(blockRows.filter((r) => r.start_time === null).map((r) => `${r.provider_id}|${r.service_id ?? '*'}|${dateOnly(r.date)}`));
+    const partial = blockRows.filter((r) => r.start_time !== null);
+    const taken = new Map<string, number>();
+    for (const row of bookingRows) {
+      for (const date of bookingDays(dateOnly(row.event_date), row.end_date ? dateOnly(row.end_date) : null)) {
+        const key = `${row.provider_id}|${date}`;
+        taken.set(key, (taken.get(key) ?? 0) + 1);
+      }
+    }
+    const packsOf = new Map<string, Set<string>>();
+    for (const r of packItemRows) packsOf.set(r.service_id, (packsOf.get(r.service_id) ?? new Set()).add(r.pack_id));
+    // Rows with an `end_date` cover every day of their range.
+    const spansOn = (rows: any[], date: string) =>
+      rows.filter((r) => dateOnly(r.date) <= date && date <= dateOnly(r.end_date ?? r.date)).map((r) => timeSpan(hhmm(r.start_time), hhmm(r.end_time))!);
+
+    const byId = new Map(
+      services.map((s) => [
+        s.id,
+        {
+          service: s,
+          hours: hours.get(s.id) ?? [],
+          blocks: partial.filter((r) => r.provider_id === s.providerId && (r.service_id === null || r.service_id === s.id)),
+          timed: timedRows.filter((r) => r.service_id === s.id || (r.pack_id !== null && (packsOf.get(s.id)?.has(r.pack_id) ?? false))),
+        },
+      ]),
+    );
+
+    return (serviceId, date) => {
+      const entry = byId.get(serviceId);
+      if (!entry) return { state: 'blocked', freeRanges: [] };
+      const { service, hours: serviceHours, blocks, timed } = entry;
+      const state = dayState({
+        past: date < firstBookable,
+        manualBlock: wholeDay.has(`${service.providerId}|*|${date}`) || wholeDay.has(`${service.providerId}|${service.id}|${date}`),
+        taken: taken.get(`${service.providerId}|${date}`) ?? 0,
+        capacity: service.capacity,
+      });
+      return serviceDay({ date, state, hours: serviceHours, from: service.from, until: service.until, blocks: spansOn(blocks, date), booked: spansOn(timed, date), concurrent: service.concurrent });
+    };
+  }
+
+  /**
+   * A month of `available | busy | blocked` for a pack: a day is only free when
+   * *every* item's provider is. Two queries, never one per day.
+   */
+  private async packCalendar(
     em: EntityManager,
     input: {
       providerIds: string[];
@@ -716,14 +846,10 @@ export class AppCatalogService {
       month: string;
       /** Bookings per day; null = no daily limit. */
       capacity: number | null;
-      /** One service: its period, weekly hours and clients at the same time give `freeRanges` (issues 3 #10). */
-      schedule?: { serviceId: string; hours: HourRange[]; from: string | null; until: string | null; concurrent: number | null };
     },
   ): Promise<AppAvailabilityDto> {
     const { first, last, days } = parseMonth(input.month);
-    const minNoticeDays = await this.settings.get('booking_min_notice_days');
-    const today = algiersToday();
-    const firstBookable = new Date(new Date(`${today}T00:00:00.000Z`).getTime() + minNoticeDays * 86_400_000).toISOString().slice(0, 10);
+    const { minNoticeDays, firstBookable } = await this.bookableFrom();
 
     const [blocks, bookings] = await Promise.all([
       em.query(
@@ -753,31 +879,6 @@ export class AppCatalogService {
       }
     }
 
-    // Partial blocks of the provider and timed bookings of the service, for the free hours.
-    const schedule = input.schedule;
-    const [partialBlocks, timedBookings]: [any[], any[]] = schedule
-      ? await Promise.all([
-          em.query(
-            `SELECT ab.date, ab.start_time, ab.end_time FROM availability_blocks ab
-             WHERE ab.provider_id IN (?) AND ab.date BETWEEN ? AND ? AND ab.deleted_at IS NULL AND ab.kind = 'blocked'
-               AND ab.start_time IS NOT NULL AND (ab.service_id IS NULL OR ab.service_id = ?)`,
-            [input.providerIds, first, last, schedule.serviceId],
-          ),
-          em.query(
-            `SELECT b.event_date AS date, b.end_date, b.start_time, b.end_time FROM bookings b
-             WHERE b.event_date <= ? AND COALESCE(b.end_date, b.event_date) >= ? AND b.deleted_at IS NULL AND b.status IN ('pending', 'accepted')
-               AND b.start_time IS NOT NULL AND b.end_time IS NOT NULL
-               AND (b.service_id = ? OR b.pack_id IN (SELECT pack_id FROM pack_items WHERE service_id = ?))`,
-            [last, first, schedule.serviceId, schedule.serviceId],
-          ),
-        ])
-      : [[], []];
-    // Rows with an `end_date` cover every day of their range.
-    const spansOn = (rows: any[], date: string) =>
-      rows
-        .filter((r) => dateOnly(r.date) <= date && date <= dateOnly(r.end_date ?? r.date))
-        .map((r) => timeSpan(hhmm(r.start_time), hhmm(r.end_time))!);
-
     const result: AppAvailabilityDto['days'] = [];
     for (let day = 1; day <= days; day++) {
       const date = `${input.month}-${String(day).padStart(2, '0')}`;
@@ -790,19 +891,9 @@ export class AppCatalogService {
           capacity: input.capacity,
         }),
       );
-      let state: DayState = states.includes('blocked') ? 'blocked' : states.includes('busy') ? 'busy' : 'available';
-      let free: AppAvailabilityDto['days'][number]['freeRanges'] = null;
-      if (schedule) {
-        // Outside the period, or a weekday without hours: nothing can be booked that day.
-        const closed = !inPeriod(date, schedule.from, schedule.until) || (schedule.hours.length > 0 && !schedule.hours.some((h) => h.weekday === weekdayOf(date)));
-        if (closed) state = 'blocked';
-        free =
-          state === 'available'
-            ? freeRanges({ hours: schedule.hours, date, blocks: spansOn(partialBlocks, date), booked: spansOn(timedBookings, date), capacity: schedule.concurrent })
-            : [];
-        if (state === 'available' && free.length === 0) state = 'busy';
-      }
-      result.push({ date, state, freeRanges: free });
+      const state: DayState = states.includes('blocked') ? 'blocked' : states.includes('busy') ? 'busy' : 'available';
+      // Packs have no free hours of their own (null, as the spec says).
+      result.push({ date, state, freeRanges: null });
     }
 
     return { month: input.month, maxEventsPerDay: input.capacity, minNoticeDays, firstBookableDate: firstBookable, days: result };
@@ -815,19 +906,20 @@ export class AppCatalogService {
       [id],
     );
     if (!row) throw AppException.of('SERVICE_NOT_FOUND');
-    return this.availability(em, {
-      providerIds: [row.provider_id],
-      serviceIds: [row.id],
+    const { first, last, days } = parseMonth(month);
+    const { minNoticeDays, firstBookable } = await this.bookableFrom();
+    const service = calendarService(row);
+    const dayOf = await this.serviceCalendars(em, [service], first, last, firstBookable);
+    return {
       month,
-      capacity: row.max_events_per_day === null ? null : Number(row.max_events_per_day),
-      schedule: {
-        serviceId: row.id,
-        hours: await this.serviceHours(em, row.id),
-        from: row.available_from ? dateOnly(row.available_from) : null,
-        until: row.available_until ? dateOnly(row.available_until) : null,
-        concurrent: row.concurrent_clients === null ? null : Number(row.concurrent_clients),
-      },
-    });
+      maxEventsPerDay: service.capacity,
+      minNoticeDays,
+      firstBookableDate: firstBookable,
+      days: Array.from({ length: days }, (_, i) => {
+        const date = `${month}-${String(i + 1).padStart(2, '0')}`;
+        return { date, ...dayOf(service.id, date) };
+      }),
+    };
   }
 
   async packAvailability(id: string, month: string): Promise<AppAvailabilityDto> {
@@ -845,7 +937,7 @@ export class AppCatalogService {
     // Items without a daily limit don't constrain; null when none has one.
     const limits = items.filter((item: any) => item.max_events_per_day !== null).map((item: any) => Number(item.max_events_per_day));
     const capacity = items.length === 0 ? 1 : limits.length > 0 ? Math.min(...limits) : null;
-    return this.availability(em, {
+    return this.packCalendar(em, {
       providerIds: [...new Set<string>(items.map((item: any) => item.provider_id as string))].concat(items.length === 0 ? [pack.provider_id] : []),
       serviceIds: items.map((item: any) => item.id),
       month,

@@ -621,6 +621,18 @@ None of this can be invented on our side:
    (`MAIL_FROM`; the default placeholder is `no-reply@eventor.dz`). Plus SPF,
    DKIM and DMARC records on the domain, or the mail will land in spam.
    Until this is set, `SMTP_HOST` stays empty and mails are only logged.
+   **Current choice (24 Nov 2026, BUG-B1):** the Gmail account `eventorsupport@gmail.com`
+   until a domain mailbox exists: `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`,
+   `SMTP_SECURE=true`, `SMTP_USER=eventorsupport@gmail.com`, `SMTP_PASSWORD=` a Google
+   **app password** of that account (needs 2-Step Verification; Google Account →
+   Security → App passwords), `MAIL_FROM=Eventor <eventorsupport@gmail.com>`. `MAIL_FROM`
+   must be that same address: Gmail rewrites any other sender to the signed-in
+   account (the API logs a warning at start-up if they differ). Gmail signs the
+   mail itself (SPF/DKIM for gmail.com), but a consumer account sends at most
+   ~500 mails a day; move to a domain sender with the production domain.
+   After a change, restart the API and run `pnpm mail:test:prod <inbox> [ar]`: it
+   sends one verification-code mail (code 000000) and prints the sender and the
+   SMTP answer.
 3. **Invoice issuer details** — legal company name, address, RC / NIF / NIS / AI
    identifiers, VAT treatment, bank details, and a logo, for the generated PDF
    invoices and the number sequences (`invoice_<year>`).

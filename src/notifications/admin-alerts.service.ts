@@ -78,9 +78,15 @@ export class AdminAlertsService implements OnModuleInit {
    * Pending bookings past `booking_reply_deadline_hours` (the BKG-01 "no reply"
    * flag), announced once: a booking with a `booking.no_reply` notification is
    * skipped. Returns the number of bookings announced.
+   *
+   * With `booking_auto_expire` on (BUG-F1) a request past the deadline is declined
+   * as `expired` by the booking jobs in the same hour, so there is nothing left to
+   * chase and no alert is sent.
    */
   async notifyNoReply(now = new Date()): Promise<number> {
-    const deadline = Number(await this.settings.get('booking_reply_deadline_hours'));
+    const { booking_reply_deadline_hours: hours, booking_auto_expire: autoExpire } = await this.settings.getMany(['booking_reply_deadline_hours', 'booking_auto_expire']);
+    if (autoExpire) return 0;
+    const deadline = Number(hours);
     const cutoff = new Date(now.getTime() - deadline * HOUR);
     const since = new Date(cutoff.getTime() - NO_REPLY_LOOKBACK_DAYS * 24 * HOUR);
     const rows: any[] = await this.dataSource.query(

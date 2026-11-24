@@ -125,8 +125,10 @@ export class AppCatalogController {
     summary: 'Search services',
     description:
       `Public (a token adds ${'`isFavourite`'} and enables ${'`favourite=true`'}). The Search tab and screen 11a Filters. ` +
-      `${VISIBILITY_NOTE} ${'`eventDate`'} keeps only providers with a free slot that day — no manual block and capacity ` +
-      `left after held and booked events. Sort with ${'`order`'}, not ${'`sort`'}. ${LANGUAGE_NOTE}`,
+      `${VISIBILITY_NOTE} ${'`eventDate`'} keeps only the services whose calendar (${'`GET /app/services/{id}/availability`'}) ` +
+      `shows that day as ${'`available`'}: not blocked by the provider or by Eventor, inside the service's period, on a weekday ` +
+      `it has hours for, with the daily limit not reached and at least one free hour left, and not before ${'`firstBookableDate`'}. ` +
+      `${'`meta.total`'} counts the services left. Sort with ${'`order`'}, not ${'`sort`'}. ${LANGUAGE_NOTE}`,
   })
   @ApiPaginatedResponse(AppServiceCardDto)
   @ApiErrorResponses('VALIDATION_FAILED', 'AUTH_TOKEN_MISSING', 'RATE_LIMITED')

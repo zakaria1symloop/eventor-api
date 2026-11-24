@@ -138,11 +138,14 @@ export class AppProviderController {
     description:
       'The **Accept** button on screen 21 (status-rules §5). The date is re-checked under a row lock, the hold becomes ' +
       'a booking, Eventor issues the invoice and contact details become visible in the chat. Only a **verified and ' +
-      'active** provider can accept (422 `PROVIDER_NOT_VERIFIED`).',
+      'active** provider can accept (422 `PROVIDER_NOT_VERIFIED`). 409 `DATE_UNAVAILABLE` when a block or the daily ' +
+      'limit now covers the date; 409 `SLOT_UNAVAILABLE` (`details: { date, startTime, endTime }`) when accepted ' +
+      'bookings already fill those hours (`concurrentClients`, every item of a pack). The request then stays pending ' +
+      'and `accept` is missing from its `allowedActions`.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiDataResponse(AppBookingDetailDto)
-  @ApiErrorResponses('BOOKING_NOT_FOUND', 'NOT_OWNER', 'BOOKING_INVALID_TRANSITION', 'DATE_UNAVAILABLE', 'PROVIDER_NOT_VERIFIED')
+  @ApiErrorResponses('BOOKING_NOT_FOUND', 'NOT_OWNER', 'BOOKING_INVALID_TRANSITION', 'DATE_UNAVAILABLE', 'SLOT_UNAVAILABLE', 'PROVIDER_NOT_VERIFIED', 'BOOKING_EXPIRED')
   async accept(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('BOOKING_NOT_FOUND')) id: string, @ReqLang() lang: Lang) {
     return { data: await this.bookings.changeStatus(auth, id, 'provider', 'accepted', null, lang) };
   }
@@ -152,17 +155,22 @@ export class AppProviderController {
   @ApiOperation({ summary: 'Decline a booking request', description: 'The **Decline** button on screen 21. The held date is released and the client is told why.' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiDataResponse(AppBookingDetailDto)
-  @ApiErrorResponses('VALIDATION_FAILED', 'BOOKING_NOT_FOUND', 'NOT_OWNER', 'BOOKING_INVALID_TRANSITION')
+  @ApiErrorResponses('VALIDATION_FAILED', 'BOOKING_NOT_FOUND', 'NOT_OWNER', 'BOOKING_INVALID_TRANSITION', 'BOOKING_EXPIRED')
   async decline(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('BOOKING_NOT_FOUND')) id: string, @Body() dto: AppCancelBookingDto, @ReqLang() lang: Lang) {
     return { data: await this.bookings.changeStatus(auth, id, 'provider', 'declined', dto.reason, lang) };
   }
 
   @Post('bookings/:id/cancel')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cancel an accepted booking', description: 'status-rules §5: no fee and no window are enforced (cash). The date is released and the invoice voided.' })
+  @ApiOperation({
+    summary: 'Cancel an accepted booking',
+    description:
+      'status-rules §5: no fee and no window are enforced (cash). The date is released and the invoice voided. Not once the ' +
+      'event is over (the end time of its last day): 409 `BOOKING_EVENT_OVER`, and `cancel` is gone from `allowedActions`.',
+  })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiDataResponse(AppBookingDetailDto)
-  @ApiErrorResponses('VALIDATION_FAILED', 'BOOKING_NOT_FOUND', 'NOT_OWNER', 'BOOKING_INVALID_TRANSITION')
+  @ApiErrorResponses('VALIDATION_FAILED', 'BOOKING_NOT_FOUND', 'NOT_OWNER', 'BOOKING_INVALID_TRANSITION', 'BOOKING_EVENT_OVER')
   async cancel(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('BOOKING_NOT_FOUND')) id: string, @Body() dto: AppCancelBookingDto, @ReqLang() lang: Lang) {
     return { data: await this.bookings.changeStatus(auth, id, 'provider', 'cancelled', dto.reason, lang) };
   }
@@ -184,10 +192,15 @@ export class AppProviderController {
 
   @Post('bookings/:id/reschedule')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Propose another date', description: 'status-rules §5. A pending booking moves straight away; an accepted one waits for the client’s answer.' })
+  @ApiOperation({
+    summary: 'Propose another date',
+    description:
+      'status-rules §5. A pending booking moves straight away; an accepted one waits for the client’s answer. Not once an ' +
+      'accepted event is over (409 `BOOKING_EVENT_OVER`; `reschedule` is then gone from `allowedActions`).',
+  })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiDataResponse(AppBookingDetailDto)
-  @ApiErrorResponses('VALIDATION_FAILED', 'BOOKING_NOT_FOUND', 'NOT_OWNER', 'BOOKING_NOT_EDITABLE', 'BOOKING_DATE_PAST', 'DATE_UNAVAILABLE', 'OUTSIDE_SERVICE_PERIOD', 'SERVICE_TIMES_REQUIRED', 'OUTSIDE_SERVICE_HOURS', 'SLOT_UNAVAILABLE', 'RESCHEDULE_PENDING_EXISTS')
+  @ApiErrorResponses('VALIDATION_FAILED', 'BOOKING_NOT_FOUND', 'NOT_OWNER', 'BOOKING_NOT_EDITABLE', 'BOOKING_EXPIRED', 'BOOKING_EVENT_OVER', 'COUNTERPARTY_UNAVAILABLE', 'BOOKING_DATE_PAST', 'DATE_UNAVAILABLE', 'OUTSIDE_SERVICE_PERIOD', 'SERVICE_TIMES_REQUIRED', 'OUTSIDE_SERVICE_HOURS', 'SLOT_UNAVAILABLE', 'RESCHEDULE_PENDING_EXISTS')
   async reschedule(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('BOOKING_NOT_FOUND')) id: string, @Body() dto: AppRescheduleDto, @ReqLang() lang: Lang) {
     return { data: await this.bookings.reschedule(auth, id, 'provider', dto, lang) };
   }

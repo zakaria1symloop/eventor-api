@@ -226,6 +226,9 @@ export class RescheduleDto {
   @ApiProperty({ enum: RescheduleStatus }) status: RescheduleStatus;
   @ApiProperty({ format: 'date-time' }) createdAt: string;
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) resolvedAt: string | null;
+  @ApiProperty({ type: String, nullable: true, example: '24000.00', description: 'Booking total when proposed; null before 24 Nov 2026.' }) oldTotal: string | null;
+  @ApiProperty({ type: String, nullable: true, example: '30000.00', description: 'Total with the new hours (per-hour services, at the agreed rate); equal to `oldTotal` when unchanged; the applied total once accepted.' })
+  newTotal: string | null;
 }
 
 export class InvoiceSummaryDto {

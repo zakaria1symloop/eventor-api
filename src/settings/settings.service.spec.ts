@@ -2,6 +2,7 @@ import type { Repository } from 'typeorm';
 import type { Setting } from '../admin/entities/setting.entity.js';
 import { SEED_SETTINGS } from '../database/migrations/1789552455600-SeedV1.js';
 import { SETTINGS_ADDED_20261015 } from '../database/migrations/1791500000001-LegalSettings.js';
+import { SETTINGS_ADDED_20261123 } from '../database/migrations/1791600000000-BookingAutoExpireSetting.js';
 import { AppException } from '../common/errors/app.exception.js';
 import { SETTINGS_DEFAULTS, SETTING_KEYS } from './settings.defaults.js';
 import { SettingsService } from './settings.service.js';
@@ -30,7 +31,7 @@ describe('SettingsService', () => {
 
   it('seeds exactly the keys the service knows, with the same values', () => {
     // SeedV1, plus the keys later migrations added.
-    const seeded = { ...SEED_SETTINGS, ...SETTINGS_ADDED_20261015 };
+    const seeded = { ...SEED_SETTINGS, ...SETTINGS_ADDED_20261015, ...SETTINGS_ADDED_20261123 };
     expect(Object.keys(seeded).sort()).toEqual([...SETTING_KEYS].sort());
     expect(seeded).toEqual(SETTINGS_DEFAULTS);
   });

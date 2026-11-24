@@ -50,4 +50,12 @@ export class BookingReschedule extends AbstractEntity {
 
   @Column({ type: 'datetime', nullable: true })
   resolvedAt: Date | null;
+
+  /** Booking total when the date was proposed (BUG-E3); null on rows older than 24 Nov 2026. */
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  oldTotal: string | null;
+
+  /** Total with the new hours (per-hour services); equal to `oldTotal` when the price does not change. Updated to what was applied on acceptance. */
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  newTotal: string | null;
 }

@@ -489,7 +489,7 @@ is only the map from screen to endpoint, plus the traps.
 Beyond the part-1 list: `NOT_OWNER`, `NOT_A_PARTICIPANT`,
 `CONVERSATION_READ_ONLY`, `CONVERSATION_CLOSED`, `CONVERSATION_NOT_FOUND`,
 `MESSAGE_NOT_FOUND`, `RECIPIENT_INVALID`, `BOOKING_NOT_FOUND`,
-`BOOKING_INVALID_TRANSITION`, `BOOKING_NOT_EDITABLE`, `BOOKING_DATE_PAST`,
+`BOOKING_INVALID_TRANSITION`, `BOOKING_NOT_EDITABLE`, `BOOKING_EXPIRED`, `BOOKING_EVENT_OVER`, `BOOKING_DATE_PAST`,
 `DATE_UNAVAILABLE`, `BOOKING_DUPLICATE`, `MIN_NOTICE`, `PROVIDER_NOT_ACCEPTING`,
 `SERVICE_UNAVAILABLE_FOR_BOOKING`, `PACK_UNAVAILABLE`, `BOOKING_EXTRA_INVALID`,
 `COMMUNE_NOT_FOUND`, `COMMUNE_WILAYA_MISMATCH`, `RESCHEDULE_NOT_FOUND`,
@@ -553,13 +553,14 @@ on `type` plus the ids in `data`:
 | --- | --- | --- | --- | --- |
 | `booking.requested` | provider | ✓ | `bookingId`, `reference` | booking (provider side): Accept / Decline |
 | `booking.accepted` | client | ✓ | `bookingId`, `reference` | booking |
-| `booking.declined` | client | ✓ | `bookingId`, `reference` | booking |
+| `booking.declined` | client; **both** when the request expired (`declineReason: "expired"`) | ✓ | `bookingId`, `reference` | booking |
 | `booking.cancelled` | the other party | ✓ | `bookingId`, `reference` | booking |
 | `booking.completed` | both, except whoever confirmed last | ✓ | `bookingId`, `reference` | booking |
 | `booking.rescheduled` | the other party (both when Eventor moved it) | ✓ | `bookingId`, `reference` | booking |
 | `booking.reschedule_proposed` | the other party (both when Eventor proposed) | ✓ | `bookingId`, `reference` | booking: accept / reject the date |
 | `booking.reschedule_rejected` | the other party | ✓ | `bookingId`, `reference` | booking |
 | `booking.price_changed` | client | ✓ | `bookingId`, `reference` | booking |
+| `booking.counterparty_blocked` | the other party of an accepted booking kept through an account block (since 2026-11-24) | ✓ | `bookingId`, `reference` | booking |
 | `booking.reminder` | provider | ✓ | `bookingId`, `reference` | booking (provider side): Accept / Decline |
 | `booking.review_requested` | client | ✓ | `bookingId`, `reference` | write a review for `bookingId` |
 | `message.new` | the other participants | push only | `conversationId`, `messageId`, `conversationKind` (`direct` / `support`) | chat `conversationId` |
@@ -686,6 +687,20 @@ loop when it fails.
 
 ## 16. Changelog
 
+### 2026-11-23 — acceptance run fixes
+
+- **BUG-M2: no double booking on accept.** `POST /app/provider/bookings/{id}/accept` (and the dashboard's status change) now refuses a request whose hours are already taken by **accepted** bookings beyond the service's `concurrentClients` (each item of a pack is checked): 409 `SLOT_UNAVAILABLE`, `details: { date, startTime, endTime }`. The request stays `pending`; the provider can still decline it. A block or the daily limit still answers 409 `DATE_UNAVAILABLE` as before. Both codes already existed: no new value.
+- In that case **`accept` is no longer in the request's `allowedActions`** (cards and detail, provider side); `decline` stays. Nothing to change in the app if it already draws buttons from `allowedActions`; on a 409 from accept, reload the booking.
+- Two requests for the same slot sent at the same moment no longer both get 201: the second answers 409 `SLOT_UNAVAILABLE`, as it would a minute later.
+- **BUG-F1: requests expire** (once the admin setting `booking_auto_expire` is on). A pending request expires at `replyDeadlineHours` (`/app/config` `booking.replyDeadlineHours`) after it was sent, or at the event start if that comes first. It then becomes **`status: "declined"` with `declineReason: "expired"`** (no new status value; the timeline entry is `declined` with no `actorLabel` and `reason: "expired"`). Show it as "Request expired / No reply in time" rather than "X declined". It lands in the `cancelled` tab like any declined booking.
+- On expiry **both** parties get a `booking.declined` notification ("Request expired"); the provider receives this type for the first time. They also get a `booking:updated` socket event and a `kind: "system"` chat message.
+- Between the expiry moment and the hourly job, `allowedActions` of that request is only `message` + `cancel`, and accept / decline / reschedule answer **409 `BOOKING_EXPIRED`** (new code). Reload the booking on that error.
+- **BUG-D2: `GET /app/services?eventDate=` now really keeps only the services free that day**: exactly the days their calendar (`GET /app/services/{id}/availability`) shows as `available`. The filter used to check only whole-day blocks and the daily limit, so it kept services that were closed that weekday, outside their period, with no free hour left, or asked for a day before `firstBookableDate`. `meta.total` and the pages count the services left; a day before `firstBookableDate` gives an empty list. No field changed; the app already sends the parameter correctly.
+- **BUG-E6: no cancel or reschedule after the event.** Once an **accepted** booking's event is over (the end time of its last day; the next morning when the hours run past midnight; midnight after the last day when it has no end time), `cancel` and `reschedule` are no longer in `allowedActions`, on both sides. What follows the event stays: `check_in`, `complete` (provider), `dispute`, `invoice`, `message`, and `respond_reschedule` for a proposal already waiting. `POST /app/bookings/{id}/cancel|reschedule` and `POST /app/provider/bookings/{id}/cancel|reschedule` then answer **409 `BOOKING_EVENT_OVER`** (new code), so a direct call gets the same answer as the missing button. Pending requests are unchanged (they expire, see BUG-F1). The app already draws its buttons from `allowedActions`, so nothing else needs to change.
+- **BUG-E3: a reschedule re-prices per-hour services.** When the new hours change the number of hours of a `per_hour` service, its `service` line is re-counted at the hourly rate already on the booking (4 h → 5 h at 6 000 = 30 000), never at the service's current price. Extras, discounts, per-person, per-day, packs and flat prices are unchanged. **New fields on `reschedules[]`** (booking detail): `oldTotal` and `newTotal` (strings, nullable on proposals made before 24 Nov 2026). Show "New total: X DA" on the proposal when they differ, so the other side accepts knowingly. The new price applies when the move does: at once on a pending booking, on acceptance otherwise. The detail's `lines`, `subtotal` and `total` then change, and an accepted booking gets a new `invoice` version. The `booking.rescheduled` / `booking.reschedule_proposed` notification body also states the old → new total. Nothing else changed: same endpoints, same request bodies.
+- **BUG-E5: the invoice follows the booking.** An accepted booking gets a **new invoice version** (new number, old version voided) whenever something printed on it changes: the event date (an applied reschedule), the price (BUG-E3) or the event type (admin edit). New hours alone, guests or place don't change the invoice, so no new version then. `invoice` on the booking detail and `GET …/invoice` always return the live version; `versions` lists them all. The app also gets `booking:updated` after an admin edit now (before, only after reschedules and status changes), so it can reload the booking and its invoice.
+- **BUG-M4: blocked accounts and their bookings.** When an admin blocks an account and chooses to cancel its bookings, the **accepted** ones whose event is not over are now cancelled too (before: pending only): `cancelledBy: "admin"`, `cancelReason: "account_blocked"`, invoice voided, the other party gets `booking.cancelled` and `booking:updated`. When the admin keeps them: **new field `counterpartyBlocked`** (boolean) on booking cards and details. It is `true` while the other party is blocked; show "<name> is temporarily unavailable". An accepted booking then has no `reschedule` in `allowedActions`, and `POST …/reschedule` answers **409 `COUNTERPARTY_UNAVAILABLE`** (new code). Cancel and message stay. The other party also receives a **new notification type `booking.counterparty_blocked`** (opens the booking). On unblock both apps get `booking:updated` and the flag goes back to `false`.
+
 ### 2026-10-26 — featured services on the home screen
 
 - `GET /app/home` gains **`featuredServices`**: the services admins picked with "Feature on home" in the dashboard. At most 12, in the admins' order, the same list for every user. Empty when none is featured: hide the section.
@@ -752,7 +767,7 @@ loop when it fails.
 | 422 `OUTSIDE_SERVICE_HOURS` | the times don't fit inside one range of that weekday; `details: { weekday, hours: [{ startTime, endTime }] }` |
 | 409 `SLOT_UNAVAILABLE` | `concurrentClients` timed bookings already overlap those hours; `details: { date, startTime, endTime }` |
 
-`POST /app/bookings/quote` never throws for these: it answers `available: false` with the same code in `unavailableReason`. A provider accepting a request is not re-checked against hours changed afterwards.
+`POST /app/bookings/quote` never throws for these: it answers `available: false` with the same code in `unavailableReason`. A provider accepting a request is not re-checked against hours changed afterwards, but it is re-checked against the bookings already **accepted** on those hours (409 `SLOT_UNAVAILABLE`, since 2026-11-23).
 
 **Free hours in the calendar:** `GET /app/services/{id}/availability` days gain `freeRanges: [{ startTime, endTime }]`, the hours still bookable that day: the service hours (all day if none) minus partial blocks and minus moments already taken by `concurrentClients` clients. Empty unless `state` is `available`. `00:00 → 00:00` means the whole day. Days outside the period and weekdays without hours are `blocked`; a day with nothing free left is `busy`. Pack calendars send `freeRanges: null`.
 

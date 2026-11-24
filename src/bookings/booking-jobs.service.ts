@@ -11,7 +11,8 @@ import { JOBS } from '../queue/jobs.js';
 import { QueueService } from '../queue/queue.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { BOOKING_EVENTS, type BookingEvent, type BookingReminderEvent } from './bookings.events.js';
-import { isDueForAutoComplete, REMINDER_INTERVAL_HOURS } from './bookings.policy.js';
+import { findExpiredRequests } from './booking-expiry.js';
+import { isDueForAutoComplete, isExpired, pendingExpiry, REMINDER_INTERVAL_HOURS } from './bookings.policy.js';
 import { BookingsService, dateOnly } from './bookings.service.js';
 import { Booking } from './entities/booking.entity.js';
 
@@ -38,6 +39,7 @@ export class BookingJobsService implements OnModuleInit {
     this.queue.registerHandler(JOBS.bookingReplyReminders, async () => void (await this.sendReplyReminders()));
     this.queue.registerHandler(JOBS.bookingAutoComplete, async () => void (await this.autoComplete()));
     this.queue.registerHandler(JOBS.bookingReviewRequests, async () => void (await this.requestReviews()));
+    this.queue.registerHandler(JOBS.bookingExpireRequests, async () => void (await this.expireRequests()));
   }
 
   @Cron(CronExpression.EVERY_HOUR, { name: 'bookings.hourly' })
@@ -46,6 +48,34 @@ export class BookingJobsService implements OnModuleInit {
     await this.queue.add(JOBS.bookingReplyReminders, {}, { jobId: `reply-reminders-${hour}` });
     await this.queue.add(JOBS.bookingAutoComplete, {}, { jobId: `auto-complete-${hour}` });
     await this.queue.add(JOBS.bookingReviewRequests, {}, { jobId: `review-requests-${hour}` });
+    await this.queue.add(JOBS.bookingExpireRequests, {}, { jobId: `expire-requests-${hour}` });
+  }
+
+  /**
+   * BUG-F1: pending requests expire at the reply deadline (`booking_reply_deadline_hours`
+   * after the request) or at the event start, whichever comes first. They are
+   * declined by the system with the reason `expired` (`BookingsService.expireRequest`).
+   * Does nothing while `booking_auto_expire` is off. Idempotent: each row is
+   * re-read under a lock and re-checked; accepted bookings are never touched.
+   */
+  async expireRequests(now = new Date()): Promise<number> {
+    const { booking_auto_expire: enabled, booking_reply_deadline_hours: deadline } = await this.settings.getMany(['booking_auto_expire', 'booking_reply_deadline_hours']);
+    if (!enabled) return 0;
+    const hours = Number(deadline);
+    let expired = 0;
+    for (const candidate of await findExpiredRequests(this.dataSource, hours, now)) {
+      await runInTransaction(this.dataSource, async (em, afterCommit) => {
+        const booking = await em.getRepository(Booking).findOne({ where: { id: candidate.id }, lock: { mode: 'pessimistic_write' } });
+        if (!booking) return;
+        const state = { status: booking.status, createdAt: booking.createdAt, eventDate: dateOnly(booking.eventDate), startTime: booking.startTime };
+        const expiry = pendingExpiry(state, hours);
+        if (!expiry || !isExpired(state, hours, now)) return;
+        await this.bookings.expireRequest(em, afterCommit, booking, expiry.cause, hours);
+        expired += 1;
+      });
+    }
+    if (expired > 0) this.logger.log(`Expired ${expired} booking request(s)`);
+    return expired;
   }
 
   /**
@@ -54,7 +84,11 @@ export class BookingJobsService implements OnModuleInit {
    * `created_at` + deadline, so it needs no write.
    */
   async sendReplyReminders(now = new Date()): Promise<number> {
-    const { booking_auto_reminder: enabled, booking_reply_deadline_hours: deadline } = await this.settings.getMany(['booking_auto_reminder', 'booking_reply_deadline_hours']);
+    const {
+      booking_auto_reminder: enabled,
+      booking_reply_deadline_hours: deadline,
+      booking_auto_expire: autoExpire,
+    } = await this.settings.getMany(['booking_auto_reminder', 'booking_reply_deadline_hours', 'booking_auto_expire']);
     if (!enabled) return 0;
     const cutoff = new Date(now.getTime() - Math.max(0, Number(deadline) - REMINDER_INTERVAL_HOURS) * HOUR);
     const due: { id: string }[] = await this.dataSource.query(
@@ -66,6 +100,9 @@ export class BookingJobsService implements OnModuleInit {
       await runInTransaction(this.dataSource, async (em, afterCommit) => {
         const booking = await em.getRepository(Booking).findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
         if (!booking || booking.status !== BookingStatus.Pending || booking.reminderSentAt || booking.createdAt > cutoff) return;
+        // Already expired (BUG-F1): the expiry job declines it this hour, a "please reply" would arrive just before "expired".
+        const state = { status: booking.status, createdAt: booking.createdAt, eventDate: dateOnly(booking.eventDate), startTime: booking.startTime };
+        if (autoExpire && isExpired(state, Number(deadline), now)) return;
         await em.getRepository(Booking).update(id, { reminderSentAt: now });
         await this.audit.log(
           { action: 'booking.reminder_sent', objectType: 'booking', objectId: id, objectLabel: booking.reference, level: AuditLevel.Info, actorId: null, actorRole: null, source: AuditSource.System, changes: { automatic: true } },

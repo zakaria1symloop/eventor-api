@@ -78,6 +78,32 @@ export interface AppBookingState {
   disputeWindowOpen: boolean;
   /** `reviewWindow(...).open` for this booking. */
   reviewWindowOpen: boolean;
+  /**
+   * The provider can still accept this pending request: false once a block, the
+   * daily limit or accepted bookings on the same hours fill the slot
+   * (`BookingsService.acceptObstacle`, BUG-M2). Omitted = true.
+   */
+  canAccept?: boolean;
+  /**
+   * A pending request past its reply deadline or event start, while
+   * `booking_auto_expire` is on (`BookingsService.isRequestExpired`, BUG-F1). It
+   * only waits for the hourly job to decline it: nothing but cancel and message
+   * is offered. Omitted = false.
+   */
+  expired?: boolean;
+  /**
+   * Now is at or after the event end (`eventEndsAt`: the end time of the last
+   * day, the next morning for overnight hours). An accepted booking can then no
+   * longer be cancelled or moved by either party: the endpoints answer 409
+   * `BOOKING_EVENT_OVER` (BUG-E6). Omitted = false.
+   */
+  eventOver?: boolean;
+  /**
+   * The other party's account is blocked and the admin kept the booking
+   * (BUG-M4): nobody could answer a new date, so an accepted booking offers no
+   * `reschedule` (409 `COUNTERPARTY_UNAVAILABLE`). Omitted = false.
+   */
+  counterpartyBlocked?: boolean;
 }
 
 /**
@@ -87,12 +113,24 @@ export interface AppBookingState {
  */
 export function appBookingActions(party: 'client' | 'provider', state: AppBookingState): AppBookingAction[] {
   const actions: AppBookingAction[] = ['message'];
-  if (state.status === BookingStatus.Pending) {
+  if (state.status === BookingStatus.Pending && state.expired === true) {
+    // Accept, decline and reschedule answer 409 BOOKING_EXPIRED.
+    actions.push('cancel');
+  } else if (state.status === BookingStatus.Pending) {
     actions.push('cancel', 'reschedule');
-    if (party === 'provider') actions.push('accept', 'decline');
+    if (party === 'provider') {
+      // The accept endpoint answers 409 SLOT_UNAVAILABLE / DATE_UNAVAILABLE in that case.
+      if (state.canAccept !== false) actions.push('accept');
+      actions.push('decline');
+    }
   }
   if (state.status === BookingStatus.Accepted) {
-    actions.push('cancel', 'reschedule', 'invoice');
+    // Once the event is over only what follows it is left: check-in, completion, dispute, invoice, chat.
+    if (state.eventOver !== true) {
+      actions.push('cancel');
+      if (state.counterpartyBlocked !== true) actions.push('reschedule');
+    }
+    actions.push('invoice');
     const eventPassed = state.eventDate <= state.today;
     if (party === 'provider' && eventPassed) actions.push('complete');
     if (eventPassed && !state.checkedIn && state.disputeStatus !== BookingDisputeStatus.Open) actions.push('check_in');

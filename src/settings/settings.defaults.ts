@@ -17,6 +17,8 @@ export interface SettingsMap {
   invoice_issuer: InvoiceIssuer;
   booking_reply_deadline_hours: number;
   booking_auto_reminder: boolean;
+  /** BUG-F1: pending requests expire (declined, reason `expired`) at the reply deadline or the event start. Off until an admin turns it on. */
+  booking_auto_expire: boolean;
   booking_min_notice_days: number;
   dispute_window_hours: number;
   review_open_after_hours: number;
@@ -58,6 +60,7 @@ export const SETTINGS_DEFAULTS: Readonly<SettingsMap> = Object.freeze({
   invoice_issuer: { name: 'Eventor', address: '', nif: '', rc: '', email: '', phone: '' },
   booking_reply_deadline_hours: 48,
   booking_auto_reminder: true,
+  booking_auto_expire: false,
   booking_min_notice_days: 1,
   dispute_window_hours: 72,
   review_open_after_hours: 24,

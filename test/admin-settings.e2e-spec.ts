@@ -42,6 +42,7 @@ describe('Admin settings (e2e)', () => {
         'languages',
         'notifications',
         'support',
+        'legal',
         'maintenance',
       ]);
       const fee = setting(res.body, 'platform_fee_percent');

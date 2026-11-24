@@ -20,7 +20,7 @@ import { DomainEvents } from '../common/events/domain-events.js';
 import type { Lang } from '../common/i18n/language.js';
 import { paginateWithCounts, type Paginated } from '../common/pagination/paginated.js';
 import { toOrder } from '../common/pagination/sort.js';
-import { runInTransaction, type AfterCommit } from '../database/transaction.js';
+import { BOOKING_ISOLATION, runInTransaction, type AfterCommit } from '../database/transaction.js';
 import { FilesService } from '../files/files.service.js';
 import { JOBS } from '../queue/jobs.js';
 import { QueueService } from '../queue/queue.service.js';
@@ -601,7 +601,7 @@ export class AcademicRequestsService implements OnModuleInit {
         clientCreated: client.created,
       });
       return this.get(id, em);
-    });
+    }, BOOKING_ISOLATION);
   }
 
   // ── job ─────────────────────────────────────────────────────

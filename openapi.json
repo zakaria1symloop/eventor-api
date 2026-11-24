@@ -13552,7 +13552,7 @@
     },
     "/api/v1/admin/bookings/{id}/status": {
       "post": {
-        "description": "pending → accepted | declined | cancelled; accepted → cancelled | completed; completed → `reopen` (accepted). Other moves: 409 BOOKING_INVALID_TRANSITION. `reason` is required except for accepted, `note` always. Admins may complete before the event date (flagged `earlyCompletion` in the audit). Effects: accept re-checks the date (409 DATE_UNAVAILABLE), availability `booked`, invoice issued (INV-YYYY-NNNN, issuer from `invoice_issuer`, PDF render job) and contact details unmasked in chat; decline / cancel release availability (cancel voids the invoice); complete sets `completed_at` and counters; reopen reverts them and withdraws the review request when no review exists. Status change row, audit and `booking.<status>` event; emails to client / provider when `notify`. Used by BKG-04.",
+        "description": "pending → accepted | declined | cancelled; accepted → cancelled | completed; completed → `reopen` (accepted). Other moves: 409 BOOKING_INVALID_TRANSITION. `reason` is required except for accepted, `note` always. Admins may complete before the event date (flagged `earlyCompletion` in the audit). Effects: accept re-checks the date (409 DATE_UNAVAILABLE) and the hours already taken by accepted bookings (409 SLOT_UNAVAILABLE), availability `booked`, invoice issued (INV-YYYY-NNNN, issuer from `invoice_issuer`, PDF render job) and contact details unmasked in chat; decline / cancel release availability (cancel voids the invoice); complete sets `completed_at` and counters; reopen reverts them and withdraws the review request when no review exists. Status change row, audit and `booking.<status>` event; emails to client / provider when `notify`. Used by BKG-04.",
         "operationId": "AdminBookingsController_changeStatus",
         "parameters": [
           {
@@ -13729,7 +13729,7 @@
             }
           },
           "409": {
-            "description": "`BOOKING_INVALID_TRANSITION`: A booking cannot move from \"{from}\" to \"{to}\".<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.",
+            "description": "`BOOKING_INVALID_TRANSITION`: A booking cannot move from \"{from}\" to \"{to}\".<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`SLOT_UNAVAILABLE`: These hours are already booked on {date}. Choose other times.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13754,6 +13754,18 @@
                       "error": "Conflict",
                       "code": "DATE_UNAVAILABLE",
                       "message": "The provider is not available on {date}.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "SLOT_UNAVAILABLE": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "SLOT_UNAVAILABLE",
+                      "message": "These hours are already booked on {date}. Choose other times.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -34763,6 +34775,26 @@
             }
           },
           {
+            "name": "targetId",
+            "required": false,
+            "in": "query",
+            "description": "Only the reports on this target (with `targetType`, e.g. `targetType=user&targetId=` for one account).",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "aboutUserId",
+            "required": false,
+            "in": "query",
+            "description": "BUG-H3: the reports about one account — on the account itself and on what it owns or wrote (services, packs, messages sent, reviews and replies written). Same definition as `stats.reports` on `GET /admin/users/{id}`: the user page lists these.",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
             "name": "reason",
             "required": false,
             "in": "query",
@@ -44649,7 +44681,7 @@
     },
     "/api/v1/app/services": {
       "get": {
-        "description": "Public (a token adds `isFavourite` and enables `favourite=true`). The Search tab and screen 11a Filters. Only services visible in the app: published, provider active **and** verified, and at least one open wilaya. Anything else answers 404 rather than admitting it exists. `eventDate` keeps only providers with a free slot that day — no manual block and capacity left after held and booked events. Sort with `order`, not `sort`. Text comes back in the caller’s language: `Accept-Language: ar|en`, then the signed-in account’s `language`, then `en`. The `*En` / `*Ar` fields are always present too, for screens that show both.",
+        "description": "Public (a token adds `isFavourite` and enables `favourite=true`). The Search tab and screen 11a Filters. Only services visible in the app: published, provider active **and** verified, and at least one open wilaya. Anything else answers 404 rather than admitting it exists. `eventDate` keeps only the services whose calendar (`GET /app/services/{id}/availability`) shows that day as `available`: not blocked by the provider or by Eventor, inside the service's period, on a weekday it has hours for, with the daily limit not reached and at least one free hour left, and not before `firstBookableDate`. `meta.total` counts the services left. Sort with `order`, not `sort`. Text comes back in the caller’s language: `Accept-Language: ar|en`, then the signed-in account’s `language`, then `en`. The `*En` / `*Ar` fields are always present too, for screens that show both.",
         "operationId": "AppCatalogController_services",
         "parameters": [
           {
@@ -44783,7 +44815,7 @@
             "name": "eventDate",
             "required": false,
             "in": "query",
-            "description": "Keep only services free on that day.",
+            "description": "Keep only services free on that day: the day their calendar (`GET /app/services/{id}/availability`) shows as `available`. A day before `firstBookableDate` returns an empty list.",
             "schema": {
               "format": "date",
               "example": "2026-03-14",
@@ -47418,7 +47450,7 @@
     },
     "/api/v1/app/bookings/{id}/cancel": {
       "post": {
-        "description": "status-rules §5: a client cancels a `pending` or an `accepted` booking. **No fee and no window are enforced** — payment is cash, the service’s own policy text (`cancellationPolicy` on the detail) is shown but not applied, and a disagreement becomes a dispute. The date is released and any invoice is voided.",
+        "description": "status-rules §5: a client cancels a `pending` or an `accepted` booking. **No fee and no window are enforced** — payment is cash, the service’s own policy text (`cancellationPolicy` on the detail) is shown but not applied, and a disagreement becomes a dispute. The date is released and any invoice is voided. Once an accepted event is over (the end time of its last day) it can no longer be cancelled: 409 `BOOKING_EVENT_OVER`, and `cancel` is gone from `allowedActions`; report a problem with a dispute instead.",
         "operationId": "AppBookingsController_cancel",
         "parameters": [
           {
@@ -47603,7 +47635,7 @@
             }
           },
           "409": {
-            "description": "`BOOKING_INVALID_TRANSITION`: A booking cannot move from \"{from}\" to \"{to}\".",
+            "description": "`BOOKING_INVALID_TRANSITION`: A booking cannot move from \"{from}\" to \"{to}\".<br>`BOOKING_EVENT_OVER`: This event is over: the booking can no longer be cancelled or moved.",
             "content": {
               "application/json": {
                 "schema": {
@@ -47616,6 +47648,18 @@
                       "error": "Conflict",
                       "code": "BOOKING_INVALID_TRANSITION",
                       "message": "A booking cannot move from \"{from}\" to \"{to}\".",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "BOOKING_EVENT_OVER": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "BOOKING_EVENT_OVER",
+                      "message": "This event is over: the booking can no longer be cancelled or moved.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -47640,7 +47684,7 @@
     },
     "/api/v1/app/bookings/{id}/reschedule": {
       "post": {
-        "description": "status-rules §5 \"Reschedule\": either party proposes, the other accepts. On a **pending** booking the change is applied straight away; on an **accepted** one it becomes a proposal the provider answers with `/reschedules/{rid}/accept|reject`. Only one proposal can be open at a time.",
+        "description": "status-rules §5 \"Reschedule\": either party proposes, the other accepts. On a **pending** booking the change is applied straight away; on an **accepted** one it becomes a proposal the provider answers with `/reschedules/{rid}/accept|reject`. Only one proposal can be open at a time. Not once an accepted event is over (409 `BOOKING_EVENT_OVER`; `reschedule` is then gone from `allowedActions`).",
         "operationId": "AppBookingsController_reschedule",
         "parameters": [
           {
@@ -47825,7 +47869,7 @@
             }
           },
           "409": {
-            "description": "`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`SLOT_UNAVAILABLE`: These hours are already booked on {date}. Choose other times.<br>`RESCHEDULE_PENDING_EXISTS`: A new date is already waiting for confirmation. Cancel it first.",
+            "description": "`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.<br>`BOOKING_EXPIRED`: This request expired: it was not answered in time.<br>`BOOKING_EVENT_OVER`: This event is over: the booking can no longer be cancelled or moved.<br>`COUNTERPARTY_UNAVAILABLE`: The other party is temporarily unavailable on Eventor: the date cannot be changed now. Contact Eventor support.<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`SLOT_UNAVAILABLE`: These hours are already booked on {date}. Choose other times.<br>`RESCHEDULE_PENDING_EXISTS`: A new date is already waiting for confirmation. Cancel it first.",
             "content": {
               "application/json": {
                 "schema": {
@@ -47838,6 +47882,42 @@
                       "error": "Conflict",
                       "code": "BOOKING_NOT_EDITABLE",
                       "message": "This action is not possible while the booking is {status}.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "BOOKING_EXPIRED": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "BOOKING_EXPIRED",
+                      "message": "This request expired: it was not answered in time.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "BOOKING_EVENT_OVER": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "BOOKING_EVENT_OVER",
+                      "message": "This event is over: the booking can no longer be cancelled or moved.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "COUNTERPARTY_UNAVAILABLE": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "COUNTERPARTY_UNAVAILABLE",
+                      "message": "The other party is temporarily unavailable on Eventor: the date cannot be changed now. Contact Eventor support.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -50140,7 +50220,7 @@
     },
     "/api/v1/app/provider/bookings/{id}/accept": {
       "post": {
-        "description": "The **Accept** button on screen 21 (status-rules §5). The date is re-checked under a row lock, the hold becomes a booking, Eventor issues the invoice and contact details become visible in the chat. Only a **verified and active** provider can accept (422 `PROVIDER_NOT_VERIFIED`).",
+        "description": "The **Accept** button on screen 21 (status-rules §5). The date is re-checked under a row lock, the hold becomes a booking, Eventor issues the invoice and contact details become visible in the chat. Only a **verified and active** provider can accept (422 `PROVIDER_NOT_VERIFIED`). 409 `DATE_UNAVAILABLE` when a block or the daily limit now covers the date; 409 `SLOT_UNAVAILABLE` (`details: { date, startTime, endTime }`) when accepted bookings already fill those hours (`concurrentClients`, every item of a pack). The request then stays pending and `accept` is missing from its `allowedActions`.",
         "operationId": "AppProviderController_accept",
         "parameters": [
           {
@@ -50291,7 +50371,7 @@
             }
           },
           "409": {
-            "description": "`BOOKING_INVALID_TRANSITION`: A booking cannot move from \"{from}\" to \"{to}\".<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.",
+            "description": "`BOOKING_INVALID_TRANSITION`: A booking cannot move from \"{from}\" to \"{to}\".<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`SLOT_UNAVAILABLE`: These hours are already booked on {date}. Choose other times.<br>`BOOKING_EXPIRED`: This request expired: it was not answered in time.",
             "content": {
               "application/json": {
                 "schema": {
@@ -50316,6 +50396,30 @@
                       "error": "Conflict",
                       "code": "DATE_UNAVAILABLE",
                       "message": "The provider is not available on {date}.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "SLOT_UNAVAILABLE": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "SLOT_UNAVAILABLE",
+                      "message": "These hours are already booked on {date}. Choose other times.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "BOOKING_EXPIRED": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "BOOKING_EXPIRED",
+                      "message": "This request expired: it was not answered in time.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -50549,7 +50653,7 @@
             }
           },
           "409": {
-            "description": "`BOOKING_INVALID_TRANSITION`: A booking cannot move from \"{from}\" to \"{to}\".",
+            "description": "`BOOKING_INVALID_TRANSITION`: A booking cannot move from \"{from}\" to \"{to}\".<br>`BOOKING_EXPIRED`: This request expired: it was not answered in time.",
             "content": {
               "application/json": {
                 "schema": {
@@ -50562,6 +50666,18 @@
                       "error": "Conflict",
                       "code": "BOOKING_INVALID_TRANSITION",
                       "message": "A booking cannot move from \"{from}\" to \"{to}\".",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "BOOKING_EXPIRED": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "BOOKING_EXPIRED",
+                      "message": "This request expired: it was not answered in time.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -50610,7 +50726,7 @@
     },
     "/api/v1/app/provider/bookings/{id}/cancel": {
       "post": {
-        "description": "status-rules §5: no fee and no window are enforced (cash). The date is released and the invoice voided.",
+        "description": "status-rules §5: no fee and no window are enforced (cash). The date is released and the invoice voided. Not once the event is over (the end time of its last day): 409 `BOOKING_EVENT_OVER`, and `cancel` is gone from `allowedActions`.",
         "operationId": "AppProviderController_cancel",
         "parameters": [
           {
@@ -50795,7 +50911,7 @@
             }
           },
           "409": {
-            "description": "`BOOKING_INVALID_TRANSITION`: A booking cannot move from \"{from}\" to \"{to}\".",
+            "description": "`BOOKING_INVALID_TRANSITION`: A booking cannot move from \"{from}\" to \"{to}\".<br>`BOOKING_EVENT_OVER`: This event is over: the booking can no longer be cancelled or moved.",
             "content": {
               "application/json": {
                 "schema": {
@@ -50808,6 +50924,18 @@
                       "error": "Conflict",
                       "code": "BOOKING_INVALID_TRANSITION",
                       "message": "A booking cannot move from \"{from}\" to \"{to}\".",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "BOOKING_EVENT_OVER": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "BOOKING_EVENT_OVER",
+                      "message": "This event is over: the booking can no longer be cancelled or moved.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -51068,7 +51196,7 @@
     },
     "/api/v1/app/provider/bookings/{id}/reschedule": {
       "post": {
-        "description": "status-rules §5. A pending booking moves straight away; an accepted one waits for the client’s answer.",
+        "description": "status-rules §5. A pending booking moves straight away; an accepted one waits for the client’s answer. Not once an accepted event is over (409 `BOOKING_EVENT_OVER`; `reschedule` is then gone from `allowedActions`).",
         "operationId": "AppProviderController_reschedule",
         "parameters": [
           {
@@ -51253,7 +51381,7 @@
             }
           },
           "409": {
-            "description": "`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`SLOT_UNAVAILABLE`: These hours are already booked on {date}. Choose other times.<br>`RESCHEDULE_PENDING_EXISTS`: A new date is already waiting for confirmation. Cancel it first.",
+            "description": "`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.<br>`BOOKING_EXPIRED`: This request expired: it was not answered in time.<br>`BOOKING_EVENT_OVER`: This event is over: the booking can no longer be cancelled or moved.<br>`COUNTERPARTY_UNAVAILABLE`: The other party is temporarily unavailable on Eventor: the date cannot be changed now. Contact Eventor support.<br>`DATE_UNAVAILABLE`: The provider is not available on {date}.<br>`SLOT_UNAVAILABLE`: These hours are already booked on {date}. Choose other times.<br>`RESCHEDULE_PENDING_EXISTS`: A new date is already waiting for confirmation. Cancel it first.",
             "content": {
               "application/json": {
                 "schema": {
@@ -51266,6 +51394,42 @@
                       "error": "Conflict",
                       "code": "BOOKING_NOT_EDITABLE",
                       "message": "This action is not possible while the booking is {status}.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "BOOKING_EXPIRED": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "BOOKING_EXPIRED",
+                      "message": "This request expired: it was not answered in time.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "BOOKING_EVENT_OVER": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "BOOKING_EVENT_OVER",
+                      "message": "This event is over: the booking can no longer be cancelled or moved.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "COUNTERPARTY_UNAVAILABLE": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "COUNTERPARTY_UNAVAILABLE",
+                      "message": "The other party is temporarily unavailable on Eventor: the date cannot be changed now. Contact Eventor support.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -63130,6 +63294,9 @@
               "PACK_HAS_BOOKINGS",
               "BOOKING_NOT_FOUND",
               "BOOKING_INVALID_TRANSITION",
+              "BOOKING_EXPIRED",
+              "COUNTERPARTY_UNAVAILABLE",
+              "BOOKING_EVENT_OVER",
               "BOOKING_NOT_EDITABLE",
               "DATE_UNAVAILABLE",
               "MULTI_DAY_NOT_ALLOWED",
@@ -65903,6 +66070,31 @@
           "total"
         ]
       },
+      "UserReportStatsDto": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "number",
+            "example": 3,
+            "description": "Open reports about this account: on the account itself and on what it owns or wrote (`GET /admin/reports?aboutUserId=`, open tab)."
+          },
+          "openOnAccount": {
+            "type": "number",
+            "example": 1,
+            "description": "Of those, open reports on the account itself (`targetType=user`), e.g. a client reporting a provider from the app."
+          },
+          "total": {
+            "type": "number",
+            "example": 9,
+            "description": "All reports about the account, whatever their status (`aboutUserId`, tab all)."
+          }
+        },
+        "required": [
+          "open",
+          "openOnAccount",
+          "total"
+        ]
+      },
       "UserStatsDto": {
         "type": "object",
         "properties": {
@@ -65935,6 +66127,14 @@
           "disputes": {
             "$ref": "#/components/schemas/DisputeStatsDto"
           },
+          "reports": {
+            "description": "BUG-H3: reports about this account and its content (reviews.reported only covers reviews).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserReportStatsDto"
+              }
+            ]
+          },
           "earnings": {
             "type": "string",
             "example": "3840000.00",
@@ -65953,6 +66153,7 @@
           "packs",
           "reviews",
           "disputes",
+          "reports",
           "earnings",
           "replyRate"
         ]
@@ -66655,7 +66856,7 @@
           "upcomingBookings": {
             "type": "number",
             "example": 5,
-            "description": "Accepted bookings from today (kept)."
+            "description": "Accepted bookings from today: cancelled with `bookings: cancel`, kept with `keep` (BUG-M4)."
           },
           "conversations": {
             "type": "number",
@@ -66725,7 +66926,7 @@
               "keep"
             ],
             "example": "cancel",
-            "description": "What happens to pending bookings."
+            "description": "What happens to the account's bookings (BUG-M4). `cancel`: every pending request **and** every accepted booking whose event is not over is cancelled (cancelledBy `admin`, reason `account_blocked`, invoices voided, the other party notified). `keep`: they all stay; the other party of each accepted one is notified that the counterpart is unavailable, and cannot propose a new date until the unblock. Unblocking never restores cancelled bookings."
           }
         },
         "required": [
@@ -67542,6 +67743,18 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          },
+          "oldTotal": {
+            "type": "string",
+            "nullable": true,
+            "example": "24000.00",
+            "description": "Booking total when proposed; null before 24 Nov 2026."
+          },
+          "newTotal": {
+            "type": "string",
+            "nullable": true,
+            "example": "30000.00",
+            "description": "Total with the new hours (per-hour services, at the agreed rate); equal to `oldTotal` when unchanged; the applied total once accepted."
           }
         },
         "required": [
@@ -67557,7 +67770,9 @@
           "forced",
           "status",
           "createdAt",
-          "resolvedAt"
+          "resolvedAt",
+          "oldTotal",
+          "newTotal"
         ]
       },
       "InvoiceSummaryDto": {
@@ -77870,6 +78085,7 @@
               "booking.reschedule_proposed",
               "booking.reschedule_rejected",
               "booking.price_changed",
+              "booking.counterparty_blocked",
               "booking.reminder",
               "booking.review_requested",
               "dispute.opened",
@@ -80725,6 +80941,18 @@
             "example": true,
             "description": "True when it is this caller’s turn to accept or reject."
           },
+          "oldTotal": {
+            "type": "string",
+            "nullable": true,
+            "example": "24000.00",
+            "description": "Booking total when the date was proposed. Null on proposals made before 24 Nov 2026."
+          },
+          "newTotal": {
+            "type": "string",
+            "nullable": true,
+            "example": "30000.00",
+            "description": "Total with the new hours: a `per_hour` service is billed the new number of hours at the rate already agreed on the booking (BUG-E3). Equal to `oldTotal` when the price does not change; show \"New total\" when they differ. Once accepted, the total that was applied. Null on older proposals."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -80740,6 +80968,8 @@
           "reason",
           "proposedByRole",
           "awaitingMe",
+          "oldTotal",
+          "newTotal",
           "createdAt"
         ]
       },
@@ -80975,6 +81205,11 @@
             "format": "uuid",
             "description": "The direct chat, for the \"Message\" button."
           },
+          "counterpartyBlocked": {
+            "type": "boolean",
+            "example": false,
+            "description": "The other party's account is blocked by Eventor and the booking was kept (BUG-M4). Show \"<counterparty> is temporarily unavailable\"; `reschedule` is then missing from `allowedActions` on an accepted booking. Back to false when they are unblocked (`booking:updated`)."
+          },
           "allowedActions": {
             "type": "array",
             "description": "The buttons to draw; the write endpoints enforce the same rules.",
@@ -81143,6 +81378,7 @@
           "total",
           "counterparty",
           "conversationId",
+          "counterpartyBlocked",
           "allowedActions",
           "createdAt",
           "locationText",
@@ -81390,6 +81626,11 @@
             "format": "uuid",
             "description": "The direct chat, for the \"Message\" button."
           },
+          "counterpartyBlocked": {
+            "type": "boolean",
+            "example": false,
+            "description": "The other party's account is blocked by Eventor and the booking was kept (BUG-M4). Show \"<counterparty> is temporarily unavailable\"; `reschedule` is then missing from `allowedActions` on an accepted booking. Back to false when they are unblocked (`booking:updated`)."
+          },
           "allowedActions": {
             "type": "array",
             "description": "The buttons to draw; the write endpoints enforce the same rules.",
@@ -81437,6 +81678,7 @@
           "total",
           "counterparty",
           "conversationId",
+          "counterpartyBlocked",
           "allowedActions",
           "createdAt"
         ]

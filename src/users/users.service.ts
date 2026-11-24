@@ -43,6 +43,7 @@ import { UserNote } from './entities/user-note.entity.js';
 import { User } from './entities/user.entity.js';
 import { USER_EVENTS, type UserInvitedEvent } from './users.events.js';
 import { initialVerificationStatus, normalisePhone } from './users.policy.js';
+import { REPORTS_ABOUT_USER_SQL, reportsAboutUserParams } from '../reviews/reviews.policy.js';
 
 export const INVITATION_TOKEN_TTL_DAYS = 7;
 
@@ -441,7 +442,7 @@ export class UsersService {
   private async stats(user: User, today: string, em: EntityManager): Promise<Omit<UserStatsDto, 'replyRate'>> {
     const isProvider = user.role === UserRole.Provider;
     const col = isProvider ? 'provider_id' : 'client_id';
-    const [bookingRows, serviceRows, packRows, [reviewRow], [reportedRow], disputeRows] = await Promise.all([
+    const [bookingRows, serviceRows, packRows, [reviewRow], [reportedRow], disputeRows, [aboutRow]] = await Promise.all([
       em.query(
         `SELECT status AS k, COUNT(*) AS n, SUM(event_date >= ?) AS upcoming, COALESCE(SUM(total), 0) AS amount
          FROM bookings WHERE ${col} = ? AND deleted_at IS NULL GROUP BY status`,
@@ -462,6 +463,13 @@ export class UsersService {
         `SELECT d.status AS k, COUNT(*) AS n FROM disputes d JOIN bookings b ON b.id = d.booking_id
          WHERE d.deleted_at IS NULL AND b.${col} = ? GROUP BY d.status`,
         [user.id],
+      ),
+      // BUG-H3: the same rows as GET /admin/reports?aboutUserId=.
+      em.query(
+        `SELECT COUNT(*) AS total, COALESCE(SUM(rp.status = 'open'), 0) AS open,
+                COALESCE(SUM(rp.status = 'open' AND rp.target_type = 'user'), 0) AS on_account
+         FROM reports rp WHERE rp.deleted_at IS NULL AND ${REPORTS_ABOUT_USER_SQL}`,
+        reportsAboutUserParams(user.id),
       ),
     ]);
     const byStatus = new Map<string, { n: number; upcoming: number; amount: string }>(
@@ -488,6 +496,7 @@ export class UsersService {
         reported: Number(reportedRow.n),
       },
       disputes: { open: (disputes.get(DisputeStatus.Open) ?? 0) + (disputes.get(DisputeStatus.InReview) ?? 0), total: sum(disputes) },
+      reports: { open: Number(aboutRow.open), openOnAccount: Number(aboutRow.on_account), total: Number(aboutRow.total) },
       earnings: Number(byStatus.get(BookingStatus.Completed)?.amount ?? 0).toFixed(2),
     };
   }

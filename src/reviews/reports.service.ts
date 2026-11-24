@@ -27,7 +27,7 @@ import {
 } from './dto/reports.dto.js';
 import { Report } from './entities/report.entity.js';
 import { REVIEW_EVENTS, type ReportCreatedEvent, type ReportsClosedEvent } from './reviews.events.js';
-import { CONVERTIBLE_TARGETS } from './reviews.policy.js';
+import { CONVERTIBLE_TARGETS, REPORTS_ABOUT_USER_SQL, reportsAboutUserParams } from './reviews.policy.js';
 import { closeOpenReports, insertReport, type InsertReportInput } from './reviews.writes.js';
 
 const iso = (value: Date | string | null | undefined): string | null => (value ? new Date(value).toISOString() : null);
@@ -59,6 +59,8 @@ export class ReportsService {
     const tab = filters.tab ?? 'open';
     if (options.tab && tab !== 'all') add('rp.status = ?', tab);
     if (filters.targetType?.length) add('rp.target_type IN (?)', filters.targetType);
+    if (filters.targetId) add('rp.target_id = ?', filters.targetId);
+    if (filters.aboutUserId) add(REPORTS_ABOUT_USER_SQL, ...reportsAboutUserParams(filters.aboutUserId));
     if (filters.reason?.length) add('rp.reason IN (?)', filters.reason);
     if (filters.createdFrom) add('rp.created_at >= ?', new Date(`${filters.createdFrom}T00:00:00Z`));
     if (filters.createdTo) add('rp.created_at < ?', new Date(`${addDays(filters.createdTo, 1)}T00:00:00Z`));

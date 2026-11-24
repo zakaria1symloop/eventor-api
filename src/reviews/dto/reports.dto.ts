@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEnum, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsEnum, IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
 import { toArray, trim } from '../../common/dto/transforms.js';
 import { DisputeType, ReportReason, ReportStatus, ReportTargetType } from '../../common/enums/moderation.enums.js';
 import { PartyRole } from '../../common/enums/user.enums.js';
@@ -22,6 +22,21 @@ export class ReportFiltersDto {
   @Transform(toArray)
   @IsEnum(ReportTargetType, { each: true })
   targetType?: ReportTargetType[];
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Only the reports on this target (with `targetType`, e.g. `targetType=user&targetId=` for one account).' })
+  @IsOptional()
+  @IsUUID('all')
+  targetId?: string;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'BUG-H3: the reports about one account — on the account itself and on what it owns or wrote (services, packs, messages sent, reviews and replies written). ' +
+      'Same definition as `stats.reports` on `GET /admin/users/{id}`: the user page lists these.',
+  })
+  @IsOptional()
+  @IsUUID('all')
+  aboutUserId?: string;
 
   @ApiPropertyOptional({ enum: ReportReason, isArray: true, description: 'Repeat for several.' })
   @IsOptional()

@@ -12,10 +12,16 @@ import {
   computeLines,
   computeTotals,
   eventEndUtc,
+  eventEndsAt,
+  eventStartUtc,
+  EXPIRED_REASON,
   isDueForAutoComplete,
+  isExpired,
+  pendingExpiry,
   isNoReply,
   packLines,
   reminderRetryAfter,
+  rescheduledLines,
   serviceQuantity,
   STATUS_ACTIONS,
   targetStatus,
@@ -148,6 +154,98 @@ describe('timing', () => {
 
   it('adds days to a date', () => {
     expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
+  });
+});
+
+describe('rescheduledLines (BUG-E3: a per-hour price follows the new hours)', () => {
+  const SERVICE = 'svc-1';
+  const booked = [
+    { kind: BookingLineKind.Service, label: 'DJ', quantity: 4, unitAmount: '6000.00', serviceId: SERVICE },
+    { kind: BookingLineKind.Extra, label: 'Smoke machine', quantity: 2, unitAmount: '1500.00', serviceId: SERVICE },
+    { kind: BookingLineKind.Discount, label: 'Loyalty', quantity: 1, unitAmount: '2000.00', serviceId: null },
+  ];
+
+  it('re-counts the hours of the per-hour service line at the agreed unit price, overnight included', () => {
+    const lines = rescheduledLines(booked, { serviceId: SERVICE, priceType: PriceType.PerHour, startTime: '20:00', endTime: '01:00' })!;
+    expect(lines[0]).toEqual({ ...booked[0], quantity: 5 });
+    // Extras and discounts are kept as they are.
+    expect(lines.slice(1)).toEqual(booked.slice(1));
+    expect(computeTotals(computeLines(lines)).total).toBe('31000.00');
+  });
+
+  it('returns null when nothing changes: same length, or not priced per hour', () => {
+    expect(rescheduledLines(booked, { serviceId: SERVICE, priceType: PriceType.PerHour, startTime: '10:00', endTime: '14:00' })).toBeNull();
+    for (const priceType of [PriceType.PerEvent, PriceType.PerPerson, PriceType.PerDay]) {
+      expect(rescheduledLines(booked, { serviceId: SERVICE, priceType, startTime: '18:00', endTime: '23:00' })).toBeNull();
+    }
+    // A pack (no service of its own) never changes.
+    expect(rescheduledLines([{ kind: BookingLineKind.PackService, label: 'DJ', quantity: 1, unitAmount: '6000.00', serviceId: SERVICE }], { serviceId: null, priceType: null, startTime: '18:00', endTime: '23:00' })).toBeNull();
+  });
+
+  it('only touches the line of the booked service', () => {
+    const other = [{ kind: BookingLineKind.Service, label: 'Other', quantity: 4, unitAmount: '6000.00', serviceId: 'svc-2' }];
+    expect(rescheduledLines(other, { serviceId: SERVICE, priceType: PriceType.PerHour, startTime: '18:00', endTime: '23:00' })).toBeNull();
+  });
+});
+
+describe('eventEndsAt (BUG-E6: when cancel and reschedule stop)', () => {
+  const at = (b: Parameters<typeof eventEndsAt>[0]) => eventEndsAt(b).toISOString();
+
+  it('is the end time of the event day, Africa/Algiers (UTC+1)', () => {
+    expect(at({ eventDate: '2026-12-03', startTime: '18:00', endTime: '22:00' })).toBe('2026-12-03T21:00:00.000Z');
+  });
+
+  it('runs into the next day when the hours pass midnight', () => {
+    expect(at({ eventDate: '2026-12-03', startTime: '20:00', endTime: '02:00' })).toBe('2026-12-04T01:00:00.000Z');
+    // 00:00 → 00:00 is the whole day.
+    expect(at({ eventDate: '2026-12-03', startTime: '00:00', endTime: '00:00' })).toBe('2026-12-03T23:00:00.000Z');
+  });
+
+  it('is the end of the last day of a multi-day booking', () => {
+    expect(at({ eventDate: '2026-12-03', endDate: '2026-12-05', startTime: null, endTime: null })).toBe('2026-12-05T23:00:00.000Z');
+    expect(at({ eventDate: '2026-12-03', endDate: '2026-12-05', startTime: '20:00', endTime: '01:00' })).toBe('2026-12-06T00:00:00.000Z');
+  });
+
+  it('is midnight after the event day when there are no hours', () => {
+    expect(at({ eventDate: '2026-12-03', startTime: null, endTime: null })).toBe('2026-12-03T23:00:00.000Z');
+    expect(at({ eventDate: '2026-12-03', startTime: null, endTime: '17:30:00' })).toBe('2026-12-03T16:30:00.000Z');
+  });
+});
+
+describe('request expiry (BUG-F1)', () => {
+  const pending = (createdAt: string, eventDate: string, startTime: string | null = null) => ({ status: BookingStatus.Pending, createdAt: new Date(createdAt), eventDate, startTime });
+
+  it('starts an event at its start time, or at the start of the day, in Algiers time', () => {
+    expect(eventStartUtc('2026-12-03', '18:00:00').toISOString()).toBe('2026-12-03T17:00:00.000Z');
+    expect(eventStartUtc('2026-12-03', null).toISOString()).toBe('2026-12-02T23:00:00.000Z');
+  });
+
+  it('expires at the reply deadline when the event is further away', () => {
+    const booking = pending('2026-11-20T10:00:00Z', '2026-12-20', '18:00');
+    expect(pendingExpiry(booking, 48)).toEqual({ at: new Date('2026-11-22T10:00:00Z'), cause: 'reply_deadline' });
+    expect(isExpired(booking, 48, new Date('2026-11-22T09:59:59Z'))).toBe(false);
+    expect(isExpired(booking, 48, new Date('2026-11-22T10:00:00Z'))).toBe(true);
+  });
+
+  it('expires at the event start when it comes before the deadline (EVT-000003: event over, still pending)', () => {
+    const booking = pending('2026-11-21T10:00:00Z', '2026-11-22', '12:00');
+    expect(pendingExpiry(booking, 48)).toEqual({ at: new Date('2026-11-22T11:00:00Z'), cause: 'event_started' });
+    expect(isExpired(booking, 48, new Date('2026-11-22T10:59:00Z'))).toBe(false);
+    expect(isExpired(booking, 48, new Date('2026-11-22T11:00:00Z'))).toBe(true);
+    // A whole-day event starts at midnight.
+    expect(pendingExpiry(pending('2026-11-21T10:00:00Z', '2026-11-22'), 48)!.at.toISOString()).toBe('2026-11-21T23:00:00.000Z');
+  });
+
+  it('never expires anything but a pending request', () => {
+    for (const status of [BookingStatus.Accepted, BookingStatus.Completed, BookingStatus.Declined, BookingStatus.Cancelled]) {
+      const booking = { ...pending('2020-01-01T00:00:00Z', '2020-01-02'), status };
+      expect(pendingExpiry(booking, 48)).toBeNull();
+      expect(isExpired(booking, 48)).toBe(false);
+    }
+  });
+
+  it('uses the decline reason code `expired`', () => {
+    expect(EXPIRED_REASON).toBe('expired');
   });
 });
 

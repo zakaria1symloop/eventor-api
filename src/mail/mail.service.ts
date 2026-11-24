@@ -4,6 +4,7 @@ import type { Lang } from '../common/i18n/language.js';
 import { envConfig, type Env } from '../config/env.js';
 import { JOBS } from '../queue/jobs.js';
 import { QueueService } from '../queue/queue.service.js';
+import { gmailSenderWarning } from './mail-sender.js';
 import {
   renderMail,
   type MailTemplateData,
@@ -49,6 +50,8 @@ export class MailService implements OnModuleInit {
 
   onModuleInit(): void {
     this.queue.registerHandler<MailRequest>(JOBS.sendMail, (request) => this.send(request));
+    const warning = gmailSenderWarning(this.env);
+    if (warning) this.logger.warn(warning);
   }
 
   /** `smtp` when SMTP is configured, `console` when mail only reaches the log/outbox. Shown by `/health/ready`. */

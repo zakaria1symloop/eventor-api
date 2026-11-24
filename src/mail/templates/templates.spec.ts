@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { gmailSenderWarning, mailAddress } from '../mail-sender.js';
 import { MAIL_TEMPLATES, renderMail, type MailTemplateData, type MailTemplateName } from './index.js';
+import { acceptsReplies, NO_REPLY_FOOTER, REPLY_FOOTER, withReplyFooter } from './layout.js';
 
 const URL = 'https://admin.example.test/set-password?token=abc123';
 
@@ -44,6 +45,26 @@ describe('mail templates: every mail has a plain-text part with its content (BUG
       });
     }
   }
+});
+
+describe('footer follows the sender (#20 follow-up)', () => {
+  it('invites replies from a real inbox, never from a no-reply address', () => {
+    expect(acceptsReplies('Eventor <eventorsupport@gmail.com>')).toBe(true);
+    expect(acceptsReplies('Eventor <no-reply@eventor.dz>')).toBe(false);
+    expect(acceptsReplies('noreply@eventor.dz')).toBe(false);
+  });
+
+  it('swaps the footer in both parts and both languages, nothing else', () => {
+    for (const lang of ['en', 'ar'] as const) {
+      const mail = renderMail('verification-code', lang, { name: 'Amel', code: '482913', minutes: 15 });
+      const replied = withReplyFooter(mail, lang);
+      expect(replied.text).toContain(REPLY_FOOTER[lang]);
+      expect(replied.text).not.toContain(NO_REPLY_FOOTER[lang]);
+      expect(replied.html).toContain(REPLY_FOOTER[lang]);
+      expect(replied.text).toContain('482913');
+      expect(replied.subject).toBe(mail.subject);
+    }
+  });
 });
 
 describe('gmailSenderWarning (BUG-B1: who the mail really comes from)', () => {

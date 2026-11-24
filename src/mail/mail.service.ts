@@ -5,6 +5,7 @@ import { envConfig, type Env } from '../config/env.js';
 import { JOBS } from '../queue/jobs.js';
 import { QueueService } from '../queue/queue.service.js';
 import { gmailSenderWarning } from './mail-sender.js';
+import { acceptsReplies, withReplyFooter } from './templates/layout.js';
 import {
   renderMail,
   type MailTemplateData,
@@ -64,7 +65,9 @@ export class MailService implements OnModuleInit {
   }
 
   async send<T extends MailTemplateName>(request: MailRequest<T>): Promise<void> {
-    const mail = renderMail(request.template, request.lang, request.data);
+    const rendered = renderMail(request.template, request.lang, request.data);
+    // #20 follow-up: when the sender is a real inbox (eventorsupport@…), the footer invites replies.
+    const mail = acceptsReplies(this.env.MAIL_FROM) ? withReplyFooter(rendered, request.lang) : rendered;
 
     if (!this.transporter) {
       this.outbox.push({ to: request.to, subject: mail.subject, text: mail.text, attachments: (request.attachments ?? []).map((a) => a.filename) });

@@ -6,6 +6,34 @@ export interface RenderedMail {
   text: string;
 }
 
+/** The footer of every mail when the sender is a no-reply address. */
+export const NO_REPLY_FOOTER: Record<Lang, string> = {
+  en: 'The Eventor team. This is an automatic message, please do not reply.',
+  ar: 'فريق Eventor. هذه رسالة تلقائية، يرجى عدم الرد عليها.',
+};
+
+/** #20 follow-up: the footer when replies reach Eventor support (the sender is a real inbox). */
+export const REPLY_FOOTER: Record<Lang, string> = {
+  en: 'The Eventor team. You can reply to this email to reach Eventor support.',
+  ar: 'فريق Eventor. يمكنك الرد على هذه الرسالة للتواصل مع دعم Eventor.',
+};
+
+/** A sender whose address starts with "no-reply" / "noreply" is not read; any other one is. */
+export function acceptsReplies(mailFrom: string): boolean {
+  const match = /<([^>]+)>/.exec(mailFrom);
+  const address = (match ? match[1]! : mailFrom).trim().toLowerCase();
+  return !/^no-?reply@/.test(address);
+}
+
+/** Swaps the "do not reply" footer for the "reply to reach support" one, in the HTML and the text part. */
+export function withReplyFooter(mail: RenderedMail, lang: Lang): RenderedMail {
+  return {
+    subject: mail.subject,
+    html: mail.html.replace(escapeHtml(NO_REPLY_FOOTER[lang]), escapeHtml(REPLY_FOOTER[lang])),
+    text: mail.text.replace(NO_REPLY_FOOTER[lang], REPLY_FOOTER[lang]),
+  };
+}
+
 export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -26,10 +54,7 @@ export function layout(
   textLines: string[],
 ): RenderedMail {
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
-  const footer =
-    lang === 'ar'
-      ? 'فريق Eventor. هذه رسالة تلقائية، يرجى عدم الرد عليها.'
-      : 'The Eventor team. This is an automatic message, please do not reply.';
+  const footer = NO_REPLY_FOOTER[lang];
 
   const html = `<!doctype html>
 <html lang="${lang}" dir="${dir}">

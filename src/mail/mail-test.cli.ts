@@ -11,6 +11,7 @@ import nodemailer from 'nodemailer';
 import { validateEnv } from '../config/env.js';
 import { gmailSenderWarning, mailAddress } from './mail-sender.js';
 import { renderMail } from './templates/index.js';
+import { acceptsReplies, withReplyFooter } from './templates/layout.js';
 
 try {
   process.loadEnvFile();
@@ -35,7 +36,9 @@ async function main(): Promise<void> {
     auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASSWORD } : undefined,
   });
   await transport.verify();
-  const mail = renderMail('verification-code', lang, { name: 'Eventor test', code: '000000', minutes: 15 });
+  const rendered = renderMail('verification-code', lang, { name: 'Eventor test', code: '000000', minutes: 15 });
+  // Exactly what the API sends, footer included.
+  const mail = acceptsReplies(env.MAIL_FROM) ? withReplyFooter(rendered, lang) : rendered;
   const info = await transport.sendMail({ from: env.MAIL_FROM, to, subject: mail.subject, html: mail.html, text: mail.text });
   console.log(
     JSON.stringify(

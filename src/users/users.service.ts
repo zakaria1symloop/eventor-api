@@ -71,6 +71,7 @@ const PROVIDER_FIELDS = ['businessName', 'categoryId', 'bioEn', 'bioAr', 'wilaya
 
 interface RawUserRow {
   id: string;
+  deleted_at: Date | null;
   role: UserRole;
   full_name: string;
   email: string;
@@ -144,6 +145,8 @@ export class UsersService {
     if (needsProfile) qb.leftJoin(ProviderProfile, 'pp', 'pp.user_id = u.id AND pp.deleted_at IS NULL');
     if (joins === 'row') qb.leftJoin(Category, 'c', 'c.id = pp.category_id').leftJoin(Wilaya, 'w', 'w.code = u.wilaya_code');
     qb.where('u.role IN (:...managedRoles)', { managedRoles: [UserRole.Client, UserRole.Provider] });
+    // Deleted accounts only on request (BUG-M5 follow-up).
+    if (filters.includeDeleted) qb.withDeleted();
 
     if (filters.q) qb.andWhere(userSearch(filters.q));
     if (filters.role) qb.andWhere('u.role = :role', { role: filters.role });
@@ -245,6 +248,7 @@ export class UsersService {
   private selectRow(qb: SelectQueryBuilder<User>): SelectQueryBuilder<User> {
     return qb
       .select('u.id', 'id')
+      .addSelect('u.deleted_at', 'deleted_at')
       .addSelect('u.role', 'role')
       .addSelect('u.full_name', 'full_name')
       .addSelect('u.email', 'email')
@@ -279,6 +283,7 @@ export class UsersService {
       const isProvider = r.role === UserRole.Provider;
       return {
         id: r.id,
+        deletedAt: iso(r.deleted_at),
         role: r.role,
         fullName: r.full_name,
         email: r.email,
@@ -299,8 +304,8 @@ export class UsersService {
     });
   }
 
-  async row(id: string, em: EntityManager = this.dataSource.manager): Promise<UserRowDto> {
-    const raw = await this.selectRow(this.filtered({}, em).andWhere('u.id = :id', { id })).getRawOne<RawUserRow>();
+  async row(id: string, em: EntityManager = this.dataSource.manager, includeDeleted = false): Promise<UserRowDto> {
+    const raw = await this.selectRow(this.filtered({ includeDeleted }, em).andWhere('u.id = :id', { id })).getRawOne<RawUserRow>();
     if (!raw) throw AppException.of('USER_NOT_FOUND');
     return (await this.toRows([raw], em))[0]!;
   }
@@ -317,11 +322,12 @@ export class UsersService {
 
   // ── profile ─────────────────────────────────────────────────
 
-  async get(id: string, auth: AuthUser | null, em: EntityManager = this.dataSource.manager): Promise<UserDetailDto> {
+  /** `includeDeleted`: the read-only profile of a deleted account (GET only; actions load through `load()`, which refuses it). */
+  async get(id: string, auth: AuthUser | null, em: EntityManager = this.dataSource.manager, includeDeleted = false): Promise<UserDetailDto> {
     const user = await em.getRepository(User).findOne({
       where: { id, role: In([UserRole.Client, UserRole.Provider]) },
       relations: { blockedBy: true },
-      withDeleted: false,
+      withDeleted: includeDeleted,
     });
     if (!user) throw AppException.of('USER_NOT_FOUND');
     const isProvider = user.role === UserRole.Provider;
@@ -330,7 +336,7 @@ export class UsersService {
     const today = algiersToday();
 
     const [row, profile, stats, recentBookings, recentServices, recentReviews, notes, documents] = await Promise.all([
-      this.row(id, em),
+      this.row(id, em, includeDeleted),
       isProvider ? em.getRepository(ProviderProfile).findOne({ where: { userId: id }, relations: { category: true } }) : null,
       this.stats(user, today, em),
       em.query(

@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { AuthUser } from '../auth/auth.types.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
@@ -107,8 +107,9 @@ export class AdminUsersController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiDataResponse(UserDetailDto)
   @ApiErrorResponses('USER_NOT_FOUND')
-  async get(@CurrentUser() auth: AuthUser, @Param('id', userId()) id: string) {
-    return { data: await this.users.get(id, auth) };
+  @ApiQuery({ name: 'includeDeleted', required: false, type: Boolean, description: 'BUG-M5 follow-up: also open a deleted account, read-only (`deletedAt` is set). Without it a deleted account is 404 as before; its actions are always 404.' })
+  async get(@CurrentUser() auth: AuthUser, @Param('id', userId()) id: string, @Query('includeDeleted') includeDeleted?: string) {
+    return { data: await this.users.get(id, auth, undefined, includeDeleted === 'true') };
   }
 
   @Patch(':id')

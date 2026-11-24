@@ -124,7 +124,7 @@ describe('Admin users (e2e)', () => {
       expect(Object.keys(row).sort()).toEqual(
         [
           'id', 'role', 'fullName', 'email', 'phone', 'avatarUrl', 'status', 'verificationStatus', 'wilaya', 'businessName', 'category',
-          'rating', 'ratingCount', 'bookingsCount', 'servicesCount', 'lastActiveAt', 'createdAt',
+          'rating', 'ratingCount', 'bookingsCount', 'servicesCount', 'lastActiveAt', 'createdAt', 'deletedAt',
         ].sort(),
       );
       expect(row).toMatchObject({
@@ -350,6 +350,14 @@ describe('Admin users (e2e)', () => {
       await db().getRepository(User).softDelete(gone.id);
       expectError(await request(t.http).get(`${BASE}/${gone.id}`).set(admin.headers), 404, 'USER_NOT_FOUND');
       expectError(await request(t.http).get(`${BASE}/${admin.user.id}`).set(admin.headers), 404, 'USER_NOT_FOUND');
+
+      // BUG-M5 follow-up, opt-in only: the read-only profile and the search badge; actions stay 404.
+      const profile = await request(t.http).get(`${BASE}/${gone.id}?includeDeleted=true`).set(admin.headers).expect(200);
+      expect(profile.body.data).toMatchObject({ id: gone.id, deletedAt: expect.any(String) });
+      expectError(await request(t.http).patch(`${BASE}/${gone.id}`).set(admin.headers).send({ fullName: 'Xx' }), 404, 'USER_NOT_FOUND');
+      const withDeleted = await request(t.http).get(`${BASE}?q=${encodeURIComponent(gone.email)}&includeDeleted=true`).set(admin.headers).expect(200);
+      expect(withDeleted.body.data).toEqual([expect.objectContaining({ id: gone.id, deletedAt: expect.any(String) })]);
+      expect((await request(t.http).get(`${BASE}?q=${encodeURIComponent(gone.email)}`).set(admin.headers).expect(200)).body.data).toEqual([]);
     });
   });
 

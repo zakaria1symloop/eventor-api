@@ -25,7 +25,7 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { normaliseEmail } from '../../auth/dto/admin-auth.dto.js';
-import { toArray, trim, trimToNull } from '../../common/dto/transforms.js';
+import { toArray, toBoolean, trim, trimToNull } from '../../common/dto/transforms.js';
 import { BookingStatus } from '../../common/enums/booking.enums.js';
 import { DocumentStatus, DocumentType } from '../../common/enums/file.enums.js';
 import { ReviewStatus } from '../../common/enums/moderation.enums.js';
@@ -105,6 +105,16 @@ export class UserFiltersDto {
   @IsOptional()
   @IsEnum(UserStatus)
   status?: UserStatus;
+
+  @ApiPropertyOptional({
+    description:
+      'BUG-M5 follow-up: also list deleted accounts (rows carry `deletedAt`; show a "Deleted" badge). Off by default. ' +
+      'Their profile opens read-only with `GET /admin/users/{id}?includeDeleted=true`; every action on them answers 404 USER_NOT_FOUND.',
+  })
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  includeDeleted?: boolean;
 
   @ApiPropertyOptional({ enum: VerificationStatus })
   @IsOptional()
@@ -199,6 +209,9 @@ export class UserTabCountsDto {
 export class UserRowDto {
   @ApiProperty({ format: 'uuid', example: '3f1c9a2e-8b7d-4c6a-9e5f-2a1b3c4d5e6f' })
   id: string;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Set on a deleted account (only listed with `includeDeleted=true`, or its read-only profile).' })
+  deletedAt: string | null;
 
   @ApiProperty({ enum: MANAGED_ROLES, example: UserRole.Provider })
   role: UserRole;

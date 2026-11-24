@@ -8995,6 +8995,15 @@
             }
           },
           {
+            "name": "includeDeleted",
+            "required": false,
+            "in": "query",
+            "description": "BUG-M5 follow-up: also list deleted accounts (rows carry `deletedAt`; show a \"Deleted\" badge). Off by default. Their profile opens read-only with `GET /admin/users/{id}?includeDeleted=true`; every action on them answers 404 USER_NOT_FOUND.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "verificationStatus",
             "required": false,
             "in": "query",
@@ -9748,6 +9757,15 @@
             "schema": {
               "format": "uuid",
               "type": "string"
+            }
+          },
+          {
+            "name": "includeDeleted",
+            "required": false,
+            "in": "query",
+            "description": "BUG-M5 follow-up: also open a deleted account, read-only (`deletedAt` is set). Without it a deleted account is 404 as before; its actions are always 404.",
+            "schema": {
+              "type": "boolean"
             }
           },
           {
@@ -65834,6 +65852,12 @@
             "format": "uuid",
             "example": "3f1c9a2e-8b7d-4c6a-9e5f-2a1b3c4d5e6f"
           },
+          "deletedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Set on a deleted account (only listed with `includeDeleted=true`, or its read-only profile)."
+          },
           "role": {
             "type": "string",
             "enum": [
@@ -65941,6 +65965,7 @@
         },
         "required": [
           "id",
+          "deletedAt",
           "role",
           "fullName",
           "email",
@@ -66648,6 +66673,12 @@
             "format": "uuid",
             "example": "3f1c9a2e-8b7d-4c6a-9e5f-2a1b3c4d5e6f"
           },
+          "deletedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Set on a deleted account (only listed with `includeDeleted=true`, or its read-only profile)."
+          },
           "role": {
             "type": "string",
             "enum": [
@@ -66805,6 +66836,7 @@
         },
         "required": [
           "id",
+          "deletedAt",
           "role",
           "fullName",
           "email",
@@ -69194,6 +69226,23 @@
             "type": "string",
             "example": "2026-12-20"
           },
+          "endDate": {
+            "type": "string",
+            "nullable": true,
+            "example": "2026-12-22",
+            "description": "Last day of a multi-day booking; null for one day (and on invoices issued before 24 Nov 2026)."
+          },
+          "startTime": {
+            "type": "string",
+            "nullable": true,
+            "example": "18:00",
+            "description": "Event hours (HH:mm); null when the booking has none (and on older invoices)."
+          },
+          "endTime": {
+            "type": "string",
+            "nullable": true,
+            "example": "23:00"
+          },
           "eventType": {
             "type": "string",
             "enum": [
@@ -69273,6 +69322,9 @@
           "titleEn",
           "titleAr",
           "eventDate",
+          "endDate",
+          "startTime",
+          "endTime",
           "eventType",
           "lines",
           "subtotal",

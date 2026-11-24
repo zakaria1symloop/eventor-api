@@ -126,8 +126,13 @@ instead of `admin`. Older rows keep their stored value.
 `provider.deleted` (true once the account was deleted). **Dashboard to do:** when it is
 true, show the name with a "Deleted user" badge and no "Open profile" link (the user page
 answers 404 `USER_NOT_FOUND`). Do the same wherever the dashboard links a person from a
-booking. Listing deleted accounts in Users search is a separate product choice, not
-done here.
+booking.
+
+**Optional, opt-in (24 Nov 2026):** Users search can list deleted accounts with
+`GET /admin/users?includeDeleted=true`; their rows carry `deletedAt`, so show a "Deleted"
+badge. Their profile opens read-only with `GET /admin/users/{id}?includeDeleted=true`.
+Hide every action button there, because each one answers 404 `USER_NOT_FOUND`. Without the
+parameter nothing changes, so the current dashboard is unaffected.
 
 ## BUG-M4 — block dialog wording (M-16, L-17)
 

@@ -9,7 +9,7 @@
 
 | # | Bug | Priority | Status | Commit |
 |---|---|---|---|---|
-| 1 | BUG-M2 double booking on accept | P0 | Fixed | `b2cecf7` |
+| 1 | BUG-M2 double booking on accept | P0 | Fixed; accept-time check then **withdrawn by product decision** (24 Nov, Symloop management), same-second fix kept | `b2cecf7`, `86eb3d1` |
 | 2 | BUG-F1 requests never expire | P1 | Fixed (behind a setting, off) | `b2cecf7` |
 | 3 | BUG-D2 `eventDate` filter ignored | P1 | Fixed | `b2cecf7` |
 | 4 | BUG-E6 cancel/reschedule offered after the event | P1 | Fixed | `b2cecf7` |
@@ -48,6 +48,7 @@ Dashboard follow-ups are described in `docs/dashboard-handoff.md` (the dashboard
 - **Fix:** capacity re-checked inside a locked transaction, with the same overlap rule as availability (overnight and multi-day included), for services and each pack item. Two simultaneous requests for the same slot no longer both get 201.
 - **Contract:** 409 `SLOT_UNAVAILABLE` (existing code). `accept` is removed from `allowedActions` when the slot is full.
 - **Tests:** M-08 / M-09 scenarios (concurrent requests, second accept refused).
+- **Product decision (24 Nov 2026, Symloop management):** providers may accept several clients in the same time frame. The accept-time check of hours taken by accepted bookings was removed (commit `86eb3d1`). Accept still refuses a blocked date or the daily limit (409 `DATE_UNAVAILABLE`), and `accept` stays hidden in that case. Kept: the same-second creation fix and the "clients at the same time" limit when a request is sent or moved. The removed check is kept on the git tag `m2-accept-slot-check`.
 
 ### 2 · BUG-F1 — booking requests never expired (P1)
 - **Fix:** a pending request expires at the reply deadline or the event start, whichever comes first. It becomes `declined` with reason `expired`, both parties are notified, the chat gets a message, and `booking:updated` is emitted. An hourly job does this, and a guard applies at read time.

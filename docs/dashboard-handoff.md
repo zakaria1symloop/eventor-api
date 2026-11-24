@@ -149,3 +149,22 @@ Unblocking never restores cancelled bookings.
 impact list (`GET /admin/users/{id}/block-impact` → `pendingBookings`,
 `upcomingBookings`) must agree: with "Cancel them" both counts are cancelled, with
 "Keep them" both stay. Add the line "Unblocking does not restore cancelled bookings."
+
+## BUG-E7 — a cancelled booking kept its pending reschedule proposal (E-24)
+
+When a booking becomes cancelled, declined (expiry included) or completed, by any
+path, its pending reschedule proposals now move to `cancelled` (resolved now) in the
+same transaction. Effects on the dashboard API, all additive:
+- `GET /admin/bookings/{id}` → `pendingReschedule` is `null` on a cancelled, declined
+  or completed booking (even for an older row still marked pending); the proposal
+  still appears in the history with status `cancelled`.
+- `POST /admin/bookings/{id}/reschedules/{rid}/cancel` answers 409
+  `RESCHEDULE_NOT_PENDING` for a closed proposal, and 409 `BOOKING_NOT_EDITABLE` on an
+  ended booking.
+- New audit action `booking.reschedule_closed` (object = the booking,
+  `changes: { closed, reason }`, reason = the booking's new status; `cleanup: true`
+  when written by `pnpm bookings:stale-reschedules:prod --apply`).
+
+**Dashboard to do (optional):** label `booking.reschedule_closed` in the activity log
+and the booking history ("Reschedule proposal closed — booking cancelled"). Until
+then it shows the raw action name.

@@ -248,7 +248,7 @@ export class AppProviderController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiParam({ name: 'rid', format: 'uuid' })
   @ApiDataResponse(AppBookingDetailDto)
-  @ApiErrorResponses('BOOKING_NOT_FOUND', 'NOT_OWNER', 'RESCHEDULE_NOT_FOUND', 'RESCHEDULE_NOT_PENDING')
+  @ApiErrorResponses('BOOKING_NOT_FOUND', 'NOT_OWNER', 'RESCHEDULE_NOT_FOUND', 'RESCHEDULE_NOT_PENDING', 'BOOKING_NOT_EDITABLE')
   async withdrawReschedule(
     @CurrentUser() auth: AuthUser,
     @Param('id', uuidParam('BOOKING_NOT_FOUND')) id: string,

@@ -123,6 +123,18 @@ describe('appBookingActions', () => {
     expect(appBookingActions('client', state())).not.toContain('respond_reschedule');
   });
 
+  it('never offers to answer or make a reschedule on an ended booking, even with an old pending row (BUG-E7)', () => {
+    for (const status of [BookingStatus.Cancelled, BookingStatus.Declined, BookingStatus.Completed]) {
+      for (const party of ['client', 'provider'] as const) {
+        const actions = appBookingActions(party, state({ status, pendingRescheduleForMe: true, eventDate: TODAY }));
+        expect(actions).not.toContain('respond_reschedule');
+        expect(actions).not.toContain('reschedule');
+      }
+    }
+    // A proposal still waiting after the event of an accepted booking can still be answered (BUG-E6, unchanged).
+    expect(appBookingActions('provider', state({ status: BookingStatus.Accepted, eventOver: true, pendingRescheduleForMe: true }))).toContain('respond_reschedule');
+  });
+
   it('never repeats an action and always allows messaging', () => {
     const actions = appBookingActions('provider', state({ eventDate: TODAY, disputeWindowOpen: true, pendingRescheduleForMe: true }));
     expect(new Set(actions).size).toBe(actions.length);

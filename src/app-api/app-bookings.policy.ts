@@ -141,7 +141,8 @@ export function appBookingActions(party: 'client' | 'provider', state: AppBookin
       actions.push('review');
     }
   }
-  if (state.pendingRescheduleForMe) actions.push('respond_reschedule');
+  // BUG-E7: only a pending or accepted booking can still move; an ended one never offers to answer a proposal.
+  if (state.pendingRescheduleForMe && (state.status === BookingStatus.Pending || state.status === BookingStatus.Accepted)) actions.push('respond_reschedule');
   if (state.disputeWindowOpen && state.disputeStatus !== BookingDisputeStatus.Open) actions.push('dispute');
   return [...new Set(actions)];
 }

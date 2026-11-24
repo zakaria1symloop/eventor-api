@@ -158,7 +158,7 @@ export class AdminBookingsController {
   @ApiParam(ID)
   @ApiParam({ name: 'rid', format: 'uuid' })
   @ApiDataResponse(BookingDetailDto)
-  @ApiErrorResponses('BOOKING_NOT_FOUND', 'RESCHEDULE_NOT_FOUND', 'RESCHEDULE_NOT_PENDING')
+  @ApiErrorResponses('BOOKING_NOT_FOUND', 'RESCHEDULE_NOT_FOUND', 'RESCHEDULE_NOT_PENDING', 'BOOKING_NOT_EDITABLE')
   async cancelReschedule(@CurrentUser() auth: AuthUser, @Param('id') id: string, @Param('rid', uuidParam('RESCHEDULE_NOT_FOUND')) rid: string) {
     return { data: await this.bookings.cancelReschedule(auth, await this.bookings.resolveId(id), rid) };
   }

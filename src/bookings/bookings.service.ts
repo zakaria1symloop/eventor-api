@@ -542,9 +542,10 @@ export class BookingsService {
       })),
     ].sort((a, b) => a.at.localeCompare(b.at));
 
-    const pending = rescheduleRows
-      .filter((s: any) => s.status === RescheduleStatus.Pending)
-      .at(-1);
+    // BUG-E7: an ended booking has no proposal waiting, even an old row left pending before the fix.
+    const pending = isEditable(r.status as BookingStatus)
+      ? rescheduleRows.filter((s: any) => s.status === RescheduleStatus.Pending).at(-1)
+      : undefined;
     const fee = computeFee(String(r.total), String(r.fee_percent));
     const status = r.status as BookingStatus;
     const today = algiersToday();
@@ -1443,6 +1444,8 @@ export class BookingsService {
 
     await em.getRepository(Booking).update(booking.id, update as never);
     Object.assign(booking, update);
+    // BUG-E7: a booking that stops being active closes its pending reschedule proposals, in this transaction.
+    if (!isEditable(to)) await this.closePendingReschedules(em, booking, to, now);
     await this.recordStatus(
       em,
       booking.id,
@@ -1905,6 +1908,35 @@ export class BookingsService {
     }
   }
 
+  /**
+   * BUG-E7: every pending proposal of a booking that became cancelled, declined (expiry included) or completed
+   * is closed as `cancelled`, resolved now. Called by `applyTransition`, the only writer of a booking status, so
+   * every path that ends a booking (app, dashboard, block, deletion, expiry, jobs, disputes) goes through it.
+   * No notification of its own: the status change already tells both parties; the audit row explains the close.
+   */
+  private async closePendingReschedules(em: EntityManager, booking: Booking, to: BookingStatus, now: Date): Promise<number> {
+    const result = await em.query(
+      "UPDATE booking_reschedules SET status = 'cancelled', resolved_at = ?, updated_at = ? WHERE booking_id = ? AND status = 'pending' AND deleted_at IS NULL",
+      [now, now, booking.id],
+    );
+    const closed = Number(result?.affectedRows ?? 0);
+    if (closed > 0) {
+      await this.audit.log(
+        {
+          action: 'booking.reschedule_closed',
+          objectType: 'booking',
+          objectId: booking.id,
+          objectLabel: booking.reference,
+          level: AuditLevel.Normal,
+          changes: { closed, reason: to },
+          note: `Pending reschedule proposal closed: the booking is ${to}.`,
+        },
+        em,
+      );
+    }
+    return closed;
+  }
+
   async cancelReschedule(
     auth: AuthUser,
     id: string,
@@ -1921,6 +1953,9 @@ export class BookingsService {
       if (!row) throw AppException.of('RESCHEDULE_NOT_FOUND');
       if (row.status !== RescheduleStatus.Pending)
         throw AppException.of('RESCHEDULE_NOT_PENDING', { status: row.status });
+      // BUG-E7: nothing to withdraw on a booking that has ended (same answer as accept / reject).
+      if (!isEditable(booking.status))
+        throw AppException.of('BOOKING_NOT_EDITABLE', { status: booking.status });
       await em
         .getRepository(BookingReschedule)
         .update(row.id, {

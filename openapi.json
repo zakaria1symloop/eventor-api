@@ -14294,7 +14294,7 @@
             }
           },
           "409": {
-            "description": "`RESCHEDULE_NOT_PENDING`: This reschedule proposal is already {status}.",
+            "description": "`RESCHEDULE_NOT_PENDING`: This reschedule proposal is already {status}.<br>`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.",
             "content": {
               "application/json": {
                 "schema": {
@@ -14307,6 +14307,18 @@
                       "error": "Conflict",
                       "code": "RESCHEDULE_NOT_PENDING",
                       "message": "This reschedule proposal is already {status}.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "BOOKING_NOT_EDITABLE": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "BOOKING_NOT_EDITABLE",
+                      "message": "This action is not possible while the booking is {status}.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -48967,7 +48979,7 @@
             }
           },
           "409": {
-            "description": "`RESCHEDULE_NOT_PENDING`: This reschedule proposal is already {status}.",
+            "description": "`RESCHEDULE_NOT_PENDING`: This reschedule proposal is already {status}.<br>`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.",
             "content": {
               "application/json": {
                 "schema": {
@@ -48980,6 +48992,18 @@
                       "error": "Conflict",
                       "code": "RESCHEDULE_NOT_PENDING",
                       "message": "This reschedule proposal is already {status}.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "BOOKING_NOT_EDITABLE": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "BOOKING_NOT_EDITABLE",
+                      "message": "This action is not possible while the booking is {status}.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -52503,7 +52527,7 @@
             }
           },
           "409": {
-            "description": "`RESCHEDULE_NOT_PENDING`: This reschedule proposal is already {status}.",
+            "description": "`RESCHEDULE_NOT_PENDING`: This reschedule proposal is already {status}.<br>`BOOKING_NOT_EDITABLE`: This action is not possible while the booking is {status}.",
             "content": {
               "application/json": {
                 "schema": {
@@ -52516,6 +52540,18 @@
                       "error": "Conflict",
                       "code": "RESCHEDULE_NOT_PENDING",
                       "message": "This reschedule proposal is already {status}.",
+                      "details": null,
+                      "path": "/api/v1/…",
+                      "timestamp": "2026-09-15T10:00:00.000Z",
+                      "requestId": "req_9f2a71c0"
+                    }
+                  },
+                  "BOOKING_NOT_EDITABLE": {
+                    "value": {
+                      "statusCode": 409,
+                      "error": "Conflict",
+                      "code": "BOOKING_NOT_EDITABLE",
+                      "message": "This action is not possible while the booking is {status}.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",

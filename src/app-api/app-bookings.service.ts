@@ -397,7 +397,7 @@ export class AppBookingsService {
       provider: this.providerCard(r),
       // BUG-H4/M3: every reason code comes with its label in the caller's language.
       timeline: timeline.map((entry) => ({ ...entry, reasonLabel: reasonLabel(entry.reason, lang) })),
-      reschedules: allReschedules.map((row): AppRescheduleRowDto => this.toReschedule(row, party)),
+      reschedules: allReschedules.map((row): AppRescheduleRowDto => this.toReschedule(row, party, r.status as BookingStatus)),
       invoice: invoice
         ? {
             id: invoice.id,
@@ -446,7 +446,8 @@ export class AppBookingsService {
   private async pendingReschedules(em: EntityManager, ids: string[]): Promise<Map<string, any>> {
     if (!ids.length) return new Map();
     const rows: any[] = await em.query(
-      "SELECT br.*, u.role AS proposer_role FROM booking_reschedules br LEFT JOIN users u ON u.id = br.proposed_by_id WHERE br.booking_id IN (?) AND br.status = 'pending' AND br.deleted_at IS NULL",
+      // BUG-E7: only a booking still pending or accepted has a proposal waiting (old rows may still say pending).
+      "SELECT br.*, u.role AS proposer_role FROM booking_reschedules br JOIN bookings b ON b.id = br.booking_id AND b.status IN ('pending', 'accepted') LEFT JOIN users u ON u.id = br.proposed_by_id WHERE br.booking_id IN (?) AND br.status = 'pending' AND br.deleted_at IS NULL",
       [ids],
     );
     return new Map(rows.map((r) => [r.booking_id, r]));
@@ -473,7 +474,7 @@ export class AppBookingsService {
     return disputeWindow({ status: r.status, eventDate: dateOnly(r.event_date), endDate: r.end_date ? dateOnly(r.end_date) : null, startTime: r.start_time, endTime: r.end_time, cancelledAt }, hours).open;
   }
 
-  private toReschedule(row: any, party: Party): AppRescheduleRowDto {
+  private toReschedule(row: any, party: Party, bookingStatus: BookingStatus): AppRescheduleRowDto {
     const proposedByRole = row.proposer_role === 'provider' ? PartyRole.Provider : row.proposer_role === 'admin' ? PartyRole.Admin : PartyRole.Client;
     return {
       id: row.id,
@@ -484,7 +485,11 @@ export class AppBookingsService {
       newEndTime: hhmm(row.new_end),
       reason: row.reason ?? null,
       proposedByRole,
-      awaitingMe: row.status === RescheduleStatus.Pending && proposedByRole !== (party === 'client' ? PartyRole.Client : PartyRole.Provider),
+      // BUG-E7: nothing waits for anyone on a booking that has ended.
+      awaitingMe:
+        row.status === RescheduleStatus.Pending &&
+        (bookingStatus === BookingStatus.Pending || bookingStatus === BookingStatus.Accepted) &&
+        proposedByRole !== (party === 'client' ? PartyRole.Client : PartyRole.Provider),
       oldTotal: row.old_total === null || row.old_total === undefined ? null : String(row.old_total),
       newTotal: row.new_total === null || row.new_total === undefined ? null : String(row.new_total),
       createdAt: iso(row.created_at)!,

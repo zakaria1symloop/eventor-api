@@ -30,6 +30,8 @@
     "stats:backfill": "tsx src/stats/stats-backfill.cli.ts",
     "bookings:expire-preview": "tsx src/bookings/booking-expiry-preview.cli.ts",
     "bookings:expire-preview:prod": "node dist/bookings/booking-expiry-preview.cli.js",
+    "bookings:stale-reschedules": "tsx src/bookings/stale-reschedules.cli.ts",
+    "bookings:stale-reschedules:prod": "node dist/bookings/stale-reschedules.cli.js",
     "mail:test": "tsx src/mail/mail-test.cli.ts",
     "mail:test:prod": "node dist/mail/mail-test.cli.js",
     "perf:seed": "tsx src/tools/perf-seed.ts",

@@ -75,6 +75,24 @@ afterAll(async () => {
 });
 
 describe('App catalog (e2e)', () => {
+  describe('GET /.well-known/assetlinks.json (BUG-C3, C-18)', () => {
+    it('is public JSON with the app package and the release fingerprint, without a redirect', async () => {
+      const res = await request(t.http).get('/.well-known/assetlinks.json').redirects(0);
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/^application\/json/);
+      expect(res.body).toEqual([
+        {
+          relation: ['delegate_permission/common.handle_all_urls'],
+          target: {
+            namespace: 'android_app',
+            package_name: 'com.symloop.eventor',
+            sha256_cert_fingerprints: ['80:74:C0:3F:BA:FC:B0:1C:DD:8F:ED:7D:80:B2:24:1F:27:BB:04:F7:C1:28:A3:43:6C:DD:C5:EE:70:F4:49:A3'],
+          },
+        },
+      ]);
+    });
+  });
+
   describe('GET /app/config', () => {
     it('is public and carries what the splash screen needs', async () => {
       const res = await request(t.http).get(`${BASE}/config`);

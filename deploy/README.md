@@ -307,6 +307,24 @@ urlencoded bodies only, not multipart uploads.
 
 ---
 
+### 5.x Android App Links (`assetlinks.json`, BUG-C3)
+
+The app opens emailed `/set-password` links only once Android has verified
+`https://<admin host>/.well-known/assetlinks.json`. The API serves it from
+`ANDROID_APP_PACKAGE` and `ANDROID_CERT_SHA256`, and `eventor.conf` sends exactly that
+path of the admin host to the API (`location = /.well-known/assetlinks.json`). After
+`nginx -t && systemctl reload nginx`, check it:
+
+```
+curl -sI https://<admin host>/.well-known/assetlinks.json   # 200, content-type: application/json, no Location
+adb shell pm verify-app-links --re-verify com.symloop.eventor
+adb shell pm get-app-links com.symloop.eventor            # <admin host>: verified
+```
+
+Once the app is on Google Play with Play App Signing, append the Play signing
+SHA-256 to `ANDROID_CERT_SHA256` (comma-separated) and restart the API. iOS
+(`apple-app-site-association`) waits for the final team id and bundle id.
+
 ## 6. First deploy: `.env.production`
 
 Copy `deploy/.env.production.example` and fill it in. It lists **every**

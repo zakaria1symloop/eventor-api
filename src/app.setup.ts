@@ -1,9 +1,11 @@
 import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import type { Request, Response } from 'express';
 import helmet from 'helmet';
 import { CorsIoAdapter } from './common/http/cors-io.adapter.js';
 import { requestIdMiddleware } from './common/request-context/request-id.middleware.js';
 import { corsList, type Env } from './config/env.js';
+import { assetLinks, ASSET_LINKS_PATH } from './common/http/well-known.js';
 
 /**
  * The leading slash matters: Nest 12 mounts its not-found handler at the raw
@@ -23,6 +25,11 @@ export function configureApp(app: INestApplication, env: Env): void {
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
   const express = app as unknown as NestExpressApplication;
   express.disable('x-powered-by');
+  // BUG-C3: outside the API prefix and the guards; public, cached for an hour, never redirected.
+  const links = JSON.stringify(assetLinks(env));
+  express.getHttpAdapter().getInstance().get(ASSET_LINKS_PATH, (_req: Request, res: Response) => {
+    res.set({ 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' }).send(links);
+  });
   // First, so that every response carries a request id and gets its log line —
   // including the ones the body parser rejects below (malformed JSON, 413).
   app.use(requestIdMiddleware({ log: env.LOG_REQUESTS }));

@@ -102,6 +102,18 @@ export class Env {
   @IsString()
   APP_PUBLIC_URL = 'http://localhost:3001';
 
+  /**
+   * Android App Links (BUG-C3): `/.well-known/assetlinks.json` lets the app open
+   * `${APP_PUBLIC_URL}/set-password` links. Public values, not secrets. Comma-separated
+   * SHA-256 certificate fingerprints: the release key, plus the Play App Signing key
+   * once the app is on Google Play.
+   */
+  @IsString()
+  ANDROID_APP_PACKAGE = 'com.symloop.eventor';
+
+  @IsString()
+  ANDROID_CERT_SHA256 = '80:74:C0:3F:BA:FC:B0:1C:DD:8F:ED:7D:80:B2:24:1F:27:BB:04:F7:C1:28:A3:43:6C:DD:C5:EE:70:F4:49:A3';
+
   // ── Auth ──────────────────────────────────────────────────
   @IsString()
   @MinLength(16)

@@ -83183,6 +83183,55 @@
           "createdAt"
         ]
       },
+      "AppSystemMessageDto": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "booking_requested",
+              "booking_accepted",
+              "booking_declined",
+              "booking_cancelled",
+              "booking_completed",
+              "booking_expired",
+              "reschedule_proposed",
+              "reschedule_accepted",
+              "reschedule_declined",
+              "booking_rescheduled"
+            ],
+            "example": "booking_accepted",
+            "description": "What happened. Render the text from it and `params` in the app language; `body` already holds it in the request language."
+          },
+          "bookingId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Tap → open this booking (B4 / P2)."
+          },
+          "bookingRef": {
+            "type": "string",
+            "example": "EVT-000123"
+          },
+          "params": {
+            "type": "object",
+            "example": {
+              "date": "2026-12-03",
+              "startTime": "18:00",
+              "endTime": "22:00",
+              "titleEn": "Wedding DJ",
+              "titleAr": "دي جي للأعراس",
+              "actor": "provider"
+            },
+            "description": "`date` / `endDate` (`YYYY-MM-DD`), `startTime` / `endTime` (`HH:mm`), `titleEn` / `titleAr`, `actor` (`client` | `provider` | `admin` | `system`), `reason` (decline / cancel code). Reschedules add `oldDate`, `newDate`, `newStartTime`, `newEndTime` and, when the price changes, `oldTotal` / `newTotal`."
+          }
+        },
+        "required": [
+          "event",
+          "bookingId",
+          "bookingRef",
+          "params"
+        ]
+      },
       "AppMessageDto": {
         "type": "object",
         "properties": {
@@ -83238,6 +83287,16 @@
             "nullable": true,
             "description": "Full-size signed URL of the image."
           },
+          "system": {
+            "nullable": true,
+            "description": "BUG-G2: set on a booking system message (`kind: system`) since 24 Nov 2026; null on other messages and on older system messages.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AppSystemMessageDto"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -83254,6 +83313,7 @@
           "removed",
           "imageUrl",
           "imageLargeUrl",
+          "system",
           "createdAt"
         ]
       },

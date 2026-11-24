@@ -38,6 +38,7 @@ import { SERVICE_VISIBLE_SQL } from '../services/services.policy.js';
 import { SequencesService } from '../sequences/sequences.service.js';
 import { fitsHours, inPeriod, overlapping, weekdayOf, type HourRange } from '../services/scheduling.policy.js';
 import { SettingsService } from '../settings/settings.service.js';
+import { renderSystemMessage, type SystemActor, type SystemEvent, type SystemMessageData, type SystemMessageParams } from '../messaging/system-messages.js';
 import {
   BOOKING_EVENTS,
   type BookingCancelledEvent,
@@ -1208,12 +1209,7 @@ export class BookingsService {
         serviceId: dto.serviceId ?? null,
       },
     );
-    await this.messaging.insertMessage(em, afterCommit, {
-      conversationId,
-      senderId: null,
-      kind: MessageKind.System,
-      body: `Booking ${booking.reference} requested for ${dto.eventDate} (${label}).`,
-    });
+    await this.postBookingMessage(em, afterCommit, booking, 'booking_requested', { actor: this.actorOf(booking, auth.id) }, conversationId);
     await this.audit.log(
       {
         action: 'booking.created',
@@ -1450,18 +1446,21 @@ export class BookingsService {
 
     if (action === 'accepted') {
       await this.invoices.issue(em, afterCommit, booking.id, options.notify);
-      const [conversation] = await em.query(
-        "SELECT id FROM conversations WHERE booking_id = ? AND kind = 'direct' AND deleted_at IS NULL LIMIT 1",
-        [booking.id],
-      );
-      if (conversation) {
-        await this.messaging.insertMessage(em, afterCommit, {
-          conversationId: conversation.id,
-          senderId: null,
-          kind: MessageKind.System,
-          body: `Booking ${booking.reference} accepted. Contact details are now visible to both of you.`,
-        });
-      }
+      await this.postBookingMessage(em, afterCommit, booking, 'booking_accepted', { actor: this.actorOf(booking, options.actorId) });
+    }
+    // BUG-G2: declines, cancellations and completions now leave a trace in the chat too (an expiry posts its own).
+    if (action === 'declined' && options.reason !== EXPIRED_REASON) {
+      await this.postBookingMessage(em, afterCommit, booking, 'booking_declined', { actor: this.actorOf(booking, options.actorId), reason: options.reason });
+    }
+    if (action === 'cancelled') {
+      const by = update.cancelledBy ?? PartyRole.Admin;
+      await this.postBookingMessage(em, afterCommit, booking, 'booking_cancelled', {
+        actor: by === PartyRole.Client ? 'client' : by === PartyRole.Provider ? 'provider' : 'admin',
+        reason: options.reason,
+      });
+    }
+    if (action === 'completed') {
+      await this.postBookingMessage(em, afterCommit, booking, 'booking_completed', { actor: this.actorOf(booking, options.actorId) });
     }
 
     await this.audit.log(
@@ -1689,18 +1688,59 @@ export class BookingsService {
       source: AuditSource.System,
       auditAction: 'booking.expired',
     });
-    const [conversation] = await em.query(
-      "SELECT id FROM conversations WHERE booking_id = ? AND kind = 'direct' AND deleted_at IS NULL LIMIT 1",
+    await this.postBookingMessage(em, afterCommit, booking, 'booking_expired', { actor: 'system', reason: EXPIRED_REASON, expiryCause: cause, replyDeadlineHours });
+  }
+
+  /** Who did it, as the chat names them: the client, the provider, Eventor (an admin), or Eventor (a job). */
+  private actorOf(booking: Pick<Booking, 'clientId' | 'providerId'>, actorId: string | null | undefined): SystemActor {
+    if (!actorId) return 'system';
+    if (actorId === booking.clientId) return 'client';
+    if (actorId === booking.providerId) return 'provider';
+    return 'admin';
+  }
+
+  /**
+   * BUG-G2: a system message in the booking's direct chat, with its structured part (event, booking id and
+   * reference, dates, titles, who acted). `body` is the English text; the app renders it in each reader's
+   * language. No chat → nothing.
+   */
+  private async postBookingMessage(
+    em: EntityManager,
+    afterCommit: AfterCommit,
+    booking: Booking,
+    event: SystemEvent,
+    extra: Partial<SystemMessageParams> = {},
+    conversationId?: string,
+  ): Promise<void> {
+    const id =
+      conversationId ??
+      (await em.query("SELECT id FROM conversations WHERE booking_id = ? AND kind = 'direct' AND deleted_at IS NULL LIMIT 1", [booking.id]))[0]?.id;
+    if (!id) return;
+    const [title] = await em.query(
+      `SELECT COALESCE(s.title_en, p.name_en) AS en, COALESCE(NULLIF(s.title_ar, ''), NULLIF(p.name_ar, '')) AS ar
+       FROM bookings b LEFT JOIN services s ON s.id = b.service_id LEFT JOIN packs p ON p.id = b.pack_id WHERE b.id = ?`,
       [booking.id],
     );
-    if (conversation) {
-      await this.messaging.insertMessage(em, afterCommit, {
-        conversationId: conversation.id,
-        senderId: null,
-        kind: MessageKind.System,
-        body: `Booking request ${booking.reference} expired: ${why}. The date is free again.`,
-      });
-    }
+    const data: SystemMessageData = {
+      bookingId: booking.id,
+      bookingRef: booking.reference,
+      params: {
+        date: dateOnly(booking.eventDate),
+        endDate: booking.endDate ? dateOnly(booking.endDate) : null,
+        startTime: hhmm(booking.startTime),
+        endTime: hhmm(booking.endTime),
+        titleEn: title?.en ?? '',
+        titleAr: title?.ar ?? title?.en ?? '',
+        ...extra,
+      },
+    };
+    await this.messaging.insertMessage(em, afterCommit, {
+      conversationId: id,
+      senderId: null,
+      kind: MessageKind.System,
+      body: renderSystemMessage(event, data, 'en'),
+      system: { event, data },
+    });
   }
 
   // ── reschedule ──────────────────────────────────────────────
@@ -1780,6 +1820,15 @@ export class BookingsService {
         },
         em,
       );
+      await this.postBookingMessage(em, afterCommit, booking, apply ? 'booking_rescheduled' : 'reschedule_proposed', {
+        actor: this.actorOf(booking, auth.id),
+        ...(apply ? { date: dto.date, startTime: newStart, endTime: newEnd } : {}),
+        oldDate,
+        newDate: dto.date,
+        newStartTime: newStart,
+        newEndTime: newEnd,
+        ...(price ? { oldTotal, newTotal } : {}),
+      });
       this.events.emitAfterCommit<BookingRescheduledEvent>(
         afterCommit,
         apply ? BOOKING_EVENTS.rescheduled : BOOKING_EVENTS.rescheduleProposed,
@@ -1950,6 +1999,15 @@ export class BookingsService {
         },
         em,
       );
+      await this.postBookingMessage(em, afterCommit, booking, action === 'accept' ? 'reschedule_accepted' : 'reschedule_declined', {
+        actor: this.actorOf(booking, auth.id),
+        ...(action === 'accept' ? { date: newDate, startTime: newStart, endTime: newEnd } : {}),
+        oldDate: dateOnly(row.oldDate),
+        newDate,
+        newStartTime: newStart,
+        newEndTime: newEnd,
+        ...(price ? { oldTotal, newTotal: price.totals.total } : {}),
+      });
       this.events.emitAfterCommit<BookingRescheduledEvent>(
         afterCommit,
         action === 'accept'

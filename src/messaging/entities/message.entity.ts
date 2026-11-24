@@ -63,6 +63,14 @@ export class Message extends AppendOnlyEntity {
   @Column({ type: 'datetime', nullable: true })
   moderatedAt: Date | null;
 
+  /** BUG-G2: which booking event a system message reports (`system-messages.ts`); null for other messages. */
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  systemEvent: string | null;
+
+  /** BUG-G2: `{ bookingId, bookingRef, params }` of that event. */
+  @Column({ type: 'json', nullable: true })
+  systemData: Record<string, unknown> | null;
+
   @UpdateDateColumn({ type: 'datetime', precision: 6 })
   updatedAt: Date;
 }

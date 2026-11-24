@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { SYSTEM_EVENTS, type SystemEvent, type SystemMessageParams } from '../../messaging/system-messages.js';
 import { Transform, Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min } from 'class-validator';
 import { trim, trimToNull } from '../../common/dto/transforms.js';
@@ -143,6 +144,25 @@ export class AppChatBookingDto {
   @ApiProperty({ example: '57000.00' }) total: string;
 }
 
+/** BUG-G2: the structured part of a booking system message. */
+export class AppSystemMessageDto {
+  @ApiProperty({
+    enum: SYSTEM_EVENTS,
+    example: 'booking_accepted',
+    description: 'What happened. Render the text from it and `params` in the app language; `body` already holds it in the request language.',
+  })
+  event: SystemEvent;
+  @ApiProperty({ format: 'uuid', description: 'Tap → open this booking (B4 / P2).' }) bookingId: string;
+  @ApiProperty({ example: 'EVT-000123' }) bookingRef: string;
+  @ApiProperty({
+    example: { date: '2026-12-03', startTime: '18:00', endTime: '22:00', titleEn: 'Wedding DJ', titleAr: 'دي جي للأعراس', actor: 'provider' },
+    description:
+      '`date` / `endDate` (`YYYY-MM-DD`), `startTime` / `endTime` (`HH:mm`), `titleEn` / `titleAr`, `actor` (`client` | `provider` | `admin` | `system`), ' +
+      '`reason` (decline / cancel code). Reschedules add `oldDate`, `newDate`, `newStartTime`, `newEndTime` and, when the price changes, `oldTotal` / `newTotal`.',
+  })
+  params: SystemMessageParams;
+}
+
 export class AppMessageDto {
   @ApiProperty({ format: 'uuid' }) id: string;
   @ApiProperty({ format: 'uuid' }) conversationId: string;
@@ -159,6 +179,12 @@ export class AppMessageDto {
   removed: boolean;
   @ApiProperty({ type: String, nullable: true, description: 'Signed URL of the image, for an `attachment` message.' }) imageUrl: string | null;
   @ApiProperty({ type: String, nullable: true, description: 'Full-size signed URL of the image.' }) imageLargeUrl: string | null;
+  @ApiProperty({
+    type: AppSystemMessageDto,
+    nullable: true,
+    description: 'BUG-G2: set on a booking system message (`kind: system`) since 24 Nov 2026; null on other messages and on older system messages.',
+  })
+  system: AppSystemMessageDto | null;
   @ApiProperty({ format: 'date-time' }) createdAt: string;
 }
 

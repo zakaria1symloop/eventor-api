@@ -861,6 +861,42 @@ describe('App bookings (e2e)', () => {
     });
   });
 
+  describe('chat system messages (BUG-G2, G-09 / M-05 / N-09 / O-07)', () => {
+    it('every booking event leaves a linked message, in each reader’s language', async () => {
+      const PROVIDER = '/api/v1/app/provider/bookings';
+      const service = await bookableService({ titleEn: 'Wedding DJ', titleAr: 'دي جي للأعراس', maxEventsPerDay: null, concurrentClients: 1 });
+      const created = await request(t.http).post(BASE).set(client.headers).send({ serviceId: service.id, eventDate: '2027-11-05', startTime: '18:00', endTime: '22:00', wilayaCode: 16, eventType: EventType.Wedding });
+      const id = created.body.data.id;
+      await request(t.http).post(`${PROVIDER}/${id}/accept`).set(provider.headers).expect(200);
+      const proposed = await request(t.http).post(`${BASE}/${id}/reschedule`).set(client.headers).send({ date: '2027-11-12', reason: 'Hall moved' }).expect(200);
+      await request(t.http).post(`${PROVIDER}/${id}/reschedules/${proposed.body.data.reschedules[0].id}/reject`).set(provider.headers).expect(200);
+      await request(t.http).post(`${BASE}/${id}/cancel`).set(client.headers).send({ reason: 'Changed plans' }).expect(200);
+      const conversationId = created.body.data.conversationId;
+
+      // One chat per client–provider pair: other bookings of the pair post here too, so keep this booking's messages.
+      const thread = async (who: LoggedIn, lang: string) =>
+        (await request(t.http).get(`/api/v1/app/conversations/${conversationId}/messages?limit=100`).set(who.headers).set('Accept-Language', lang).expect(200)).body.data.filter(
+          (m: { kind: string; system: { bookingId: string } | null }) => m.kind === 'system' && m.system?.bookingId === id,
+        );
+      const mine = await thread(client, 'ar');
+      expect(mine.map((m: { system: { event: string } }) => m.system.event)).toEqual([
+        'booking_requested',
+        'booking_accepted',
+        'reschedule_proposed',
+        'reschedule_declined',
+        'booking_cancelled',
+      ]);
+      expect(mine.every((m: { system: { bookingId: string } }) => m.system.bookingId === id)).toBe(true);
+      expect(mine[0].body).toBe(`تم طلب الحجز ${created.body.data.reference} بتاريخ 5 نوفمبر 2027 (18:00–22:00): دي جي للأعراس.`);
+      expect(mine[4].body).toBe(`ألغى العميل الحجز ${created.body.data.reference}.`);
+      expect(mine.map((m: { body: string }) => m.body).join(' ')).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+
+      const theirs = await thread(provider, 'en');
+      expect(theirs[2].body).toBe(`The client proposed to move booking ${created.body.data.reference} to 12 November 2027 (18:00–22:00).`);
+      expect(theirs[2].system.params).toMatchObject({ actor: 'client', oldDate: '2027-11-05', newDate: '2027-11-12', titleAr: 'دي جي للأعراس' });
+    });
+  });
+
   describe('after the event is over (BUG-E6, acceptance E-25)', () => {
     const PROVIDER = '/api/v1/app/provider/bookings';
     /** Africa/Algiers (UTC+1) today plus `n` days. */

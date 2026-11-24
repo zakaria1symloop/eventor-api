@@ -16,6 +16,7 @@ import { AccountDeletionCode1791500000002 } from './1791500000002-AccountDeletio
 import { BookingAutoExpireSetting1791600000000 } from './1791600000000-BookingAutoExpireSetting.js';
 import { RescheduleTotals1791700000000 } from './1791700000000-RescheduleTotals.js';
 import { AvailabilityBlockSource1791800000000 } from './1791800000000-AvailabilityBlockSource.js';
+import { SystemMessageEvents1791900000000 } from './1791900000000-SystemMessageEvents.js';
 
 /**
  * Ordered migration registry, explicit for the same reason as the entity
@@ -40,4 +41,5 @@ export const migrations: NonNullable<DataSourceOptions['migrations']> = [
   BookingAutoExpireSetting1791600000000,
   RescheduleTotals1791700000000,
   AvailabilityBlockSource1791800000000,
+  SystemMessageEvents1791900000000,
 ];

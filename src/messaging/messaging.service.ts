@@ -32,6 +32,7 @@ import {
 } from './dto/messaging.dto.js';
 import { Conversation } from './entities/conversation.entity.js';
 import { Message } from './entities/message.entity.js';
+import type { SystemEvent, SystemMessageData } from './system-messages.js';
 import {
   MESSAGING_EVENTS,
   type ConversationUpdatedEvent,
@@ -137,13 +138,35 @@ export class MessagingService {
    * Inserts a message with `body_masked` computed, bumps `last_message_at`, and
    * pushes `message.created` after COMMIT. `senderId` null = system message.
    */
-  async insertMessage(em: EntityManager, afterCommit: AfterCommit, input: { conversationId: string; senderId: string | null; body: string; kind?: MessageKind; createdAt?: Date }): Promise<string> {
+  async insertMessage(
+    em: EntityManager,
+    afterCommit: AfterCommit,
+    input: {
+      conversationId: string;
+      senderId: string | null;
+      body: string;
+      kind?: MessageKind;
+      createdAt?: Date;
+      /** BUG-G2: a booking system message's structured part. */
+      system?: { event: SystemEvent; data: SystemMessageData };
+    },
+  ): Promise<string> {
     const kind = input.kind ?? (input.senderId ? MessageKind.Text : MessageKind.System);
     const masked = kind === MessageKind.System ? { masked: null } : maskContacts(input.body);
     const repository = em.getRepository(Message);
     const createdAt = input.createdAt ?? new Date();
     const message = await repository.save(
-      repository.create({ conversationId: input.conversationId, senderId: input.senderId, kind, body: input.body, bodyMasked: masked.masked, status: MessageStatus.Visible, createdAt }),
+      repository.create({
+        conversationId: input.conversationId,
+        senderId: input.senderId,
+        kind,
+        body: input.body,
+        bodyMasked: masked.masked,
+        status: MessageStatus.Visible,
+        createdAt,
+        systemEvent: input.system?.event ?? null,
+        systemData: (input.system?.data as unknown as Record<string, unknown>) ?? null,
+      }),
     );
     await em.query('UPDATE conversations SET last_message_at = GREATEST(COALESCE(last_message_at, ?), ?) WHERE id = ?', [createdAt, createdAt, input.conversationId]);
     afterCommit(async () => {

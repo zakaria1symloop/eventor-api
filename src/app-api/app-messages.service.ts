@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { readSystemPart, renderSystemMessage } from '../messaging/system-messages.js';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource, EntityManager } from 'typeorm';
 import type { AuthUser } from '../auth/auth.types.js';
@@ -156,13 +157,21 @@ export class AppMessagesService {
   private async lastMessages(em: EntityManager, ids: string[]): Promise<Map<string, any>> {
     if (!ids.length) return new Map();
     const rows: any[] = await em.query(
-      `SELECT m.conversation_id, m.body, m.body_masked, m.kind, m.status, m.sender_id, m.created_at FROM messages m
+      `SELECT m.conversation_id, m.body, m.body_masked, m.kind, m.status, m.sender_id, m.created_at, m.system_event, m.system_data FROM messages m
         JOIN (SELECT conversation_id, MAX(created_at) AS at FROM messages WHERE conversation_id IN (?) AND status <> 'deleted' GROUP BY conversation_id) last
           ON last.conversation_id = m.conversation_id AND last.at = m.created_at
        WHERE m.status <> 'deleted'`,
       [ids],
     );
     return new Map(rows.map((r) => [r.conversation_id, r]));
+  }
+
+  /** The conversation list's last line: removed, a system message in the reader's language (BUG-G2), or the (masked) text. */
+  private previewBody(last: any, unmasked: boolean, lang: Lang): string {
+    if (last.status === MessageStatus.Hidden) return '[removed by Eventor]';
+    const system = last.kind === MessageKind.System ? readSystemPart(last) : null;
+    if (system) return renderSystemMessage(system.event, system.data, lang);
+    return !unmasked && last.body_masked ? last.body_masked : (last.body ?? '');
   }
 
   private toRow(
@@ -186,7 +195,7 @@ export class AppMessagesService {
       other,
       lastMessage: last
         ? {
-            body: last.status === MessageStatus.Hidden ? '[removed by Eventor]' : !unmasked && last.body_masked ? last.body_masked : (last.body ?? ''),
+            body: this.previewBody(last, unmasked, lang),
             kind: last.kind as MessageKind,
             mine: last.sender_id === auth.id,
           }
@@ -241,7 +250,7 @@ export class AppMessagesService {
 
   // ── messages ──────────────────────────────────────────────────
 
-  async messages(auth: AuthUser, id: string, query: AppMessagesQueryDto): Promise<AppMessagesPageDto> {
+  async messages(auth: AuthUser, id: string, query: AppMessagesQueryDto, lang: Lang = 'en'): Promise<AppMessagesPageDto> {
     const em = this.dataSource.manager;
     await this.participant(em, id, auth.id);
     const [flags] = await em.query(`SELECT ${UNMASKED_SQL} AS unmasked FROM conversations c WHERE c.id = ?`, [id]);
@@ -262,7 +271,7 @@ export class AppMessagesService {
     const hasMore = rows.length > query.limit;
     const page = rows.slice(0, query.limit).reverse();
     return {
-      data: page.map((m) => this.toMessage(m, auth.id, unmasked)),
+      data: page.map((m) => this.toMessage(m, auth.id, unmasked, lang)),
       meta: { limit: query.limit, hasMore, nextBefore: hasMore ? (page[0]?.id ?? null) : null },
     };
   }
@@ -272,20 +281,23 @@ export class AppMessagesService {
    * applies: a hidden message is replaced entirely, and `body_masked` wins over
    * `body` until the pair share an accepted booking (status-rules §10).
    */
-  private toMessage(m: any, meId: string, unmasked: boolean): AppMessageDto {
+  private toMessage(m: any, meId: string, unmasked: boolean, lang: Lang = 'en'): AppMessageDto {
     const hidden = m.status === MessageStatus.Hidden;
     const masked = !unmasked && m.body_masked !== null;
+    // BUG-G2: a booking system message is rendered in the reader's language from its structured part.
+    const system = m.kind === MessageKind.System ? readSystemPart(m) : null;
     return {
       id: m.id,
       conversationId: m.conversation_id,
       kind: m.kind as MessageKind,
       senderId: m.sender_id ?? null,
       mine: m.sender_id === meId,
-      body: hidden ? '[removed by Eventor]' : masked ? m.body_masked : (m.body ?? ''),
+      body: hidden ? '[removed by Eventor]' : system ? renderSystemMessage(system.event, system.data, lang) : masked ? m.body_masked : (m.body ?? ''),
       masked,
       removed: hidden,
       imageUrl: m.file_id && !hidden ? this.files.signedUrl(m.file_id, { variant: FileVariantKind.Medium }) : null,
       imageLargeUrl: m.file_id && !hidden ? this.files.signedUrl(m.file_id) : null,
+      system: system && !hidden ? { event: system.event, bookingId: system.data.bookingId, bookingRef: system.data.bookingRef, params: system.data.params } : null,
       createdAt: iso(m.created_at)!,
     };
   }
@@ -297,8 +309,13 @@ export class AppMessagesService {
     if (!m) return null;
     const [flags] = await em.query(`SELECT ${UNMASKED_SQL} AS unmasked FROM conversations c WHERE c.id = ?`, [conversationId]);
     const unmasked = Number(flags?.unmasked ?? 0) === 1;
-    const rows: any[] = await em.query('SELECT user_id FROM conversation_participants WHERE conversation_id = ?', [conversationId]);
-    return { recipients: rows.map((r) => r.user_id), message: (forUserId: string) => this.toMessage(m, forUserId, unmasked) };
+    const rows: any[] = await em.query(
+      'SELECT cp.user_id, u.language FROM conversation_participants cp LEFT JOIN users u ON u.id = cp.user_id WHERE cp.conversation_id = ?',
+      [conversationId],
+    );
+    // Each participant gets a system message in their own app language (BUG-G2).
+    const langOf = new Map<string, Lang>(rows.map((r) => [r.user_id, r.language === 'ar' ? 'ar' : 'en']));
+    return { recipients: rows.map((r) => r.user_id), message: (forUserId: string) => this.toMessage(m, forUserId, unmasked, langOf.get(forUserId) ?? 'en') };
   }
 
   // ── writes ────────────────────────────────────────────────────

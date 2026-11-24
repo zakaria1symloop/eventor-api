@@ -95,8 +95,8 @@ export class AppMessagesController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, type: AppMessagesPageDto, description: 'A cursor page: `{ data, meta: { limit, hasMore, nextBefore } }`.' })
   @ApiErrorResponses('VALIDATION_FAILED', 'CONVERSATION_NOT_FOUND', 'NOT_A_PARTICIPANT', 'MESSAGE_NOT_FOUND')
-  async messagesPage(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('CONVERSATION_NOT_FOUND')) id: string, @Query() query: AppMessagesQueryDto) {
-    return this.messages.messages(auth, id, query);
+  async messagesPage(@CurrentUser() auth: AuthUser, @Param('id', uuidParam('CONVERSATION_NOT_FOUND')) id: string, @Query() query: AppMessagesQueryDto, @ReqLang() lang: Lang) {
+    return this.messages.messages(auth, id, query, lang);
   }
 
   @Post('conversations')

@@ -15,11 +15,19 @@ describe('disputes policy', () => {
       expect(disputeWindow(accepted, 72, new Date('2026-09-23T22:00:01Z')).open).toBe(false);
     });
 
-    it('uses the start of the day and 23:59 without times', () => {
+    it('uses the start of the day and midnight after it without times (same end as cancel / reschedule, BUG-E6)', () => {
       const w = disputeWindow({ ...accepted, startTime: null, endTime: null }, 24, new Date('2026-09-19T23:00:00Z'));
       expect(w.open).toBe(true);
       expect(w.opensAt?.toISOString()).toBe('2026-09-19T23:00:00.000Z');
-      expect(w.closesAt?.toISOString()).toBe('2026-09-21T22:59:00.000Z');
+      expect(w.closesAt?.toISOString()).toBe('2026-09-21T23:00:00.000Z');
+    });
+
+    it('counts from the real end of an overnight or multi-day event', () => {
+      // 20:00 → 02:00 ends on the 21st at 02:00 Algiers (01:00 UTC), not on the 20th.
+      const overnight = disputeWindow({ ...accepted, startTime: '20:00:00', endTime: '02:00:00' }, 72, new Date('2026-09-20T20:00:00Z'));
+      expect(overnight.closesAt?.toISOString()).toBe('2026-09-24T01:00:00.000Z');
+      const threeDays = disputeWindow({ ...accepted, endDate: '2026-09-22' }, 72, new Date('2026-09-20T20:00:00Z'));
+      expect(threeDays.closesAt?.toISOString()).toBe('2026-09-25T22:00:00.000Z');
     });
 
     it('allows a cancelled booking within 7 days of the cancellation', () => {

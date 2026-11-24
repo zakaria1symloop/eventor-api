@@ -136,8 +136,15 @@ export class BookingJobsService implements OnModuleInit {
       await runInTransaction(this.dataSource, async (em, afterCommit) => {
         const booking = await em.getRepository(Booking).findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
         if (!booking) return;
-        // A multi-day booking ends on its last day.
-        const input = { status: booking.status, disputeStatus: booking.disputeStatus, eventDate: dateOnly(booking.endDate ?? booking.eventDate), endTime: booking.endTime };
+        // The real end: last day of a multi-day booking, next morning for overnight hours (`eventEndsAt`).
+        const input = {
+          status: booking.status,
+          disputeStatus: booking.disputeStatus,
+          eventDate: dateOnly(booking.eventDate),
+          endDate: booking.endDate ? dateOnly(booking.endDate) : null,
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+        };
         if (!isDueForAutoComplete(input, windowHours, now)) return;
         await this.bookings.applyTransition(em, afterCommit, booking, 'completed', {
           actorId: null,

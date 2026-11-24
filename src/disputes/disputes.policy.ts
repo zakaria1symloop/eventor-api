@@ -1,6 +1,6 @@
 import { BookingStatus } from '../common/enums/booking.enums.js';
 import { DisputeBookingOutcome, DisputeStatus } from '../common/enums/moderation.enums.js';
-import { eventEndUtc } from '../bookings/bookings.policy.js';
+import { eventEndsAt } from '../bookings/bookings.policy.js';
 import type { StatusAction } from '../bookings/bookings.policy.js';
 
 // ── tabs & transitions (status-rules §6) ─────────────────────────
@@ -64,8 +64,10 @@ export function disputeWindow(
   }
   const start = booking.startTime ? booking.startTime.slice(0, 5) : '00:00';
   const opensAt = new Date(`${booking.eventDate}T${start}:00+01:00`);
-  // A multi-day booking closes after its last day.
-  const closesAt = new Date(eventEndUtc(booking.endDate ?? booking.eventDate, booking.endTime).getTime() + windowHours * 3_600_000);
+  // Counted from the real end: the last day of a multi-day booking, the next morning for overnight hours.
+  const closesAt = new Date(
+    eventEndsAt({ eventDate: booking.eventDate, endDate: booking.endDate ?? null, startTime: booking.startTime, endTime: booking.endTime }).getTime() + windowHours * 3_600_000,
+  );
   return { open: now.getTime() >= opensAt.getTime() && now.getTime() <= closesAt.getTime(), opensAt, closesAt };
 }
 

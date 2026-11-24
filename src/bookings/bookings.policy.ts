@@ -358,12 +358,13 @@ export function isExpired(
 
 /** status-rules §5: accepted → completed at event end + dispute window, unless a dispute is open. */
 export function isDueForAutoComplete(
-  booking: { status: BookingStatus; disputeStatus: BookingDisputeStatus; eventDate: string; endTime: string | null },
+  booking: { status: BookingStatus; disputeStatus: BookingDisputeStatus; eventDate: string; endDate?: string | null; startTime?: string | null; endTime: string | null },
   disputeWindowHours: number,
   now = new Date(),
 ): boolean {
   if (booking.status !== BookingStatus.Accepted || booking.disputeStatus === BookingDisputeStatus.Open) return false;
-  return eventEndUtc(booking.eventDate, booking.endTime).getTime() + disputeWindowHours * HOUR <= now.getTime();
+  // The real end (`eventEndsAt`): the last day of a multi-day booking, the next morning for overnight hours.
+  return eventEndsAt({ eventDate: booking.eventDate, endDate: booking.endDate ?? null, startTime: booking.startTime ?? null, endTime: booking.endTime }).getTime() + disputeWindowHours * HOUR <= now.getTime();
 }
 
 /**

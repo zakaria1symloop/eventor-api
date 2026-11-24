@@ -154,6 +154,16 @@ describe('timing', () => {
     expect(isDueForAutoComplete({ ...booking, status: BookingStatus.Pending }, 72, now)).toBe(false);
   });
 
+  it('waits for the real end of an overnight or multi-day event before auto-completing', () => {
+    const overnight = { status: BookingStatus.Accepted, disputeStatus: BookingDisputeStatus.None, eventDate: '2026-09-12', startTime: '20:00:00', endTime: '02:00:00' };
+    // Ends 13 Sep 02:00 Algiers = 01:00 UTC; + 72 h = 16 Sep 01:00 UTC.
+    expect(isDueForAutoComplete(overnight, 72, new Date('2026-09-16T00:59:00Z'))).toBe(false);
+    expect(isDueForAutoComplete(overnight, 72, new Date('2026-09-16T01:00:00Z'))).toBe(true);
+    const multiDay = { ...overnight, startTime: '10:00:00', endTime: '18:00:00', endDate: '2026-09-14' };
+    expect(isDueForAutoComplete(multiDay, 72, new Date('2026-09-17T16:59:00Z'))).toBe(false);
+    expect(isDueForAutoComplete(multiDay, 72, new Date('2026-09-17T17:00:00Z'))).toBe(true);
+  });
+
   it('adds days to a date', () => {
     expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
   });

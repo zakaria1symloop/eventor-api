@@ -87,6 +87,21 @@ block and cannot remove it.
 provider"). Optionally, mention in the create-block form that the note stays
 internal.
 
+## BUG-L1 — saved view: the trash icon applies the view instead of deleting it (L-39)
+
+**API (ready, unchanged, tested):** `DELETE /admin/saved-views/{id}` → 204 (owner only,
+soft delete; 403 `NOT_OWNER` on another admin's shared view). Rename:
+`PATCH /admin/saved-views/{id}` `{ name }` (409 `SAVED_VIEW_NAME_TAKEN`).
+
+**Dashboard to do:**
+1. In the trash button's click handler, call `event.stopPropagation()` (and
+   `preventDefault()` if the row is a link), so the click no longer reaches the row.
+2. Ask for confirmation ("Delete the view {name}?"), then call the DELETE and remove the
+   row. Hide the trash icon on views the admin does not own.
+3. Optional: a rename action through the same PATCH.
+
+The QA view "QA L view" on live can be deleted afterwards, with the owner's OK.
+
 ## BUG-H4 / BUG-M3 — who cancelled (H-13, M-13, M-16, L-17, L-24)
 
 `cancelledBy` on bookings can now also be **`system`** (no person, e.g. a job); the

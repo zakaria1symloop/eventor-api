@@ -248,7 +248,10 @@ export class AdminAuthService {
       if (code.expiresAt.getTime() <= Date.now()) {
         throw AppException.of('RESET_TOKEN_EXPIRED');
       }
-      const user = await em.getRepository(User).findOneBy({ id: code.userId, role: UserRole.Admin });
+      // BUG-L3: the dashboard's /reset-password page posts every reset link here, including the ones an admin
+      // emailed to an app account ("Email a reset link", `${APP_PUBLIC_URL}/reset-password`). The single-use token
+      // proves the link was received; this route only sets the password, it signs nobody in.
+      const user = await em.getRepository(User).findOneBy({ id: code.userId });
       if (!user) throw AppException.of('RESET_TOKEN_INVALID');
       assertPasswordStrong(password);
 

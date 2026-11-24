@@ -651,6 +651,22 @@ describe('Admin users (e2e)', () => {
       expect(await audited('user.password_reset_link_sent', user.id)).not.toBeNull();
     });
 
+    it('the emailed link really resets an app account’s password on the dashboard page (BUG-L3, L-19 / L-22)', async () => {
+      const password = await t.get(PasswordService).hash('OldPassword1x');
+      const user = await makeUser(db(), { language: Language.En, passwordHash: password });
+      await request(t.http).post(`${BASE}/${user.id}/password-reset`).set(admin.headers).send({ mode: 'link', signOutEverywhere: true }).expect(200);
+      const token = /reset-password\?token=(\S+)/.exec(lastMailTo(user.email)!.text)![1]!;
+      // A minute later, well inside the hour (the acceptance run failed within minutes).
+      await db().query('UPDATE verification_codes SET created_at = created_at - INTERVAL 1 MINUTE WHERE user_id = ?', [user.id]);
+
+      // The dashboard's /reset-password page posts every link to this route.
+      await request(t.http).post('/api/v1/admin/auth/reset').send({ token, password: 'NewPassword2x' }).expect(204);
+
+      expect((await request(t.http).post('/api/v1/app/auth/login').send({ email: user.email, password: 'NewPassword2x' })).status).toBe(200);
+      expectError(await request(t.http).post('/api/v1/admin/auth/reset').send({ token, password: 'OtherPassword3x' }), 400, 'RESET_TOKEN_INVALID');
+      expect(await audited('auth.password_reset', user.id)).not.toBeNull();
+    });
+
     it('sets a temporary password shown once and signs out everywhere', async () => {
       const user = await makeUser(db());
       await makeSession(db(), { userId: user.id });

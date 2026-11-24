@@ -106,7 +106,10 @@ export class AdminAuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Set a new password with a reset link',
-    description: 'Public route. Consumes the token and signs the admin out everywhere. Used by AUTH-03.',
+    description:
+      'Public route. Consumes the token and signs the account out everywhere. Used by AUTH-03. It also redeems the links an admin ' +
+      'emails to an app account from the user page ("Email a reset link", `${APP_PUBLIC_URL}/reset-password?token=…`, 60 min, BUG-L3): ' +
+      'the same dashboard page sends both here. It never signs anyone in.',
   })
   @ApiResponse({ status: 204, description: 'Password changed.' })
   @ApiErrorResponses('VALIDATION_FAILED', 'RESET_TOKEN_INVALID', 'RESET_TOKEN_EXPIRED', 'PASSWORD_WEAK', 'RATE_LIMITED')

@@ -754,7 +754,7 @@
     },
     "/api/v1/admin/auth/reset": {
       "post": {
-        "description": "Public route. Consumes the token and signs the admin out everywhere. Used by AUTH-03.",
+        "description": "Public route. Consumes the token and signs the account out everywhere. Used by AUTH-03. It also redeems the links an admin emails to an app account from the user page (\"Email a reset link\", `${APP_PUBLIC_URL}/reset-password?token=…`, 60 min, BUG-L3): the same dashboard page sends both here. It never signs anyone in.",
         "operationId": "AdminAuthController_reset",
         "parameters": [
           {

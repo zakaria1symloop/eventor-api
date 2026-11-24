@@ -63,6 +63,17 @@ which redirects to `/en/set-password` and has no such page.
    sign in with {email}", with the store links (`/app/config` → `storeUrls`) when set.
 5. Bilingual EN / AR, RTL for Arabic, no dashboard navigation.
 
+## BUG-L3 — "Email a reset link" links always said "expired" (L-19, L-15, L-22)
+
+**Fixed in the API, no dashboard change required.** The `/reset-password` page posts
+every link to `POST /admin/auth/reset`, which only accepted admin accounts; a link
+sent to an app account came back `RESET_TOKEN_INVALID`, shown as "expired". The route
+now redeems both. **Small dashboard follow-up:** the success screen should not send an
+app user to the dashboard sign-in. Use a neutral text such as "Your password has been
+changed. Sign in again on the dashboard or in the Eventor app." Show
+`RESET_TOKEN_EXPIRED` (410) as "expired" and `RESET_TOKEN_INVALID` (400) as "not valid
+or already used", rather than one message for both.
+
 ## BUG-F6 / BUG-M1 — admin availability blocks (F-32, M-22, L-12, L-20)
 
 **API (ready):** each item of `GET /admin/providers/{id}/availability` has a new

@@ -15,6 +15,7 @@
 | 4 | BUG-E6 cancel/reschedule offered after the event | P1 | Fixed | `b2cecf7` |
 | 5 | BUG-E3 per-hour price not recomputed on reschedule | P1 | Fixed | `b2cecf7` |
 | 6 | BUG-E5 invoice not reissued after reschedule | P1 | Fixed | `b2cecf7` |
+| 6b | BUG-E7 cancelled booking keeps its pending reschedule proposal | P2 | Fixed; **old rows on live: preview, then `--apply` after approval** | `e58befe` |
 | 7 | BUG-M4 block "Cancel them" leaves bookings active | P1 | Fixed (backend); dashboard wording pending | `b2cecf7` |
 | 8 | BUG-F6 + BUG-M1 admin availability block | P1 | Fixed (backend); dashboard label pending | `2179c40` |
 | 9 | BUG-F5 + BUG-J1 blocked user never sees why | P1 | Fixed | `ad049eb` |
@@ -69,6 +70,13 @@ Dashboard follow-ups are described in `docs/dashboard-handoff.md` (the dashboard
 
 ### 6 · BUG-E5 — invoice not reissued after a reschedule (P1)
 - **Fix:** an accepted booking gets a new invoice version (new number, old version voided) whenever something printed on it changes: dates, price or event type. An admin edit now also emits `booking:updated`.
+
+### 6b · BUG-E7 — a cancelled booking kept its pending reschedule proposal (P2, E-24)
+- **Added later:** item 6b of the plan, added after `BACKEND_FIXES_2026-11-23.md` was committed here.
+- **Fix:** a booking that becomes cancelled, declined (expiry included) or completed closes its pending proposals as `cancelled` (resolved now) in the same transaction. One shared helper inside `applyTransition`, the only writer of a booking status, covers every path: client, provider, admin, block "Cancel them", account deletion, service and pack deletion, expiry and auto-complete jobs, and dispute outcomes. No extra notification. A `booking.reschedule_closed` audit row records the close. A proposal waiting on an accepted booking whose event is over stays answerable (BUG-E6 unchanged).
+- **Contract:** additive. `allowedActions` never has `respond_reschedule` or `reschedule` on an ended booking, and `awaitingMe` is false. Accept, reject and withdraw answer 409 `RESCHEDULE_NOT_PENDING`, or `BOOKING_NOT_EDITABLE` for an older row. No new code.
+- **Old data:** `pnpm bookings:stale-reschedules[:prod]` lists, read-only, the proposals left pending on ended bookings (e.g. EVT-000156). `--apply` closes them. Not run on live.
+- **App:** shows a proposal (B4, P2) only while the booking is `pending` or `accepted` (mobile session, after the deploy).
 
 ### 7 · BUG-M4 — blocking with "Cancel them" left accepted bookings active (P1)
 - **Decisions:** "Cancel" means pending **and** accepted-not-over bookings, for both roles. "Keep" means the other party is told, and can't propose a new date until the unblock.
@@ -151,6 +159,7 @@ Dashboard follow-ups are described in `docs/dashboard-handoff.md` (the dashboard
 
 ## Before going live (needs approval)
 - **Deploy** with the migrations: `1791600000000` … `1792100000000` from this list.
+- **6b:** run `pnpm bookings:stale-reschedules:prod` (read-only), share the list, then `--apply` after approval.
 - **#2:** run `pnpm bookings:expire-preview:prod`, then decide on `booking_auto_expire`.
 - **#12:** nginx rule for `assetlinks.json`, then `adb shell pm verify-app-links`.
 - **#20:** Gmail app password, then `pnpm mail:test:prod`.

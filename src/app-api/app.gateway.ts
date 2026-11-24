@@ -5,6 +5,7 @@ import { ConnectedSocket, MessageBody, SubscribeMessage, WebSocketGateway, WebSo
 import type { Namespace, Socket } from 'socket.io';
 import type { DataSource } from 'typeorm';
 import { Session } from '../auth/entities/session.entity.js';
+import { ACCOUNT_BLOCKED_REVOKE_REASON } from '../auth/sessions.service.js';
 import { TokenService } from '../auth/token.service.js';
 import { SessionAudience } from '../common/enums/auth.enums.js';
 import { UserRole, UserStatus } from '../common/enums/user.enums.js';
@@ -93,8 +94,10 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection {
       if (payload.aud !== SessionAudience.App) return 'FORBIDDEN_AUDIENCE';
       const session = payload.sid ? await this.dataSource.getRepository(Session).findOneBy({ id: payload.sid }) : null;
       if (!session || session.userId !== payload.sub) return 'AUTH_TOKEN_INVALID';
-      if (session.revokedAt || session.expiresAt.getTime() <= Date.now()) return 'AUTH_SESSION_REVOKED';
       const user = await this.dataSource.getRepository(User).findOneBy({ id: payload.sub });
+      // BUG-F5/J1: a session ended by a block that still holds says so.
+      if (session.revokedReason === ACCOUNT_BLOCKED_REVOKE_REASON && user?.status === UserStatus.Blocked) return 'ACCOUNT_BLOCKED';
+      if (session.revokedAt || session.expiresAt.getTime() <= Date.now()) return 'AUTH_SESSION_REVOKED';
       if (!user) return 'AUTH_SESSION_REVOKED';
       if (user.status === UserStatus.Blocked) return 'ACCOUNT_BLOCKED';
       if (user.role === UserRole.Admin) return 'FORBIDDEN_ROLE';

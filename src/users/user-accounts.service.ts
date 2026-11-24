@@ -9,7 +9,7 @@ import type { AuthUser } from '../auth/auth.types.js';
 import { VerificationCode } from '../auth/entities/verification-code.entity.js';
 import { PasswordService } from '../auth/password.service.js';
 import { createKeyedToken } from '../auth/refresh-token.js';
-import { SessionsService } from '../auth/sessions.service.js';
+import { ACCOUNT_BLOCKED_REVOKE_REASON, SessionsService } from '../auth/sessions.service.js';
 import { AuditLevel } from '../common/enums/admin.enums.js';
 import { VerificationCodePurpose } from '../common/enums/auth.enums.js';
 import { UserRole, UserStatus } from '../common/enums/user.enums.js';
@@ -186,7 +186,8 @@ export class UserAccountsService implements OnModuleInit {
       blockedMessage: input.message,
       blockedById: auth.id,
     });
-    const sessionsRevoked = await this.sessions.revokeAllForUser(user.id, em);
+    // Marked as ended by the block: the open app is then told why (ACCOUNT_BLOCKED), not "session ended" (BUG-F5/J1).
+    const sessionsRevoked = await this.sessions.revokeAllForUser(user.id, em, { reason: ACCOUNT_BLOCKED_REVOKE_REASON });
     const cancelledBookings = await this.cancelPendingBookings(em, afterCommit, user, input.bookings, 'account_blocked', auth.id, true);
     // "Keep": what stays is reloaded by both apps (`counterpartyBlocked`), and the other party of an accepted booking is told.
     if (input.bookings === 'keep') await this.bookings.announceAccountStatus(em, afterCommit, { column: this.column(user), userId: user.id, blocked: true });

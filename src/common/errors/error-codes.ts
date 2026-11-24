@@ -110,8 +110,9 @@ export const ERROR_CODES = {
   },
   ACCOUNT_BLOCKED: {
     status: HttpStatus.FORBIDDEN,
-    en: 'This account is blocked.',
-    ar: 'هذا الحساب محظور.',
+    // Not the screen title again (BUG-J1: "This account is blocked / This account is blocked."): the app titles the screen itself.
+    en: 'Eventor has suspended this account, so it cannot be used for now.',
+    ar: 'أوقفت Eventor هذا الحساب، ولا يمكن استخدامه حاليًا.',
   },
   AUTH_SESSION_REVOKED: {
     status: HttpStatus.UNAUTHORIZED,

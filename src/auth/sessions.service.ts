@@ -12,6 +12,7 @@ import {
   decideRotation,
   deviceLabel,
   parseRefreshToken,
+  tokenMatchesHash,
   type RotationDecision,
 } from './refresh-token.js';
 
@@ -24,9 +25,16 @@ export interface IssuedSession {
 /** `sessions.revoked_reason` of a dashboard session ended by a newer sign-in of the same admin. */
 export const SESSION_REPLACED_REASON = 'signed_in_elsewhere';
 
+/**
+ * `sessions.revoked_reason` of the sessions an account block ended (BUG-F5/J1):
+ * while the account stays blocked, the guard, the refresh and the socket answer
+ * `ACCOUNT_BLOCKED` with the details instead of a generic "session ended".
+ */
+export const ACCOUNT_BLOCKED_REVOKE_REASON = 'account_blocked';
+
 export type RefreshOutcome =
   | ({ outcome: 'rotated'; user: User } & IssuedSession)
-  | { outcome: Exclude<RotationDecision, 'rotate'> | 'replaced'; userId: string | null };
+  | { outcome: Exclude<RotationDecision, 'rotate'> | 'replaced' | 'blocked'; userId: string | null };
 
 /** Sessions (one row per sign-in) and refresh token rotation. */
 @Injectable()
@@ -71,6 +79,10 @@ export class SessionsService {
       const decision = decideRotation(session, parsed.token);
       if (session?.revokedReason === SESSION_REPLACED_REASON) {
         return { outcome: 'replaced' as const, userId: session.userId };
+      }
+      // Only a token that really belongs to the session learns why it ended.
+      if (session?.revokedReason === ACCOUNT_BLOCKED_REVOKE_REASON && tokenMatchesHash(parsed.token, session.tokenHash)) {
+        return { outcome: 'blocked' as const, userId: session.userId };
       }
       if (!session || decision === 'invalid') {
         return { outcome: 'invalid' as const, userId: session?.userId ?? null };
@@ -117,7 +129,7 @@ export class SessionsService {
   async revokeAllForUser(
     userId: string,
     em: EntityManager = this.dataSource.manager,
-    options: { exceptSessionId?: string | null } = {},
+    options: { exceptSessionId?: string | null; reason?: string } = {},
   ): Promise<number> {
     const result = await em.getRepository(Session).update(
       {
@@ -125,7 +137,7 @@ export class SessionsService {
         revokedAt: IsNull(),
         ...(options.exceptSessionId ? { id: Not(options.exceptSessionId) } : {}),
       },
-      { revokedAt: new Date() },
+      { revokedAt: new Date(), ...(options.reason ? { revokedReason: options.reason } : {}) },
     );
     return result.affected ?? 0;
   }

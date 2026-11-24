@@ -410,7 +410,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: This account is blocked.",
+            "description": "`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.",
             "content": {
               "application/json": {
                 "schema": {
@@ -434,7 +434,7 @@
                       "statusCode": 403,
                       "error": "Forbidden",
                       "code": "ACCOUNT_BLOCKED",
-                      "message": "This account is blocked.",
+                      "message": "Eventor has suspended this account, so it cannot be used for now.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -36878,7 +36878,7 @@
             }
           },
           "403": {
-            "description": "`ACCOUNT_BLOCKED`: This account is blocked.<br>`ROLE_NOT_ALLOWED_IN_APP`: Only client and provider accounts can use the app.",
+            "description": "`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.<br>`ROLE_NOT_ALLOWED_IN_APP`: Only client and provider accounts can use the app.",
             "content": {
               "application/json": {
                 "schema": {
@@ -36890,7 +36890,7 @@
                       "statusCode": 403,
                       "error": "Forbidden",
                       "code": "ACCOUNT_BLOCKED",
-                      "message": "This account is blocked.",
+                      "message": "Eventor has suspended this account, so it cannot be used for now.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -37196,7 +37196,7 @@
             }
           },
           "403": {
-            "description": "`EMAIL_NOT_VERIFIED`: Verify your email address before signing in.<br>`ACCOUNT_BLOCKED`: This account is blocked.<br>`ROLE_NOT_ALLOWED_IN_APP`: Only client and provider accounts can use the app.",
+            "description": "`EMAIL_NOT_VERIFIED`: Verify your email address before signing in.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.<br>`ROLE_NOT_ALLOWED_IN_APP`: Only client and provider accounts can use the app.",
             "content": {
               "application/json": {
                 "schema": {
@@ -37220,7 +37220,7 @@
                       "statusCode": 403,
                       "error": "Forbidden",
                       "code": "ACCOUNT_BLOCKED",
-                      "message": "This account is blocked.",
+                      "message": "Eventor has suspended this account, so it cannot be used for now.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -38057,7 +38057,7 @@
             }
           },
           "403": {
-            "description": "`ACCOUNT_BLOCKED`: This account is blocked.<br>`ROLE_NOT_ALLOWED_IN_APP`: Only client and provider accounts can use the app.",
+            "description": "`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.<br>`ROLE_NOT_ALLOWED_IN_APP`: Only client and provider accounts can use the app.",
             "content": {
               "application/json": {
                 "schema": {
@@ -38069,7 +38069,7 @@
                       "statusCode": 403,
                       "error": "Forbidden",
                       "code": "ACCOUNT_BLOCKED",
-                      "message": "This account is blocked.",
+                      "message": "Eventor has suspended this account, so it cannot be used for now.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -38258,7 +38258,7 @@
             }
           },
           "403": {
-            "description": "`ACCOUNT_BLOCKED`: This account is blocked.<br>`ROLE_NOT_ALLOWED_IN_APP`: Only client and provider accounts can use the app.",
+            "description": "`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.<br>`ROLE_NOT_ALLOWED_IN_APP`: Only client and provider accounts can use the app.",
             "content": {
               "application/json": {
                 "schema": {
@@ -38270,7 +38270,7 @@
                       "statusCode": 403,
                       "error": "Forbidden",
                       "code": "ACCOUNT_BLOCKED",
-                      "message": "This account is blocked.",
+                      "message": "Eventor has suspended this account, so it cannot be used for now.",
                       "details": null,
                       "path": "/api/v1/…",
                       "timestamp": "2026-09-15T10:00:00.000Z",
@@ -38461,7 +38461,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -38615,7 +38615,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -38826,7 +38826,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -39039,7 +39039,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -39240,7 +39240,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -39437,7 +39437,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -39557,7 +39557,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -39673,7 +39673,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -39819,7 +39819,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -40040,7 +40040,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -40292,7 +40292,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -40414,7 +40414,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -40530,7 +40530,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -40676,7 +40676,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -40830,7 +40830,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -41031,7 +41031,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -41153,7 +41153,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -41309,7 +41309,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -41425,7 +41425,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -41641,7 +41641,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -41795,7 +41795,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -41959,7 +41959,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -42197,7 +42197,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -42351,7 +42351,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -42571,7 +42571,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -42712,7 +42712,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -44032,7 +44032,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -44172,7 +44172,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -46561,7 +46561,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -47249,7 +47249,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -49458,7 +49458,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -49671,7 +49671,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -49971,7 +49971,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -53069,7 +53069,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -53256,7 +53256,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -55303,7 +55303,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -55490,7 +55490,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -57556,7 +57556,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -57745,7 +57745,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -58203,7 +58203,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`FORBIDDEN_ROLE`: Your account role cannot access this.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -58463,7 +58463,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {
@@ -62043,7 +62043,7 @@
             }
           },
           "403": {
-            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: This account is blocked.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
+            "description": "`FORBIDDEN_AUDIENCE`: This token belongs to another application.<br>`ACCOUNT_BLOCKED`: Eventor has suspended this account, so it cannot be used for now.\n\n`FORBIDDEN_ROLE`: Your account role cannot access this.",
             "content": {
               "application/json": {
                 "schema": {

@@ -1,4 +1,4 @@
-import { Injectable, Logger, type CanActivate, type ExecutionContext } from '@nestjs/common';
+import { Inject, Injectable, Logger, type CanActivate, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { Request } from 'express';
@@ -11,7 +11,10 @@ import type { AuthUser } from '../auth.types.js';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator.js';
 import { audienceForPath } from './roles.guard.js';
 import { Session } from '../entities/session.entity.js';
-import { SESSION_REPLACED_REASON, SessionsService } from '../sessions.service.js';
+import { envConfig, type Env } from '../../config/env.js';
+import { resolveLanguage } from '../../common/i18n/language.js';
+import { accountBlockedException } from '../../users/account-blocked.js';
+import { ACCOUNT_BLOCKED_REVOKE_REASON, SESSION_REPLACED_REASON, SessionsService } from '../sessions.service.js';
 import { TokenService } from '../token.service.js';
 
 /** `last_active_at` / `last_used_at` are written at most once per this interval. */
@@ -33,6 +36,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly tokens: TokenService,
     private readonly sessions: SessionsService,
     @InjectDataSource() private readonly dataSource: DataSource,
+    @Inject(envConfig.KEY) private readonly env: Env,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -89,6 +93,13 @@ export class JwtAuthGuard implements CanActivate {
     if (session.revokedReason === SESSION_REPLACED_REASON) {
       throw AppException.of('AUTH_SESSION_REPLACED');
     }
+    // BUG-F5/J1: a session the block ended says why, as long as the account is still blocked.
+    if (session.revokedReason === ACCOUNT_BLOCKED_REVOKE_REASON) {
+      const blocked = await this.dataSource.getRepository(User).findOneBy({ id: payload.sub });
+      if (blocked?.status === UserStatus.Blocked) {
+        throw accountBlockedException(blocked, resolveLanguage(request.headers['accept-language'], blocked.language), this.env.ADMIN_URL, 401);
+      }
+    }
     if (session.revokedAt || session.expiresAt.getTime() <= now.getTime()) {
       throw AppException.of('AUTH_SESSION_REVOKED');
     }
@@ -98,14 +109,8 @@ export class JwtAuthGuard implements CanActivate {
       throw AppException.of('AUTH_SESSION_REVOKED');
     }
     if (user.status === UserStatus.Blocked) {
-      await this.sessions.revokeAllForUser(user.id);
-      throw new AppException(401, 'ACCOUNT_BLOCKED', {
-        reason: user.blockedReason,
-        message: user.blockedMessage,
-        blockedUntil: user.blockedUntil ? user.blockedUntil.toISOString() : null,
-        // Kept as an alias of `blockedUntil` for older app builds.
-        until: user.blockedUntil ? user.blockedUntil.toISOString() : null,
-      });
+      await this.sessions.revokeAllForUser(user.id, this.dataSource.manager, { reason: ACCOUNT_BLOCKED_REVOKE_REASON });
+      throw accountBlockedException(user, resolveLanguage(request.headers['accept-language'], user.language), this.env.ADMIN_URL, 401);
     }
     request.user = {
       id: user.id,

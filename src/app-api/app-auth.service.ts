@@ -9,7 +9,7 @@ import { VerificationCode } from '../auth/entities/verification-code.entity.js';
 import { assertPasswordStrong } from '../auth/password.policy.js';
 import { PasswordService } from '../auth/password.service.js';
 import { parseKeyedToken, tokenMatchesHash } from '../auth/refresh-token.js';
-import { SessionsService, type IssuedSession } from '../auth/sessions.service.js';
+import { ACCOUNT_BLOCKED_REVOKE_REASON, SessionsService, type IssuedSession } from '../auth/sessions.service.js';
 import { TokenService } from '../auth/token.service.js';
 import { AuditLevel } from '../common/enums/admin.enums.js';
 import { SessionAudience, VerificationCodePurpose } from '../common/enums/auth.enums.js';
@@ -24,6 +24,7 @@ import { Category } from '../catalog/entities/category.entity.js';
 import { ProviderProfile } from '../users/entities/provider-profile.entity.js';
 import { ProviderWilaya } from '../users/entities/provider-wilaya.entity.js';
 import { User } from '../users/entities/user.entity.js';
+import { accountBlockedException } from '../users/account-blocked.js';
 import { initialVerificationStatus } from '../users/users.policy.js';
 import { APP_AUTH_EVENTS, type AppCodeSentEvent } from './app.events.js';
 import {
@@ -275,7 +276,7 @@ export class AppAuthService {
       if (Number(consumed?.affectedRows ?? 0) !== 1) throw AppException.of('CODE_INVALID');
       const user = await em.getRepository(User).findOne({ where: { id: checked.userId }, lock: { mode: 'pessimistic_write' } });
       if (!user) throw AppException.of('CODE_INVALID');
-      this.assertAppAccount(user);
+      this.assertAppAccount(user, lang);
       if (!user.emailVerifiedAt) {
         await em.getRepository(User).update(user.id, { emailVerifiedAt: new Date() });
         user.emailVerifiedAt = new Date();
@@ -301,17 +302,10 @@ export class AppAuthService {
 
   // ── login / refresh / logout ────────────────────────────────
 
-  private assertAppAccount(user: User): void {
+  /** BUG-F5/J1: a blocked account gets the full details (reason label, message, dates, deletion page) in the caller's language. */
+  private assertAppAccount(user: User, lang: Lang = 'en'): void {
     if (user.role === UserRole.Admin) throw AppException.of('ROLE_NOT_ALLOWED_IN_APP');
-    if (user.status === UserStatus.Blocked) {
-      throw AppException.of('ACCOUNT_BLOCKED', {
-        reason: user.blockedReason,
-        message: user.blockedMessage,
-        blockedUntil: user.blockedUntil ? user.blockedUntil.toISOString() : null,
-        // Kept as an alias of `blockedUntil` for older app builds.
-        until: user.blockedUntil ? user.blockedUntil.toISOString() : null,
-      });
-    }
+    if (user.status === UserStatus.Blocked) throw accountBlockedException(user, lang, this.env.ADMIN_URL, 403);
   }
 
   /** Lockout, then the password: shared by sign-in and the web account deletion. */
@@ -366,7 +360,7 @@ export class AppAuthService {
 
   async login(email: string, password: string, lang: Lang): Promise<AppSessionDto> {
     const user = await this.checkCredentials(email, password);
-    this.assertAppAccount(user);
+    this.assertAppAccount(user, lang);
     if (!user.emailVerifiedAt && !this.env.AUTH_SKIP_EMAIL_VERIFICATION) {
       throw AppException.of('EMAIL_NOT_VERIFIED', { email: user.email });
     }
@@ -392,20 +386,19 @@ export class AppAuthService {
       });
       throw AppException.of('AUTH_REFRESH_INVALID');
     }
+    // BUG-F5/J1: the session was ended by an account block that still holds — say why.
+    if (result.outcome === 'blocked' && result.userId) {
+      const blocked = await this.dataSource.getRepository(User).findOneBy({ id: result.userId });
+      if (blocked?.status === UserStatus.Blocked) throw accountBlockedException(blocked, lang, this.env.ADMIN_URL, 401);
+    }
     if (result.outcome !== 'rotated') throw AppException.of('AUTH_REFRESH_INVALID');
     if (result.user.role === UserRole.Admin) {
       await this.sessions.revoke(result.session.id);
       throw AppException.of('AUTH_REFRESH_INVALID');
     }
     if (result.user.status === UserStatus.Blocked) {
-      await this.sessions.revokeAllForUser(result.user.id);
-      throw new AppException(401, 'ACCOUNT_BLOCKED', {
-        reason: result.user.blockedReason,
-        message: result.user.blockedMessage,
-        blockedUntil: result.user.blockedUntil ? result.user.blockedUntil.toISOString() : null,
-        // Kept as an alias of `blockedUntil` for older app builds.
-        until: result.user.blockedUntil ? result.user.blockedUntil.toISOString() : null,
-      });
+      await this.sessions.revokeAllForUser(result.user.id, this.dataSource.manager, { reason: ACCOUNT_BLOCKED_REVOKE_REASON });
+      throw accountBlockedException(result.user, lang, this.env.ADMIN_URL, 401);
     }
     return this.buildSession(this.dataSource.manager, result.user, result, lang);
   }
@@ -530,7 +523,7 @@ export class AppAuthService {
       if (code.expiresAt.getTime() <= Date.now()) throw AppException.of('RESET_TOKEN_EXPIRED');
       const user = await em.getRepository(User).findOne({ where: { id: code.userId }, lock: { mode: 'pessimistic_write' } });
       if (!user) throw AppException.of('RESET_TOKEN_INVALID');
-      this.assertAppAccount(user);
+      this.assertAppAccount(user, lang);
 
       await em.getRepository(User).update(user.id, {
         passwordHash: await this.passwords.hash(password),

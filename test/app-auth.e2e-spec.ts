@@ -7,7 +7,7 @@ import { Language, UserRole, UserStatus, VerificationStatus } from '../src/commo
 import { PasswordService } from '../src/auth/password.service.js';
 import { Session } from '../src/auth/entities/session.entity.js';
 import { User } from '../src/users/entities/user.entity.js';
-import { createApp, expectError, makeCategory, makeUser, tokenFor, uid, type TestApp } from './utils/index.js';
+import { createApp, expectError, loginAs, makeCategory, makeUser, tokenFor, uid, type TestApp } from './utils/index.js';
 
 const BASE = '/api/v1/app/auth';
 const PASSWORD = 'Sunflower42x';
@@ -342,6 +342,32 @@ describe('App auth (e2e)', () => {
       const guarded = await request(t.http).get('/api/v1/app/me').set('Authorization', `Bearer ${session.accessToken}`);
       expectError(guarded, 401, 'ACCOUNT_BLOCKED');
       expect(guarded.body.details).toMatchObject({ reason: 'fraud', blockedUntil: blockedUntil.toISOString() });
+    });
+
+    it('a client blocked from the dashboard is told why on the next call, the refresh and sign-in (BUG-F5/J1, F-05 / J-17 / N-36)', async () => {
+      const { email, session } = await signedInClient();
+      const admin = await loginAs(t, UserRole.Admin);
+      await request(t.http).post(`/api/v1/admin/users/${session.user.id}/block`).set(admin.headers).send({ reason: 'fraud', message: 'Under review.', bookings: 'keep' }).expect(200);
+
+      // The open app: its next call, in Arabic.
+      const next = await request(t.http).get('/api/v1/app/me').set('Authorization', `Bearer ${session.accessToken}`).set('Accept-Language', 'ar');
+      expectError(next, 401, 'ACCOUNT_BLOCKED');
+      expect(next.body.details).toMatchObject({ reason: 'fraud', reasonLabel: 'احتيال', message: 'Under review.', blockedUntil: null, until: null });
+      expect(next.body.details.blockedAt).toEqual(expect.any(String));
+      expect(next.body.details.deleteAccountUrl).toMatch(/\/ar\/delete-account$/);
+      // Not the screen title again (BUG-J1).
+      expect(next.body.message).not.toBe('هذا الحساب محظور.');
+
+      expectError(await request(t.http).post(`${BASE}/refresh`).send({ refreshToken: session.refreshToken }), 401, 'ACCOUNT_BLOCKED');
+      const signIn = await request(t.http).post(`${BASE}/login`).send({ email, password: PASSWORD });
+      expectError(signIn, 403, 'ACCOUNT_BLOCKED');
+      expect(signIn.body.details).toMatchObject({ reason: 'fraud', reasonLabel: 'Fraud or scam', message: 'Under review.' });
+      expect(signIn.body.message).not.toBe('This account is blocked.');
+
+      // Once unblocked, the old session just ended; a new sign-in works.
+      await request(t.http).post(`/api/v1/admin/users/${session.user.id}/unblock`).set(admin.headers).expect(200);
+      expectError(await request(t.http).get('/api/v1/app/me').set('Authorization', `Bearer ${session.accessToken}`), 401, 'AUTH_SESSION_REVOKED');
+      expect((await request(t.http).post(`${BASE}/login`).send({ email, password: PASSWORD })).status).toBe(200);
     });
 
     it('403 ROLE_NOT_ALLOWED_IN_APP for an admin account', async () => {
